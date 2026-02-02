@@ -1,0 +1,164 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { parseHTTPDate, parseRFC3339 } from '../src/datetime.js';
+
+// RFC 3339 §5.6: Internet Date/Time Format parsing.
+describe('parseRFC3339', () => {
+    it('parses basic UTC timestamps', () => {
+        const result = parseRFC3339('2026-02-01T00:00:00Z');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '2026-02-01T00:00:00.000Z');
+    });
+
+    it('parses timestamps with offsets', () => {
+        const result = parseRFC3339('2026-02-01T01:00:00+01:00');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '2026-02-01T00:00:00.000Z');
+    });
+
+    it('parses leap day in leap year', () => {
+        const result = parseRFC3339('2024-02-29T12:00:00Z');
+        assert.ok(result instanceof Date);
+    });
+
+    it('rejects invalid calendar dates', () => {
+        const result = parseRFC3339('2026-02-30T00:00:00Z');
+        assert.equal(result, null);
+    });
+
+    it('rejects invalid time values', () => {
+        const result = parseRFC3339('2026-02-01T24:00:00Z');
+        assert.equal(result, null);
+    });
+
+    it('rejects leap seconds for strict parsing', () => {
+        const result = parseRFC3339('2026-02-01T23:59:60Z');
+        assert.equal(result, null);
+    });
+
+    it('rejects invalid offsets', () => {
+        const result = parseRFC3339('2026-02-01T00:00:00+24:00');
+        assert.equal(result, null);
+    });
+
+    it('truncates fractional seconds to milliseconds', () => {
+        const result = parseRFC3339('2026-02-01T00:00:00.1234Z');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '2026-02-01T00:00:00.123Z');
+    });
+
+    // RFC 3339 §5.6 NOTE: "T" and "Z" may alternatively be lowercase.
+    it('accepts lowercase t separator', () => {
+        const result = parseRFC3339('2026-02-01t00:00:00Z');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '2026-02-01T00:00:00.000Z');
+    });
+
+    it('accepts lowercase z for UTC', () => {
+        const result = parseRFC3339('2026-02-01T00:00:00z');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '2026-02-01T00:00:00.000Z');
+    });
+
+    it('accepts both lowercase t and z', () => {
+        const result = parseRFC3339('2026-02-01t00:00:00z');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '2026-02-01T00:00:00.000Z');
+    });
+
+    // RFC 3339 §5.6 NOTE: Applications may use space instead of "T".
+    it('accepts space instead of T separator', () => {
+        const result = parseRFC3339('2026-02-01 00:00:00Z');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '2026-02-01T00:00:00.000Z');
+    });
+
+    it('accepts space separator with offset', () => {
+        const result = parseRFC3339('2026-02-01 01:00:00+01:00');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '2026-02-01T00:00:00.000Z');
+    });
+});
+
+// RFC 3339 §5.8: Normative examples from the RFC.
+describe('parseRFC3339 RFC examples', () => {
+    it('parses §5.8 example 1: UTC with fractional seconds', () => {
+        const result = parseRFC3339('1985-04-12T23:20:50.52Z');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.getUTCFullYear(), 1985);
+        assert.equal(result!.getUTCMonth(), 3); // April = 3
+        assert.equal(result!.getUTCDate(), 12);
+        assert.equal(result!.getUTCHours(), 23);
+        assert.equal(result!.getUTCMinutes(), 20);
+        assert.equal(result!.getUTCSeconds(), 50);
+        assert.equal(result!.getUTCMilliseconds(), 520);
+    });
+
+    it('parses §5.8 example 2: negative offset (PST)', () => {
+        const result = parseRFC3339('1996-12-19T16:39:57-08:00');
+        assert.ok(result instanceof Date);
+        // Equivalent to 1996-12-20T00:39:57Z
+        assert.equal(result!.toISOString(), '1996-12-20T00:39:57.000Z');
+    });
+
+    // RFC 3339 §5.7: Leap seconds not representable in JavaScript Date.
+    it('rejects §5.8 example 3: leap second at end of 1990', () => {
+        const result = parseRFC3339('1990-12-31T23:59:60Z');
+        assert.equal(result, null);
+    });
+
+    it('rejects §5.8 example 4: leap second in PST', () => {
+        const result = parseRFC3339('1990-12-31T15:59:60-08:00');
+        assert.equal(result, null);
+    });
+
+    it('parses §5.8 example 5: historical offset (Netherlands)', () => {
+        const result = parseRFC3339('1937-01-01T12:00:27.87+00:20');
+        assert.ok(result instanceof Date);
+        // +00:20 offset means UTC is 20 minutes earlier
+        assert.equal(result!.getUTCHours(), 11);
+        assert.equal(result!.getUTCMinutes(), 40);
+        assert.equal(result!.getUTCSeconds(), 27);
+        assert.equal(result!.getUTCMilliseconds(), 870);
+    });
+});
+
+describe('parseHTTPDate', () => {
+    // RFC 9110 §5.6.7: IMF-fixdate parsing.
+    it('parses IMF-fixdate', () => {
+        const parsed = parseHTTPDate('Sun, 06 Nov 1994 08:49:37 GMT');
+        assert.ok(parsed instanceof Date);
+        assert.equal(parsed!.toUTCString(), 'Sun, 06 Nov 1994 08:49:37 GMT');
+    });
+
+    // RFC 9110 §5.6.7: asctime-date parsing.
+    it('parses asctime-date', () => {
+        const parsed = parseHTTPDate('Sun Nov  6 08:49:37 1994');
+        assert.ok(parsed instanceof Date);
+        assert.equal(parsed!.toUTCString(), 'Sun, 06 Nov 1994 08:49:37 GMT');
+    });
+
+    // RFC 9110 §5.6.7, RFC 850 §2: rfc850-date two-digit year.
+    it('parses RFC 850 dates using a sliding 50-year window', () => {
+        const nowYear = new Date().getUTCFullYear();
+        const currentCentury = Math.floor(nowYear / 100) * 100;
+        const twoDigit = (nowYear + 51) % 100;
+        const candidate = currentCentury + twoDigit;
+        const expectedYear = candidate > nowYear + 50 ? candidate - 100 : candidate;
+        const twoDigitStr = String(twoDigit).padStart(2, '0');
+        const parsed = parseHTTPDate(`Sunday, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
+
+        assert.ok(parsed instanceof Date);
+        assert.equal(parsed!.getUTCFullYear(), expectedYear);
+    });
+
+    // RFC 9110 §5.6.7, RFC 850 §2: rfc850-date two-digit year.
+    it('parses RFC 850 dates for current two-digit year', () => {
+        const nowYear = new Date().getUTCFullYear();
+        const twoDigitStr = String(nowYear % 100).padStart(2, '0');
+        const parsed = parseHTTPDate(`Sunday, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
+
+        assert.ok(parsed instanceof Date);
+        assert.equal(parsed!.getUTCFullYear(), nowYear);
+    });
+});

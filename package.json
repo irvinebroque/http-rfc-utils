@@ -1,0 +1,57 @@
+{
+    "name": "http-rfc-utils",
+    "version": "0.1.0",
+    "description": "RFC-compliant HTTP utilities for APIs (9110, 8288, 7231, 9457, 9111)",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "sideEffects": false,
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "test": "tsx --test test/*.test.ts",
+        "test:watch": "tsx --test --watch test/*.test.ts",
+        "typecheck": "tsc --noEmit",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "http",
+        "rfc",
+        "etag",
+        "cors",
+        "cache-control",
+        "content-negotiation",
+        "link-header",
+        "problem-details",
+        "conditional-requests",
+        "rfc9110",
+        "rfc8288",
+        "rfc9457"
+    ],
+    "author": "Brendan Irvine-Broque",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/irvinebroque/http-rfc-utils.git"
+    },
+    "homepage": "https://github.com/irvinebroque/http-rfc-utils#readme",
+    "bugs": {
+        "url": "https://github.com/irvinebroque/http-rfc-utils/issues"
+    },
+    "engines": {
+        "node": ">=25.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.2",
+        "tsx": "^4.21.0",
+        "typescript": "^5.7.0"
+    }
+}

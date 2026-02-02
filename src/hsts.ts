@@ -1,0 +1,121 @@
+/**
+ * Strict-Transport-Security utilities per RFC 6797.
+ * RFC 6797 §6.1, §6.1.1, §6.1.2, §8.1.
+ * @see https://www.rfc-editor.org/rfc/rfc6797.html#section-6.1
+ */
+
+import type { StrictTransportSecurityOptions } from './types.js';
+import { TOKEN_CHARS, isEmptyHeader, splitQuotedValue, unquote } from './header-utils.js';
+
+/**
+ * Unquote strictly - returns null if not a valid quoted string.
+ * Used for HSTS directive values where unquoted values are expected.
+ */
+function unquoteStrict(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('"') || !trimmed.endsWith('"') || trimmed.length < 2) {
+        return null;
+    }
+    return unquote(trimmed);
+}
+
+function parseDirectiveValue(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return null;
+    }
+
+    if (trimmed.startsWith('"')) {
+        return unquoteStrict(trimmed);
+    }
+
+    if (!TOKEN_CHARS.test(trimmed)) {
+        return null;
+    }
+
+    return trimmed;
+}
+
+/**
+ * Parse Strict-Transport-Security header value.
+ */
+// RFC 6797 §6.1, §6.1.1, §6.1.2, §8.1: STS parsing and invalid header handling.
+export function parseStrictTransportSecurity(header: string): StrictTransportSecurityOptions | null {
+    if (isEmptyHeader(header)) {
+        return null;
+    }
+
+    const directives = splitQuotedValue(header, ';');
+    const seen = new Set<string>();
+    let maxAge: number | null = null;
+    let includeSubDomains = false;
+
+    for (const directive of directives) {
+        const trimmed = directive.trim();
+        if (!trimmed) {
+            continue;
+        }
+
+        const eqIndex = trimmed.indexOf('=');
+        const name = (eqIndex === -1 ? trimmed : trimmed.slice(0, eqIndex)).trim();
+        if (!name || !TOKEN_CHARS.test(name)) {
+            return null;
+        }
+
+        const lowerName = name.toLowerCase();
+        if (seen.has(lowerName)) {
+            return null;
+        }
+        seen.add(lowerName);
+
+        if (eqIndex === -1) {
+            if (lowerName === 'includesubdomains') {
+                includeSubDomains = true;
+            } else if (lowerName === 'max-age') {
+                return null;
+            }
+            continue;
+        }
+
+        const rawValue = trimmed.slice(eqIndex + 1).trim();
+        const value = parseDirectiveValue(rawValue);
+        if (value === null) {
+            return null;
+        }
+
+        if (lowerName === 'max-age') {
+            if (!/^\d+$/.test(value)) {
+                return null;
+            }
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed)) {
+                return null;
+            }
+            maxAge = parsed;
+        } else if (lowerName === 'includesubdomains') {
+            return null;
+        }
+    }
+
+    if (maxAge === null) {
+        return null;
+    }
+
+    return {
+        maxAge,
+        includeSubDomains: includeSubDomains ? true : undefined,
+    };
+}
+
+/**
+ * Format Strict-Transport-Security header value.
+ */
+// RFC 6797 §6.1: STS field-value formatting.
+export function formatStrictTransportSecurity(options: StrictTransportSecurityOptions): string {
+    const maxAge = Math.max(0, Math.floor(options.maxAge));
+    const parts = [`max-age=${maxAge}`];
+    if (options.includeSubDomains) {
+        parts.push('includeSubDomains');
+    }
+    return parts.join('; ');
+}

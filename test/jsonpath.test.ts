@@ -1,0 +1,744 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+    parseJsonPath,
+    queryJsonPath,
+    queryJsonPathNodes,
+    isValidJsonPath,
+    formatNormalizedPath,
+    compileJsonPath,
+} from '../src/jsonpath.js';
+
+// RFC 9535 §1.5: Example JSON value (bookstore)
+const bookstore = {
+    store: {
+        book: [
+            { category: 'reference', author: 'Nigel Rees', title: 'Sayings of the Century', price: 8.95 },
+            { category: 'fiction', author: 'Evelyn Waugh', title: 'Sword of Honour', price: 12.99 },
+            { category: 'fiction', author: 'Herman Melville', title: 'Moby Dick', isbn: '0-553-21311-3', price: 8.99 },
+            { category: 'fiction', author: 'J. R. R. Tolkien', title: 'The Lord of the Rings', isbn: '0-395-19395-8', price: 22.99 },
+        ],
+        bicycle: { color: 'red', price: 399 },
+    },
+};
+
+// RFC 9535 §2.1: JSONPath Syntax and Semantics
+describe('RFC 9535 JSONPath', () => {
+    // RFC 9535 §2.1: Well-formedness and validity
+    describe('parseJsonPath', () => {
+        // RFC 9535 §2.2.1: root-identifier = "$"
+        it('parses root identifier', () => {
+            const ast = parseJsonPath('$');
+            assert.ok(ast !== null);
+            assert.equal(ast.type, 'query');
+            assert.equal(ast.root, '$');
+            assert.deepEqual(ast.segments, []);
+        });
+
+        it('returns null for query not starting with $', () => {
+            assert.equal(parseJsonPath('store'), null);
+            assert.equal(parseJsonPath('@.foo'), null);
+            assert.equal(parseJsonPath(''), null);
+        });
+
+        // RFC 9535 §2.5.1: Child segment shorthand (.name)
+        it('parses dot notation', () => {
+            const ast = parseJsonPath('$.store.book');
+            assert.ok(ast !== null);
+            assert.equal(ast.segments.length, 2);
+            assert.equal(ast.segments[0].type, 'child');
+            assert.equal(ast.segments[1].type, 'child');
+        });
+
+        // RFC 9535 §2.5.1: Bracketed selection
+        it('parses bracket notation', () => {
+            const ast = parseJsonPath("$['store']['book']");
+            assert.ok(ast !== null);
+            assert.equal(ast.segments.length, 2);
+        });
+
+        // RFC 9535 §2.3.1.1: String literals with escapes
+        it('parses escaped strings', () => {
+            const ast = parseJsonPath("$['a\\'b']");
+            assert.ok(ast !== null);
+            const selector = ast.segments[0].selectors[0];
+            assert.equal(selector.type, 'name');
+            if (selector.type === 'name') {
+                assert.equal(selector.name, "a'b");
+            }
+        });
+
+        it('parses double-quoted strings', () => {
+            const ast = parseJsonPath('$["hello"]');
+            assert.ok(ast !== null);
+            const selector = ast.segments[0].selectors[0];
+            assert.equal(selector.type, 'name');
+            if (selector.type === 'name') {
+                assert.equal(selector.name, 'hello');
+            }
+        });
+
+        // RFC 9535 §2.3.1.1: Unicode escapes
+        it('parses unicode escapes', () => {
+            const ast = parseJsonPath('$["\\u0041"]');  // \u0041 = 'A'
+            assert.ok(ast !== null);
+            const selector = ast.segments[0].selectors[0];
+            if (selector.type === 'name') {
+                assert.equal(selector.name, 'A');
+            }
+        });
+
+        // RFC 9535 §2.1: Integer validation (I-JSON range)
+        it('rejects integers outside I-JSON range', () => {
+            assert.equal(parseJsonPath('$[9007199254740992]'), null); // > 2^53-1
+            assert.equal(parseJsonPath('$[-9007199254740992]'), null); // < -(2^53-1)
+        });
+
+        // RFC 9535 §2.3.3.1: Leading zeros not allowed
+        it('rejects leading zeros in indices', () => {
+            assert.equal(parseJsonPath('$[01]'), null);
+            assert.equal(parseJsonPath('$[007]'), null);
+        });
+
+        // RFC 9535 §2.3.4: Slice selector
+        it('parses slice selector', () => {
+            const ast = parseJsonPath('$[1:3]');
+            assert.ok(ast !== null);
+            const selector = ast.segments[0].selectors[0];
+            assert.equal(selector.type, 'slice');
+            if (selector.type === 'slice') {
+                assert.equal(selector.start, 1);
+                assert.equal(selector.end, 3);
+            }
+        });
+
+        it('parses slice with step', () => {
+            const ast = parseJsonPath('$[::2]');
+            assert.ok(ast !== null);
+            const selector = ast.segments[0].selectors[0];
+            assert.equal(selector.type, 'slice');
+            if (selector.type === 'slice') {
+                assert.equal(selector.start, undefined);
+                assert.equal(selector.end, undefined);
+                assert.equal(selector.step, 2);
+            }
+        });
+
+        // RFC 9535 §2.3.5: Filter selector
+        it('parses filter selector', () => {
+            const ast = parseJsonPath('$[?@.price < 10]');
+            assert.ok(ast !== null);
+            const selector = ast.segments[0].selectors[0];
+            assert.equal(selector.type, 'filter');
+        });
+
+        // RFC 9535 §2.5.2: Descendant segment
+        it('parses descendant segment', () => {
+            const ast = parseJsonPath('$..author');
+            assert.ok(ast !== null);
+            assert.equal(ast.segments[0].type, 'descendant');
+        });
+
+        // RFC 9535 §2.3.2: Wildcard selector
+        it('parses wildcard selector', () => {
+            const ast = parseJsonPath('$[*]');
+            assert.ok(ast !== null);
+            const selector = ast.segments[0].selectors[0];
+            assert.equal(selector.type, 'wildcard');
+        });
+
+        it('parses dot wildcard', () => {
+            const ast = parseJsonPath('$.*');
+            assert.ok(ast !== null);
+            const selector = ast.segments[0].selectors[0];
+            assert.equal(selector.type, 'wildcard');
+        });
+    });
+
+    // RFC 9535 §2.1.1: isValidJsonPath
+    describe('isValidJsonPath', () => {
+        it('returns true for valid queries', () => {
+            assert.equal(isValidJsonPath('$'), true);
+            assert.equal(isValidJsonPath('$.store'), true);
+            assert.equal(isValidJsonPath('$..author'), true);
+            assert.equal(isValidJsonPath('$[0]'), true);
+            assert.equal(isValidJsonPath('$[?@.price < 10]'), true);
+        });
+
+        it('returns false for invalid queries', () => {
+            assert.equal(isValidJsonPath(''), false);
+            assert.equal(isValidJsonPath('store'), false);
+            assert.equal(isValidJsonPath('@.foo'), false);
+            assert.equal(isValidJsonPath('$[01]'), false);
+        });
+    });
+
+    // RFC 9535 §1.5, Table 2: Examples from spec
+    describe('queryJsonPath - RFC examples', () => {
+        // RFC 9535 Table 2: $.store.book[*].author
+        it('selects all book authors', () => {
+            const result = queryJsonPath('$.store.book[*].author', bookstore);
+            assert.deepEqual(result, [
+                'Nigel Rees', 'Evelyn Waugh', 'Herman Melville', 'J. R. R. Tolkien'
+            ]);
+        });
+
+        // RFC 9535 Table 2: $..author
+        it('selects all authors (descendant)', () => {
+            const result = queryJsonPath('$..author', bookstore);
+            assert.deepEqual(result, [
+                'Nigel Rees', 'Evelyn Waugh', 'Herman Melville', 'J. R. R. Tolkien'
+            ]);
+        });
+
+        // RFC 9535 Table 2: $.store.*
+        it('selects all store members', () => {
+            const result = queryJsonPath('$.store.*', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 2); // book array and bicycle object
+        });
+
+        // RFC 9535 Table 2: $.store..price
+        it('selects all prices in store', () => {
+            const result = queryJsonPath('$.store..price', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 5); // 4 books + 1 bicycle
+            assert.ok(result.includes(8.95));
+            assert.ok(result.includes(399));
+        });
+
+        // RFC 9535 Table 2: $..book[2]
+        it('selects third book', () => {
+            const result = queryJsonPath('$..book[2]', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 1);
+            assert.equal((result[0] as any).title, 'Moby Dick');
+        });
+
+        // RFC 9535 Table 2: $..book[2].author
+        it('selects third book author', () => {
+            const result = queryJsonPath('$..book[2].author', bookstore);
+            assert.deepEqual(result, ['Herman Melville']);
+        });
+
+        // RFC 9535 Table 2: $..book[2].publisher
+        it('returns empty for missing member', () => {
+            const result = queryJsonPath('$..book[2].publisher', bookstore);
+            assert.deepEqual(result, []);
+        });
+
+        // RFC 9535 Table 2: $..book[-1]
+        it('selects last book', () => {
+            const result = queryJsonPath('$..book[-1]', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 1);
+            assert.equal((result[0] as any).title, 'The Lord of the Rings');
+        });
+
+        // RFC 9535 Table 2: $..book[0,1]
+        it('selects first two books with union', () => {
+            const result = queryJsonPath('$..book[0,1]', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 2);
+            assert.equal((result[0] as any).title, 'Sayings of the Century');
+            assert.equal((result[1] as any).title, 'Sword of Honour');
+        });
+
+        // RFC 9535 Table 2: $..book[:2]
+        it('selects first two books with slice', () => {
+            const result = queryJsonPath('$..book[:2]', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 2);
+            assert.equal((result[0] as any).title, 'Sayings of the Century');
+            assert.equal((result[1] as any).title, 'Sword of Honour');
+        });
+
+        // RFC 9535 Table 2: $..book[?@.isbn]
+        it('selects books with ISBN', () => {
+            const result = queryJsonPath('$..book[?@.isbn]', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 2);
+            // Moby Dick and The Lord of the Rings have ISBNs
+        });
+
+        // RFC 9535 Table 2: $..book[?@.price<10]
+        it('selects books cheaper than 10', () => {
+            const result = queryJsonPath('$..book[?@.price<10]', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 2);
+            result.forEach(book => {
+                assert.ok((book as any).price < 10);
+            });
+        });
+
+        // RFC 9535 Table 2: $..*
+        it('selects all descendants', () => {
+            const result = queryJsonPath('$..*', bookstore);
+            assert.ok(result !== null);
+            assert.ok(result.length > 10);
+        });
+    });
+
+    // RFC 9535 §2.2: Root identifier
+    describe('Root Identifier', () => {
+        // RFC 9535 §2.2.3: Examples
+        it('returns entire document for $', () => {
+            const doc = { k: 'v' };
+            const result = queryJsonPath('$', doc);
+            assert.deepEqual(result, [doc]);
+        });
+    });
+
+    // RFC 9535 §2.3.3: Index selector
+    describe('Index Selector', () => {
+        const arr = ['a', 'b', 'c'];
+
+        // RFC 9535 §2.3.3.2: Non-negative index
+        it('selects by positive index', () => {
+            assert.deepEqual(queryJsonPath('$[0]', arr), ['a']);
+            assert.deepEqual(queryJsonPath('$[1]', arr), ['b']);
+            assert.deepEqual(queryJsonPath('$[2]', arr), ['c']);
+        });
+
+        // RFC 9535 §2.3.3.2: Negative index
+        it('selects by negative index', () => {
+            assert.deepEqual(queryJsonPath('$[-1]', arr), ['c']);
+            assert.deepEqual(queryJsonPath('$[-2]', arr), ['b']);
+            assert.deepEqual(queryJsonPath('$[-3]', arr), ['a']);
+        });
+
+        // RFC 9535 §2.3.3.2: Out of range returns empty
+        it('returns empty for out of range index', () => {
+            assert.deepEqual(queryJsonPath('$[10]', arr), []);
+            assert.deepEqual(queryJsonPath('$[-10]', arr), []);
+        });
+
+        // RFC 9535 §2.3.3.2: Non-array returns empty
+        it('returns empty for non-array', () => {
+            assert.deepEqual(queryJsonPath('$[0]', { a: 1 }), []);
+            assert.deepEqual(queryJsonPath('$[0]', 'string'), []);
+            assert.deepEqual(queryJsonPath('$[0]', 42), []);
+        });
+    });
+
+    // RFC 9535 §2.3.4: Array slice selector
+    describe('Slice Selector', () => {
+        const arr = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+        // RFC 9535 §2.3.4.2.1: step of 0
+        it('returns empty for step=0', () => {
+            assert.deepEqual(queryJsonPath('$[::0]', arr), []);
+        });
+
+        // RFC 9535 §2.3.4.2: Basic slicing
+        it('slices with start:end', () => {
+            assert.deepEqual(queryJsonPath('$[1:3]', arr), [1, 2]);
+        });
+
+        it('slices with start only', () => {
+            assert.deepEqual(queryJsonPath('$[7:]', arr), [7, 8, 9]);
+        });
+
+        it('slices with end only', () => {
+            assert.deepEqual(queryJsonPath('$[:3]', arr), [0, 1, 2]);
+        });
+
+        it('slices with step', () => {
+            assert.deepEqual(queryJsonPath('$[1:5:2]', arr), [1, 3]);
+        });
+
+        // RFC 9535 §2.3.4.2: Negative step reverses
+        it('reverses with negative step', () => {
+            assert.deepEqual(queryJsonPath('$[::-1]', [0, 1, 2]), [2, 1, 0]);
+        });
+
+        // RFC 9535 §2.3.4.3: Examples from spec
+        it('handles 5:1:-2', () => {
+            assert.deepEqual(queryJsonPath('$[5:1:-2]', arr), [5, 3]);
+        });
+
+        // RFC 9535 §2.3.4.2: Negative indices in slice
+        it('handles negative start', () => {
+            assert.deepEqual(queryJsonPath('$[-3:]', arr), [7, 8, 9]);
+        });
+
+        it('handles negative end', () => {
+            assert.deepEqual(queryJsonPath('$[:-2]', [0, 1, 2, 3, 4]), [0, 1, 2]);
+        });
+    });
+
+    // RFC 9535 §2.3.2: Wildcard selector
+    describe('Wildcard Selector', () => {
+        // RFC 9535 §2.3.2.2: Select all children of array
+        it('selects all array elements', () => {
+            assert.deepEqual(queryJsonPath('$[*]', [1, 2, 3]), [1, 2, 3]);
+        });
+
+        // RFC 9535 §2.3.2.2: Select all children of object
+        it('selects all object values', () => {
+            const result = queryJsonPath('$[*]', { a: 1, b: 2 });
+            assert.ok(result !== null);
+            assert.equal(result.length, 2);
+            assert.ok(result.includes(1));
+            assert.ok(result.includes(2));
+        });
+
+        // RFC 9535 §2.3.2.2: Primitive returns empty
+        it('returns empty for primitives', () => {
+            assert.deepEqual(queryJsonPath('$[*]', 'string'), []);
+            assert.deepEqual(queryJsonPath('$[*]', 42), []);
+            assert.deepEqual(queryJsonPath('$[*]', true), []);
+            assert.deepEqual(queryJsonPath('$[*]', null), []);
+        });
+
+        // RFC 9535 §2.3.2.3: Multiple wildcards preserve duplicates
+        it('preserves duplicates with multiple wildcards', () => {
+            const result = queryJsonPath('$[*,*]', [1, 2]);
+            assert.ok(result !== null);
+            assert.equal(result.length, 4); // Each element selected twice
+        });
+    });
+
+    // RFC 9535 §2.3.1: Name selector
+    describe('Name Selector', () => {
+        // RFC 9535 §2.3.1.2: Select member by name
+        it('selects object member by name', () => {
+            assert.deepEqual(queryJsonPath("$['foo']", { foo: 'bar' }), ['bar']);
+        });
+
+        it('selects with dot notation', () => {
+            assert.deepEqual(queryJsonPath('$.foo', { foo: 'bar' }), ['bar']);
+        });
+
+        // RFC 9535 §2.3.1.2: Missing member returns empty
+        it('returns empty for missing member', () => {
+            assert.deepEqual(queryJsonPath('$.missing', { foo: 'bar' }), []);
+        });
+
+        // RFC 9535 §2.3.1.2: Non-object returns empty
+        it('returns empty for non-object', () => {
+            assert.deepEqual(queryJsonPath('$.foo', [1, 2, 3]), []);
+            assert.deepEqual(queryJsonPath('$.foo', 'string'), []);
+        });
+
+        // RFC 9535 §2.3.1.3: Special characters in names
+        it('handles special characters in names', () => {
+            assert.deepEqual(queryJsonPath("$['j j']", { 'j j': 3 }), [3]);
+            assert.deepEqual(queryJsonPath("$['k.k']", { 'k.k': 4 }), [4]);
+        });
+
+        // RFC 9535 §2.3.1.2: No Unicode normalization
+        it('compares strings without normalization', () => {
+            // é as single character vs e + combining accent
+            const doc = { '\u00e9': 1 }; // é
+            assert.deepEqual(queryJsonPath("$['\\u00e9']", doc), [1]);
+            // Different encoding should not match
+            assert.deepEqual(queryJsonPath("$['e\\u0301']", doc), []); // e + ́
+        });
+    });
+
+    // RFC 9535 §2.3.5: Filter selector
+    describe('Filter Selector', () => {
+        // RFC 9535 §2.3.5.2.2: Comparison operators
+        it('filters with == comparison', () => {
+            const data = [{ a: 1 }, { a: 2 }, { a: 3 }];
+            assert.deepEqual(queryJsonPath('$[?@.a == 2]', data), [{ a: 2 }]);
+        });
+
+        it('filters with != comparison', () => {
+            const data = [{ a: 1 }, { a: 2 }];
+            assert.deepEqual(queryJsonPath('$[?@.a != 1]', data), [{ a: 2 }]);
+        });
+
+        it('filters with < comparison', () => {
+            const data = [{ a: 1 }, { a: 5 }, { a: 10 }];
+            assert.deepEqual(queryJsonPath('$[?@.a < 5]', data), [{ a: 1 }]);
+        });
+
+        it('filters with <= comparison', () => {
+            const data = [{ a: 1 }, { a: 5 }, { a: 10 }];
+            assert.deepEqual(queryJsonPath('$[?@.a <= 5]', data), [{ a: 1 }, { a: 5 }]);
+        });
+
+        it('filters with > comparison', () => {
+            const data = [{ a: 1 }, { a: 5 }, { a: 10 }];
+            assert.deepEqual(queryJsonPath('$[?@.a > 5]', data), [{ a: 10 }]);
+        });
+
+        it('filters with >= comparison', () => {
+            const data = [{ a: 1 }, { a: 5 }, { a: 10 }];
+            assert.deepEqual(queryJsonPath('$[?@.a >= 5]', data), [{ a: 5 }, { a: 10 }]);
+        });
+
+        it('filters with string comparison', () => {
+            const data = [{ name: 'foo' }, { name: 'bar' }];
+            assert.deepEqual(queryJsonPath('$[?@.name == "bar"]', data), [{ name: 'bar' }]);
+        });
+
+        // RFC 9535 §2.3.5.2: Logical operators
+        it('combines with && (and)', () => {
+            const data = [{ a: 1, b: 2 }, { a: 2, b: 3 }, { a: 1, b: 3 }];
+            assert.deepEqual(
+                queryJsonPath('$[?@.a == 1 && @.b == 2]', data),
+                [{ a: 1, b: 2 }]
+            );
+        });
+
+        it('combines with || (or)', () => {
+            const data = [{ a: 1 }, { a: 2 }, { a: 3 }];
+            assert.deepEqual(
+                queryJsonPath('$[?@.a == 1 || @.a == 3]', data),
+                [{ a: 1 }, { a: 3 }]
+            );
+        });
+
+        it('handles negation with !', () => {
+            const data = [{ a: 1 }, { a: 2 }];
+            assert.deepEqual(queryJsonPath('$[?!(@.a == 1)]', data), [{ a: 2 }]);
+        });
+
+        // RFC 9535 §2.3.5.2: Existence test
+        it('tests for existence', () => {
+            const data = [{ a: 1 }, { b: 2 }];
+            assert.deepEqual(queryJsonPath('$[?@.a]', data), [{ a: 1 }]);
+        });
+
+        it('existence test with null value', () => {
+            const data = [{ a: null }, { b: 2 }];
+            // null is a value, so @.a exists
+            assert.deepEqual(queryJsonPath('$[?@.a]', data), [{ a: null }]);
+        });
+
+        // RFC 9535 §2.3.5.2: Root reference in filter
+        it('references root with $', () => {
+            const data = { threshold: 10, items: [{ v: 5 }, { v: 15 }] };
+            assert.deepEqual(
+                queryJsonPath('$.items[?@.v > $.threshold]', data),
+                [{ v: 15 }]
+            );
+        });
+
+        // RFC 9535 §2.3.5.2.2: Type comparison
+        it('compares different types as not equal', () => {
+            const data = [{ a: '1' }, { a: 1 }];
+            assert.deepEqual(queryJsonPath('$[?@.a == 1]', data), [{ a: 1 }]);
+            assert.deepEqual(queryJsonPath('$[?@.a == "1"]', data), [{ a: '1' }]);
+        });
+
+        // RFC 9535 §2.3.5.2.2: null comparison
+        it('compares null correctly', () => {
+            const data = [{ a: null }, { a: 1 }];
+            assert.deepEqual(queryJsonPath('$[?@.a == null]', data), [{ a: null }]);
+        });
+
+        // RFC 9535 §2.3.5.2.2: boolean comparison
+        it('compares booleans correctly', () => {
+            const data = [{ a: true }, { a: false }];
+            assert.deepEqual(queryJsonPath('$[?@.a == true]', data), [{ a: true }]);
+            assert.deepEqual(queryJsonPath('$[?@.a == false]', data), [{ a: false }]);
+        });
+    });
+
+    // RFC 9535 §2.4: Function extensions
+    describe('Function Extensions', () => {
+        // RFC 9535 §2.4.4: length()
+        describe('length()', () => {
+            it('returns string length', () => {
+                const data = [{ name: 'foo' }, { name: 'barbaz' }];
+                assert.deepEqual(queryJsonPath('$[?length(@.name) > 3]', data), [{ name: 'barbaz' }]);
+            });
+
+            it('returns array length', () => {
+                const data = { items: [1, 2, 3] };
+                assert.deepEqual(queryJsonPath('$[?length(@.items) == 3]', [data]), [data]);
+            });
+
+            it('returns object member count', () => {
+                const data = [{ obj: { a: 1, b: 2 } }, { obj: { a: 1 } }];
+                assert.deepEqual(queryJsonPath('$[?length(@.obj) == 2]', data), [{ obj: { a: 1, b: 2 } }]);
+            });
+        });
+
+        // RFC 9535 §2.4.5: count()
+        describe('count()', () => {
+            it('returns nodelist length', () => {
+                const data = { items: [1, 2, 3] };
+                assert.deepEqual(queryJsonPath('$[?count(@.items[*]) > 2]', [data]), [data]);
+            });
+
+            it('returns 0 for empty nodelist', () => {
+                const data = { items: [] };
+                assert.deepEqual(queryJsonPath('$[?count(@.items[*]) == 0]', [data]), [data]);
+            });
+        });
+
+        // RFC 9535 §2.4.6: match()
+        describe('match()', () => {
+            it('performs full regex match', () => {
+                const data = [{ s: 'foo' }, { s: 'foobar' }];
+                assert.deepEqual(queryJsonPath('$[?match(@.s, "foo")]', data), [{ s: 'foo' }]);
+            });
+
+            it('anchors match at start and end', () => {
+                const data = [{ s: 'foo' }, { s: 'xfoox' }];
+                assert.deepEqual(queryJsonPath('$[?match(@.s, "foo")]', data), [{ s: 'foo' }]);
+            });
+
+            it('supports regex patterns', () => {
+                const data = [{ s: 'foo' }, { s: 'bar' }, { s: 'baz' }];
+                assert.deepEqual(queryJsonPath('$[?match(@.s, "ba.")]', data), [{ s: 'bar' }, { s: 'baz' }]);
+            });
+        });
+
+        // RFC 9535 §2.4.7: search()
+        describe('search()', () => {
+            it('performs partial regex match', () => {
+                const data = [{ s: 'foo' }, { s: 'foobar' }];
+                assert.deepEqual(queryJsonPath('$[?search(@.s, "foo")]', data), [{ s: 'foo' }, { s: 'foobar' }]);
+            });
+
+            it('finds pattern anywhere in string', () => {
+                const data = [{ s: 'xfoox' }, { s: 'bar' }];
+                assert.deepEqual(queryJsonPath('$[?search(@.s, "foo")]', data), [{ s: 'xfoox' }]);
+            });
+        });
+
+        // RFC 9535 §2.4.8: value()
+        describe('value()', () => {
+            it('extracts singular value', () => {
+                const data = [{ a: { b: 1 } }, { a: { b: 2 } }];
+                assert.deepEqual(queryJsonPath('$[?value(@.a.b) == 1]', data), [{ a: { b: 1 } }]);
+            });
+        });
+    });
+
+    // RFC 9535 §2.5.2: Descendant segment
+    describe('Descendant Segment', () => {
+        const nested = { a: { b: { c: 1 } }, d: { b: { c: 2 } } };
+
+        it('finds all matching descendants', () => {
+            assert.deepEqual(queryJsonPath('$..c', nested), [1, 2]);
+        });
+
+        it('finds nested arrays', () => {
+            const data = { a: [{ b: 1 }, { b: 2 }] };
+            assert.deepEqual(queryJsonPath('$..b', data), [1, 2]);
+        });
+
+        it('combines with wildcard', () => {
+            const data = { a: { x: 1 }, b: { x: 2 } };
+            const result = queryJsonPath('$..*', data);
+            assert.ok(result !== null);
+            assert.ok(result.length >= 4); // a, b, x:1, x:2
+        });
+    });
+
+    // RFC 9535 §2.6: Semantics of null
+    describe('null Semantics', () => {
+        it('null is a valid value', () => {
+            assert.deepEqual(queryJsonPath('$.a', { a: null }), [null]);
+        });
+
+        it('null compares equal to null', () => {
+            const data = [{ a: null }, { a: 1 }];
+            assert.deepEqual(queryJsonPath('$[?@.a == null]', data), [{ a: null }]);
+        });
+
+        it('null does not equal missing', () => {
+            const data = [{ a: null }, {}];
+            const result = queryJsonPath('$[?@.a == null]', data);
+            assert.ok(result !== null);
+            assert.equal(result.length, 1);
+            assert.deepEqual(result[0], { a: null });
+        });
+    });
+
+    // RFC 9535 §2.7: Normalized paths
+    describe('Normalized Paths', () => {
+        it('formats normalized path with strings', () => {
+            assert.equal(formatNormalizedPath(['store', 'book']), "$['store']['book']");
+        });
+
+        it('formats normalized path with indices', () => {
+            assert.equal(formatNormalizedPath(['store', 'book', 0]), "$['store']['book'][0]");
+        });
+
+        it('formats empty path', () => {
+            assert.equal(formatNormalizedPath([]), '$');
+        });
+
+        it('escapes single quotes', () => {
+            assert.equal(formatNormalizedPath(["a'b"]), "$['a\\'b']");
+        });
+
+        it('escapes backslashes', () => {
+            assert.equal(formatNormalizedPath(['a\\b']), "$['a\\\\b']");
+        });
+
+        it('returns paths with nodes', () => {
+            const result = queryJsonPathNodes('$.store.book[0].title', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].path, "$['store']['book'][0]['title']");
+            assert.equal(result[0].value, 'Sayings of the Century');
+        });
+
+        it('returns multiple paths', () => {
+            const result = queryJsonPathNodes('$.store.book[*].author', bookstore);
+            assert.ok(result !== null);
+            assert.equal(result.length, 4);
+            assert.equal(result[0].path, "$['store']['book'][0]['author']");
+            assert.equal(result[1].path, "$['store']['book'][1]['author']");
+        });
+    });
+
+    // RFC 9535 §2.1.2: Nodelist semantics
+    describe('Nodelist Semantics', () => {
+        // RFC 9535 §2.1.2: Duplicate nodes not removed
+        it('preserves duplicate nodes', () => {
+            const result = queryJsonPath('$[*,*]', [1, 2]);
+            assert.ok(result !== null);
+            assert.equal(result.length, 4); // Each element selected twice
+        });
+
+        // RFC 9535 §2.1.2: Empty nodelist is valid
+        it('returns empty array for no matches', () => {
+            assert.deepEqual(queryJsonPath('$.missing', { a: 1 }), []);
+        });
+    });
+
+    // compileJsonPath
+    describe('compileJsonPath', () => {
+        it('compiles and executes query', () => {
+            const fn = compileJsonPath('$.store.book[*].author');
+            assert.ok(fn !== null);
+            assert.deepEqual(fn(bookstore), [
+                'Nigel Rees', 'Evelyn Waugh', 'Herman Melville', 'J. R. R. Tolkien'
+            ]);
+        });
+
+        it('returns null for invalid query', () => {
+            assert.equal(compileJsonPath('invalid'), null);
+        });
+
+        it('can be reused', () => {
+            const fn = compileJsonPath('$[0]');
+            assert.ok(fn !== null);
+            assert.deepEqual(fn([1, 2, 3]), [1]);
+            assert.deepEqual(fn(['a', 'b']), ['a']);
+        });
+    });
+
+    // Error handling
+    describe('Error Handling', () => {
+        it('returns null for invalid query', () => {
+            assert.equal(queryJsonPath('invalid', {}), null);
+        });
+
+        it('throws with throwOnError option', () => {
+            assert.throws(() => {
+                queryJsonPath('invalid', {}, { throwOnError: true });
+            });
+        });
+    });
+});

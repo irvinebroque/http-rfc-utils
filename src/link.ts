@@ -1,0 +1,475 @@
+/**
+ * Link header utilities per RFC 8288.
+ * RFC 8288 §3, §3.1, §3.2, §3.3, §3.4, §6.2.2.
+ * @see https://www.rfc-editor.org/rfc/rfc8288.html
+ */
+
+import type { LinkDefinition, PaginationLinks } from './types.js';
+import { decodeExtValue } from './ext-value.js';
+import {
+    isEmptyHeader,
+    quoteIfNeeded as quoteIfNeededImpl,
+    unquote as unquoteImpl,
+} from './header-utils.js';
+
+/**
+ * Standard link relation types (RFC 8288 Section 6.2.2 + common extensions)
+ */
+// RFC 8288 §6.2.2: Registered relation types.
+// RFC 8594 §6: sunset link relation type.
+// RFC 9264 §6: linkset link relation type.
+// RFC 9727 §7.2: api-catalog link relation type.
+export const LinkRelation = {
+    SELF: 'self',
+    FIRST: 'first',
+    LAST: 'last',
+    NEXT: 'next',
+    PREV: 'prev',
+    PREVIOUS: 'previous',  // Alias for prev
+    ALTERNATE: 'alternate',
+    CANONICAL: 'canonical',
+    AUTHOR: 'author',
+    COLLECTION: 'collection',
+    ITEM: 'item',
+    EDIT: 'edit',
+    EDIT_FORM: 'edit-form',
+    CREATE_FORM: 'create-form',
+    SEARCH: 'search',
+    DESCRIBEDBY: 'describedby',
+    SERVICE_DESC: 'service-desc',
+    SERVICE_DOC: 'service-doc',
+    SERVICE_META: 'service-meta',
+    STATUS: 'status',
+    SUNSET: 'sunset',            // RFC 8594 §6
+    LINKSET: 'linkset',          // RFC 9264 §6
+    API_CATALOG: 'api-catalog',  // RFC 9727 §7.2
+} as const;
+
+/**
+ * Quote a value if needed for Link header attribute.
+ * Values containing special characters must be quoted.
+ * 
+ * @param value - The value to potentially quote
+ * @returns Quoted value if needed
+ */
+// RFC 8288 §3.2: Link-param quoting rules.
+export function quoteIfNeeded(value: string): string {
+    return quoteIfNeededImpl(value);
+}
+
+/**
+ * Unquote a quoted string value, handling escapes.
+ * 
+ * @param value - Potentially quoted value
+ * @returns Unquoted value with escapes resolved
+ */
+// RFC 8288 §3.2: Link-param quoted-string unescaping.
+export function unquote(value: string): string {
+    return unquoteImpl(value);
+}
+
+/**
+ * Format a single link as a Link header value segment.
+ * 
+ * Output format: <href>; rel="value"; [other params]
+ * 
+ * @param link - Link definition
+ * @returns Formatted link string
+ */
+// RFC 8288 §3.1, §3.2, §3.3, §3.4: Link-value formatting and parameters.
+export function formatLink(link: LinkDefinition): string {
+    const parts: string[] = [`<${link.href}>`];
+
+    // rel is always first and always quoted per convention
+    if (link.rel) {
+        parts.push(`rel="${link.rel}"`);
+    }
+
+    // Add other parameters in a consistent order
+    // Always quote values for consistency
+    const orderedKeys = ['type', 'title', 'media', 'anchor', 'rev'];
+    for (const key of orderedKeys) {
+        if (key in link && link[key] !== undefined) {
+            const value = link[key];
+            if (typeof value === 'string') {
+                // Always quote values - escape any quotes in the value
+                const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                parts.push(`${key}="${escaped}"`);
+            }
+        }
+    }
+
+    // RFC 8288 §3.4.1: hreflang may appear multiple times
+    if (link.hreflang !== undefined) {
+        const hreflangs = Array.isArray(link.hreflang) ? link.hreflang : [link.hreflang];
+        for (const lang of hreflangs) {
+            const escaped = lang.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            parts.push(`hreflang="${escaped}"`);
+        }
+    }
+
+    // Add any extension attributes (skip titleLang as it's metadata)
+    const skipKeys = new Set(['href', 'rel', 'titleLang', ...orderedKeys, 'hreflang']);
+    for (const [key, value] of Object.entries(link)) {
+        if (skipKeys.has(key)) {
+            continue;
+        }
+        if (value !== undefined) {
+            if (typeof value === 'string') {
+                parts.push(`${key}=${quoteIfNeeded(value)}`);
+            } else if (Array.isArray(value)) {
+                // Multiple values for extension attribute
+                for (const v of value) {
+                    parts.push(`${key}=${quoteIfNeeded(v)}`);
+                }
+            }
+        }
+    }
+
+    return parts.join('; ');
+}
+
+/**
+ * Format multiple links as a complete Link header value.
+ * Links are comma-separated.
+ * 
+ * @param links - Array of link definitions
+ * @returns Complete Link header value
+ */
+// RFC 8288 §3: Link header field-value formatting.
+export function formatLinkHeader(links: LinkDefinition[]): string {
+    return links.map(formatLink).join(', ');
+}
+
+/**
+ * Build Link header from PaginationLinks (backward-compatible).
+ * 
+ * @param links - Pagination links object
+ * @returns Link header value
+ */
+// RFC 8288 §3, §3.3: Link header with relation types.
+export function buildLinkHeader(links: PaginationLinks): string {
+    const definitions: LinkDefinition[] = [];
+
+    definitions.push({ href: links.self, rel: 'self' });
+    definitions.push({ href: links.first, rel: 'first' });
+
+    if (links.prev) {
+        definitions.push({ href: links.prev, rel: 'prev' });
+    }
+
+    if (links.next) {
+        definitions.push({ href: links.next, rel: 'next' });
+    }
+
+    definitions.push({ href: links.last, rel: 'last' });
+
+    return formatLinkHeader(definitions);
+}
+
+/**
+ * Parser state machine states
+ */
+const enum State {
+    BETWEEN_LINKS,
+    IN_URI,
+    IN_PARAMS,
+    IN_PARAM_NAME,
+    IN_PARAM_VALUE,
+    IN_QUOTED_VALUE,
+}
+
+/**
+ * Parse a Link header value into link definitions.
+ * 
+ * **CRITICAL IMPLEMENTATION NOTES**:
+ * 
+ * 1. Commas INSIDE quoted strings are NOT separators:
+ *    `<url1>; title="Hello, World", <url2>; rel="next"`
+ *    This is TWO links, not three.
+ * 
+ * 2. Escaped characters in quoted values:
+ *    `title="Say \"Hello\""`  -> title = Say "Hello"
+ *    `title="Back\\slash"`    -> title = Back\slash
+ * 
+ * 3. Multiple values for same attribute (e.g., hreflang):
+ *    `<url>; rel="alternate"; hreflang="en"; hreflang="de"`
+ *    This should work but is rare.
+ * 
+ * 4. Parameters without values:
+ *    `<url>; rel="prefetch"; crossorigin`
+ *    crossorigin is a boolean attribute.
+ * 
+ * 5. Whitespace around delimiters should be trimmed:
+ *    `<url> ; rel = "next"` is valid
+ * 
+ * @param header - Link header value
+ * @returns Array of parsed link definitions
+ */
+// RFC 8288 §3, §3.1, §3.2, §3.3: Link header parsing.
+export function parseLinkHeader(header: string): LinkDefinition[] {
+    if (isEmptyHeader(header)) {
+        return [];
+    }
+
+    const results: LinkDefinition[] = [];
+    let state: State = State.BETWEEN_LINKS;
+    let currentLink: Partial<LinkDefinition> = {};
+    let currentParamName = '';
+    let currentParamValue = '';
+    let currentUri = '';
+    let escaped = false;
+
+    const saveParam = () => {
+        const name = currentParamName.trim().toLowerCase();
+        const rawValue = currentParamValue.trim();
+        if (!name) {
+            currentParamName = '';
+            currentParamValue = '';
+            return;
+        }
+
+        // Unquote the value
+        const value = rawValue.startsWith('"') ? unquote(rawValue) : (rawValue || '');
+
+        // RFC 8288 §3.4.1: These params MUST NOT appear more than once (ignore duplicates)
+        const singleUseParams = new Set(['rel', 'type', 'media', 'anchor']);
+        if (singleUseParams.has(name) && currentLink[name] !== undefined) {
+            currentParamName = '';
+            currentParamValue = '';
+            return;
+        }
+
+        // RFC 8288 §3.4.1: title* takes precedence over title
+        // title and title* also single-use, but title* wins
+        if (name === 'title*') {
+            if (currentLink['title*'] !== undefined) {
+                // Ignore duplicate title*
+                currentParamName = '';
+                currentParamValue = '';
+                return;
+            }
+            // Decode RFC 8187 ext-value
+            const decoded = decodeExtValue(value);
+            if (decoded) {
+                currentLink.title = decoded.value;
+                currentLink.titleLang = decoded.language;
+                currentLink['title*'] = value; // Store raw for round-trip
+            } else {
+                // Decoding failed, store raw value
+                currentLink['title*'] = value;
+            }
+            currentParamName = '';
+            currentParamValue = '';
+            return;
+        }
+
+        if (name === 'title') {
+            // Only use title if title* hasn't been seen
+            if (currentLink['title*'] !== undefined || currentLink.title !== undefined) {
+                currentParamName = '';
+                currentParamValue = '';
+                return;
+            }
+            currentLink.title = value;
+            currentParamName = '';
+            currentParamValue = '';
+            return;
+        }
+
+        // RFC 8288 §3.4.1: hreflang may appear multiple times
+        if (name === 'hreflang') {
+            const existing = currentLink.hreflang;
+            if (existing === undefined) {
+                currentLink.hreflang = value;
+            } else if (Array.isArray(existing)) {
+                existing.push(value);
+            } else {
+                currentLink.hreflang = [existing, value];
+            }
+            currentParamName = '';
+            currentParamValue = '';
+            return;
+        }
+
+        // RFC 8288 §3.3: rev is deprecated but should be parsed
+        if (name === 'rev') {
+            if (currentLink.rev === undefined) {
+                currentLink.rev = value;
+            }
+            currentParamName = '';
+            currentParamValue = '';
+            return;
+        }
+
+        // RFC 8288 §3.4.2: Extension attributes with * suffix
+        // Prefer the *-suffixed version when both are present
+        if (name.endsWith('*')) {
+            const baseName = name.slice(0, -1);
+            const decoded = decodeExtValue(value);
+            if (decoded) {
+                // Store decoded value under base name
+                currentLink[baseName] = decoded.value;
+                currentLink[name] = value; // Store raw for reference
+            } else {
+                currentLink[name] = value;
+            }
+            currentParamName = '';
+            currentParamValue = '';
+            return;
+        }
+
+        // Regular parameter - only set if not already set by *-version
+        const starName = `${name}*`;
+        if (currentLink[starName] !== undefined) {
+            // Skip, the *-version takes precedence
+            currentParamName = '';
+            currentParamValue = '';
+            return;
+        }
+
+        if (currentLink[name] === undefined) {
+            currentLink[name] = value;
+        }
+
+        currentParamName = '';
+        currentParamValue = '';
+    };
+
+    const saveLink = () => {
+        if (currentLink.href) {
+            if (!currentLink.rel) {
+                currentLink = {};
+                currentUri = '';
+                return;
+            }
+
+            const rels = currentLink.rel
+                .split(/\s+/)
+                .map(rel => rel.trim())
+                .filter(Boolean);
+
+            for (const rel of rels) {
+                results.push({
+                    ...(currentLink as LinkDefinition),
+                    rel,
+                });
+            }
+        }
+        currentLink = {};
+        currentUri = '';
+    };
+
+    for (let i = 0; i < header.length; i++) {
+        const char = header[i];
+
+        switch (state) {
+            case State.BETWEEN_LINKS:
+                if (char === '<') {
+                    currentUri = '';
+                    state = State.IN_URI;
+                }
+                // Ignore whitespace and commas between links
+                break;
+
+            case State.IN_URI:
+                if (char === '>') {
+                    currentLink.href = currentUri.trim();
+                    state = State.IN_PARAMS;
+                } else {
+                    currentUri += char;
+                }
+                break;
+
+            case State.IN_PARAMS:
+                if (char === ';') {
+                    // Save any pending parameter
+                    saveParam();
+                    state = State.IN_PARAM_NAME;
+                } else if (char === ',') {
+                    // End of this link
+                    saveParam();
+                    saveLink();
+                    state = State.BETWEEN_LINKS;
+                } else if (char === '"') {
+                    // Starting a quoted value directly (shouldn't happen normally)
+                    currentParamValue += char;
+                    state = State.IN_QUOTED_VALUE;
+                } else if (char !== ' ' && char !== '\t') {
+                    // Some character that's part of a param name (unusual)
+                    currentParamName += char;
+                    state = State.IN_PARAM_NAME;
+                }
+                break;
+
+            case State.IN_PARAM_NAME:
+                if (char === '=') {
+                    state = State.IN_PARAM_VALUE;
+                } else if (char === ';') {
+                    // Boolean parameter with no value
+                    saveParam();
+                    // Stay in IN_PARAM_NAME for next param
+                } else if (char === ',') {
+                    // End of link with boolean param
+                    saveParam();
+                    saveLink();
+                    state = State.BETWEEN_LINKS;
+                } else if (char !== ' ' && char !== '\t') {
+                    currentParamName += char;
+                }
+                break;
+
+            case State.IN_PARAM_VALUE:
+                if (char === '"') {
+                    currentParamValue += char;
+                    state = State.IN_QUOTED_VALUE;
+                } else if (char === ';') {
+                    saveParam();
+                    state = State.IN_PARAM_NAME;
+                } else if (char === ',') {
+                    saveParam();
+                    saveLink();
+                    state = State.BETWEEN_LINKS;
+                } else if (char !== ' ' && char !== '\t' || currentParamValue.length > 0) {
+                    // Only add non-whitespace, or whitespace if we've started the value
+                    // But actually, we should trim, so skip leading whitespace
+                    if (char !== ' ' && char !== '\t') {
+                        currentParamValue += char;
+                    } else if (currentParamValue.length > 0 && !currentParamValue.startsWith('"')) {
+                        // For unquoted values, stop at whitespace
+                        // This handles: rel = "next" where space before quote
+                        // Don't add whitespace, just continue
+                    }
+                }
+                break;
+
+            case State.IN_QUOTED_VALUE:
+                if (escaped) {
+                    currentParamValue += char;
+                    escaped = false;
+                } else if (char === '\\') {
+                    currentParamValue += char;
+                    escaped = true;
+                } else if (char === '"') {
+                    currentParamValue += char;
+                    // End of quoted value - go back to param processing
+                    state = State.IN_PARAM_VALUE;
+                } else {
+                    currentParamValue += char;
+                }
+                break;
+        }
+    }
+
+    // Handle end of string
+    if (state === State.IN_PARAM_NAME || state === State.IN_PARAM_VALUE || state === State.IN_PARAMS) {
+        saveParam();
+        saveLink();
+    } else if (state === State.IN_QUOTED_VALUE) {
+        // Unclosed quote - save what we have anyway
+        saveParam();
+        saveLink();
+    }
+
+    return results;
+}

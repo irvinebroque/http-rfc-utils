@@ -1,0 +1,18 @@
+# Source and tests (dist is published via files field)
+src/
+test/
+
+# Development files
+.github/
+.gitignore
+tsconfig.json
+*.md
+!README.md
+
+# Editor/OS files
+.DS_Store
+*.log
+.env*
+
+# npm artifacts
+*.tgz
