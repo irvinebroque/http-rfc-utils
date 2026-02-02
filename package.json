@@ -47,8 +47,9 @@
         "url": "https://github.com/irvinebroque/http-rfc-utils/issues"
     },
     "engines": {
-        "node": ">=25.0.0"
+        "node": ">=22.0.0"
     },
+    "packageManager": "pnpm@10.26.1",
     "devDependencies": {
         "@types/node": "^22.10.2",
         "tsx": "^4.21.0",
