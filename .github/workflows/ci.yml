@@ -11,13 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [25]
+        node-version: [22]
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-      - run: npm install
-      - run: npm run typecheck
-      - run: npm run test
-      - run: npm run build
+      - run: pnpm install
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
