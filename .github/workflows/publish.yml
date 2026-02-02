@@ -1,24 +1,35 @@
 name: Publish
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 25
+          node-version: 22
           registry-url: https://registry.npmjs.org
-      - run: npm install
-      - run: npm run test
-      - run: npm run build
-      - run: npm publish --provenance --access public
+
+      - run: pnpm install
+
+      - run: pnpm test
+
+      - run: pnpm build
+
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version patch -m "v%s"
+
+      - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - run: git push --follow-tags
