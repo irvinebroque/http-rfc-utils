@@ -23,7 +23,9 @@ Scope: README.md, docs/src/content/docs/reference/rfcs.mdx, src/*.ts, test/*.tes
 | RFC 6750 | Yes | Yes | auth | auth | - |
 | RFC 7616 | Yes (3.3-3.5) | No | auth | auth | Digest authentication; qop=auth-int entity-body handling out-of-scope. |
 | RFC 4647 | Yes (3) | Yes | language | language | - |
-| RFC 8941 | Yes (3-4) | Yes | structured-fields | structured-fields | - |
+| RFC 8941 | Yes (3-4) | Yes | structured-fields | structured-fields | RFC 9651 Date type now supported. |
+| RFC 9651 | Yes (3.3.7) | No | structured-fields, types | structured-fields | Date bare item (@unix-seconds) parsing and serialization. |
+| RFC 9745 | Yes (2-4) | No | deprecation, link | deprecation | Deprecation header parsing/formatting; deprecation link relation. |
 | RFC 8942 | Yes | Yes | client-hints | client-hints | - |
 | RFC 9211 | Yes | Yes | cache-status | cache-status | - |
 | RFC 9209 | Yes (2-2.4) | No | proxy-status | proxy-status | Proxy-Status parsing/formatting; all 32 error types. |
@@ -566,6 +568,34 @@ Relevant section: 2 (rfc850-date)
 Checklist (status):
 - Sliding 50-year window handling: Compliant. (`src/datetime.ts`)
 
+### RFC 9651 (Structured Field Values - Date type)
+Relevant section: 3.3.7
+
+ABNF (subset):
+```abnf
+sf-date    = "@" sf-integer
+```
+
+Checklist (status):
+- 3.3.7 Date parsing (@ prefix + sf-integer): Compliant. (`src/structured-fields.ts`)
+- 3.3.7 Date serialization (@timestamp): Compliant. (`src/structured-fields.ts`)
+- 3.3.7 Decimal timestamps rejected: Compliant. (`src/structured-fields.ts`)
+- SfDate class wraps timestamp to distinguish from plain numbers: Compliant. (`src/types.ts`)
+- Date in dictionary/list contexts: Compliant. (`src/structured-fields.ts`)
+
+### RFC 9745 (Deprecation Header)
+Relevant sections: 2, 2.1, 2.2, 3, 4
+
+Checklist (status):
+- 2.1 Deprecation = sf-item (Date per RFC 9651 §3.3.7): Compliant. (`src/deprecation.ts`)
+- 2.1 Past dates mean already deprecated: Compliant (isDeprecated helper). (`src/deprecation.ts`)
+- 2.1 Future dates mean will be deprecated: Compliant. (`src/deprecation.ts`)
+- 2.2 Scope applies to response resource: Out-of-scope (application-level concern).
+- 3 Link relation (deprecation): Compliant. (`src/link.ts` LinkRelation.DEPRECATION)
+- 3 Sunset-after-deprecation ordering validation: Compliant. (`src/deprecation.ts`)
+- 4 IANA registration: Out-of-scope (IANA responsibility).
+- Header builder for paired Deprecation + Sunset: Compliant. (`src/deprecation.ts`)
+
 ### RFC 8594 (Sunset Header)
 Relevant sections: 3, 6
 
@@ -728,7 +758,8 @@ Status legend: Compliant / Partial / Out-of-scope
 | src/cookie.ts | RFC 6265 4.1.1, 4.2.1, 5.1.1, 5.1.3-5.1.4, 5.2-5.4 | Partial | Parsing/matching implemented; storage model and public suffix handling out-of-scope. |
 | src/auth.ts | RFC 7617 2-2.1; RFC 6750 2-3; RFC 7616 3.3-3.5 | Partial | Basic/Bearer/Digest parsing implemented; Digest response computation with MD5/SHA-256/SHA-512-256; qop=auth-int out-of-scope; Bearer param charset constraints not enforced; form/query methods out-of-scope. |
 | src/hsts.ts | RFC 6797 6.1-6.1.2, 8.1 | Compliant | Duplicate directives invalidate header; max-age required. |
-| src/structured-fields.ts | RFC 8941 3-4 | Compliant | Key lowercase, numeric limits, base64 validation, string escape/range validation, token charset, and integer serialization range enforced. |
+| src/structured-fields.ts | RFC 8941 3-4; RFC 9651 3.3.7 | Compliant | Key lowercase, numeric limits, base64 validation, string escape/range validation, token charset, integer serialization range enforced, and RFC 9651 Date type support. |
+| src/deprecation.ts | RFC 9745 2-4; RFC 9651 3.3.7 | Compliant | Deprecation header parsing/formatting via structured fields Date type; isDeprecated helper; sunset-after-deprecation validation; paired header builder. |
 | src/client-hints.ts | RFC 8942 2.2, 3.1-3.2, 4.2 | Partial | Accept-CH parsing implemented; UA opt-in and secure-transport handling out-of-scope. |
 | src/cache-status.ts | RFC 9211 2-2.8 | Partial | Structured field parsing implemented; semantic validation left to callers. |
 | src/proxy-status.ts | RFC 9209 2-2.4 | Compliant | Structured field parsing/formatting; all 32 error types; extra params for dns_error and tls_alert_received; extensible. |

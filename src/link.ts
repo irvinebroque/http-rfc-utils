@@ -17,6 +17,7 @@ import {
  */
 // RFC 8288 §6.2.2: Registered relation types.
 // RFC 8594 §6: sunset link relation type.
+// RFC 9745 §4: deprecation link relation type.
 // RFC 9264 §6: linkset link relation type.
 // RFC 9727 §7.2: api-catalog link relation type.
 export const LinkRelation = {
@@ -41,6 +42,7 @@ export const LinkRelation = {
     SERVICE_META: 'service-meta',
     STATUS: 'status',
     SUNSET: 'sunset',            // RFC 8594 §6
+    DEPRECATION: 'deprecation',  // RFC 9745 §4
     LINKSET: 'linkset',          // RFC 9264 §6
     API_CATALOG: 'api-catalog',  // RFC 9727 §7.2
 } as const;

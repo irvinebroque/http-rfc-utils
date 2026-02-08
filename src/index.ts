@@ -70,7 +70,7 @@ export type {
     DigestPreference,
 } from './types.js';
 
-export { isPaginationError, isPaginationParams } from './types.js';
+export { isPaginationError, isPaginationParams, SfDate } from './types.js';
 
 // =============================================================================
 // ETag (RFC 9110)
@@ -385,7 +385,7 @@ export {
 } from './headers.js';
 
 // =============================================================================
-// Structured Field Values (RFC 8941)
+// Structured Field Values (RFC 8941 + RFC 9651)
 // =============================================================================
 export {
     parseSfList,
@@ -395,6 +395,17 @@ export {
     serializeSfDict,
     serializeSfItem,
 } from './structured-fields.js';
+
+// =============================================================================
+// Deprecation (RFC 9745)
+// =============================================================================
+export {
+    parseDeprecation,
+    formatDeprecation,
+    isDeprecated,
+    validateDeprecationSunsetOrder,
+    buildDeprecationHeaders,
+} from './deprecation.js';
 
 // =============================================================================
 // JSON Pointer (RFC 6901)
