@@ -1011,6 +1011,111 @@ export interface CompiledUriTemplate {
     variables: string[];
 }
 
+// =============================================================================
+// RFC 9309 — Robots Exclusion Protocol
+// =============================================================================
+
+/**
+ * A group of rules for one or more user agents.
+ * RFC 9309 §2.1: A robots.txt file contains one or more groups.
+ */
+export interface RobotsGroup {
+    userAgents: string[];
+    allow: string[];
+    disallow: string[];
+    crawlDelay?: number;
+}
+
+/**
+ * Complete robots.txt configuration.
+ * RFC 9309 §2: Structured representation of a robots.txt file.
+ */
+export interface RobotsConfig {
+    groups: RobotsGroup[];
+    sitemaps: string[];
+    host?: string;
+}
+
+// =============================================================================
+// RFC 9116 — security.txt
+// =============================================================================
+
+/**
+ * Structured security.txt file.
+ * RFC 9116 §2.5: All fields of the security.txt format.
+ */
+export interface SecurityTxt {
+    contact: string[];
+    expires: Date;
+    encryption?: string[];
+    acknowledgments?: string[];
+    preferredLanguages?: string[];
+    canonical?: string[];
+    policy?: string[];
+    hiring?: string[];
+    extensions?: Record<string, string[]>;
+}
+
+/**
+ * A validation issue found in a security.txt file.
+ */
+export interface SecurityTxtIssue {
+    field: string;
+    message: string;
+    severity: 'error' | 'warning';
+}
+
+// =============================================================================
+// RFC 7033 — WebFinger
+// =============================================================================
+
+/**
+ * A link in a WebFinger JRD response.
+ * RFC 7033 §4.4.4: Link relation objects.
+ */
+export interface WebFingerLink {
+    rel: string;
+    type?: string;
+    href?: string;
+    titles?: Record<string, string>;
+    properties?: Record<string, string | null>;
+}
+
+/**
+ * WebFinger JSON Resource Descriptor (JRD) response.
+ * RFC 7033 §4.4: JRD document structure.
+ */
+export interface WebFingerResponse {
+    subject: string;
+    aliases?: string[];
+    properties?: Record<string, string | null>;
+    links?: WebFingerLink[];
+}
+
+// =============================================================================
+// RFC 6415 — Host Metadata
+// =============================================================================
+
+/**
+ * A link in a host-meta document.
+ * RFC 6415 §2: Host-meta link element.
+ */
+export interface HostMetaLink {
+    rel: string;
+    type?: string;
+    href?: string;
+    template?: string;
+}
+
+/**
+ * Host metadata document.
+ * RFC 6415 §2: XRD-based host-wide metadata.
+ */
+export interface HostMeta {
+    links: HostMetaLink[];
+    properties?: Record<string, string | null>;
+}
+
 // Type guards
 export function isPaginationError(result: PaginationResult): result is PaginationError {
     return 'error' in result;

@@ -5,7 +5,49 @@ RFC-aligned HTTP utilities for APIs: ETags, conditional requests, caching, link 
 ## Installation
 
 ```bash
-npm install http-rfc-utils
+pnpm add @irvinebroque/http-rfc-utils
+```
+
+```bash
+npm install @irvinebroque/http-rfc-utils
+```
+
+Import from `@irvinebroque/http-rfc-utils`.
+
+## Quickstart
+
+```ts
+import {
+    generateETag,
+    parseETag,
+    evaluatePreconditions,
+    formatHTTPDate,
+    cacheControl,
+    CachePresets,
+} from '@irvinebroque/http-rfc-utils';
+
+const body = { id: '42', name: 'Ada' };
+const etagHeader = generateETag(body);
+const currentETag = parseETag(etagHeader);
+const lastModified = new Date();
+const request = new Request('https://api.example.test/items/42');
+
+const conditional = evaluatePreconditions(request, currentETag, lastModified);
+if (!conditional.proceed) {
+    return new Response(null, {
+        status: conditional.status,
+        headers: conditional.headers,
+    });
+}
+
+return new Response(JSON.stringify(body), {
+    headers: {
+        'Content-Type': 'application/json',
+        'ETag': etagHeader,
+        'Last-Modified': formatHTTPDate(lastModified),
+        'Cache-Control': cacheControl(CachePresets.revalidate),
+    },
+});
 ```
 
 ## Supported RFCs
@@ -44,50 +86,60 @@ npm install http-rfc-utils
 - [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986.html), Sections 2, 3.1, 3.2.2, 5.2.4, 6.2 (URI Generic Syntax)
 - [RFC 6570](https://www.rfc-editor.org/rfc/rfc6570.html), Sections 1.2, 2-3 (URI Template)
 - [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html), Sections 2-4 (HTTP Message Signatures)
+- [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html), Sections 2.1-2.4 (Robots Exclusion Protocol)
+- [RFC 9116](https://www.rfc-editor.org/rfc/rfc9116.html), Sections 2.3, 2.5, 3 (security.txt)
+- [RFC 7033](https://www.rfc-editor.org/rfc/rfc7033.html), Sections 4.2-4.4 (WebFinger)
+- [RFC 6415](https://www.rfc-editor.org/rfc/rfc6415.html), Sections 2-3 (Host Metadata)
 - Fetch/CORS specs (CORS headers)
 
 ## RFC References
 
-Use these RFCs as the source of truth for HTTP behavior and field formats:
+Use the RFC list in `AGENTS.md` as the project source of truth for implementation work.
 
-- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html) - Sections 5.6.7, 8.8.2-8.8.3.2, 10.2.3, 12.4.2, 12.5.3-12.5.5, 13.1.1-13.1.5, 13.2.2, 14.1.2-14.4, 15.4.5, 15.5.13, 15.5.17
-- [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html) - Sections 1.2.2, 5.2, 5.2.2
-- [RFC 5861](https://www.rfc-editor.org/rfc/rfc5861.html) - Section 3 (stale-while-revalidate, stale-if-error)
-- [RFC 8246](https://www.rfc-editor.org/rfc/rfc8246.html) - Section 2 (immutable)
-- [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html) - Sections 3.1-3.4, 6
-- [RFC 9264](https://www.rfc-editor.org/rfc/rfc9264.html) - Sections 4.1-4.2, 6
-- [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727.html) - Sections 2-4, 7
-- [RFC 7231](https://www.rfc-editor.org/rfc/rfc7231.html) - Sections 5.3.1-5.3.2 (obsoleted by RFC 9110)
-- [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240.html) - Sections 2-3
-- [RFC 7239](https://www.rfc-editor.org/rfc/rfc7239.html) - Section 4
-- [RFC 6265](https://www.rfc-editor.org/rfc/rfc6265.html) - Sections 4.1.1, 4.2.1, 5.1.1, 5.1.3-5.1.4, 5.2-5.4
-- [RFC 6266](https://www.rfc-editor.org/rfc/rfc6266.html) - Sections 4-4.3
-- [RFC 8187](https://www.rfc-editor.org/rfc/rfc8187.html) - Section 3.2
-- [RFC 6797](https://www.rfc-editor.org/rfc/rfc6797.html) - Sections 6.1-6.1.2
-- [RFC 7617](https://www.rfc-editor.org/rfc/rfc7617.html) - Sections 2-2.1
-- [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750.html) - Sections 2.1, 3
-- [RFC 7616](https://www.rfc-editor.org/rfc/rfc7616.html) - Sections 3.3-3.5
-- [RFC 4647](https://www.rfc-editor.org/rfc/rfc4647.html) - Section 3 (basic filtering)
-- [RFC 8941](https://www.rfc-editor.org/rfc/rfc8941.html) - Sections 3-4
-- [RFC 9651](https://www.rfc-editor.org/rfc/rfc9651.html) - Section 3.3.7 (Date type, obsoletes RFC 8941)
-- [RFC 9745](https://www.rfc-editor.org/rfc/rfc9745.html) - Sections 2-4
-- [RFC 8942](https://www.rfc-editor.org/rfc/rfc8942.html) - Sections 2.2, 3.1-3.2, 4.2
-- [RFC 9211](https://www.rfc-editor.org/rfc/rfc9211.html) - Sections 2-2.8
-- [RFC 9209](https://www.rfc-editor.org/rfc/rfc9209.html) - Sections 2-2.4
-- [RFC 9530](https://www.rfc-editor.org/rfc/rfc9530.html) - Sections 2-5
-- [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html) - Sections 3.1-3.2, 4.1
-- [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901.html) - Sections 3-7
-- [RFC 9535](https://www.rfc-editor.org/rfc/rfc9535.html) - Sections 2.1-2.7
-- [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) - Section 5.6
-- [RFC 850](https://www.rfc-editor.org/rfc/rfc850.html) - Section 2
-- [RFC 8594](https://www.rfc-editor.org/rfc/rfc8594.html) - Sections 3, 6
-- [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986.html) - Sections 2, 3.1, 3.2.2, 5.2.4, 6.2
-- [RFC 6570](https://www.rfc-editor.org/rfc/rfc6570.html) - Sections 1.2, 2-3
-- [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html) - Sections 2-4
+Use the RFC map below for module-level coverage and exported API references.
 
 ## Requirements
 
-- Node.js 25 or later
+- Node.js 22 or later
+
+## Find APIs by task
+
+- Conditional requests and validators: `src/etag.ts`, `src/conditional.ts`
+- Caching and cache metadata: `src/cache.ts`, `src/cache-status.ts`, `src/proxy-status.ts`
+- Negotiation and headers: `src/negotiate.ts`, `src/language.ts`, `src/encoding.ts`, `src/headers.ts`
+- Linking and pagination: `src/link.ts`, `src/linkset.ts`, `src/pagination.ts`
+- Auth, cookies, and transport: `src/auth.ts`, `src/cookie.ts`, `src/hsts.ts`, `src/cors.ts`
+- API response utilities: `src/response.ts`, `src/problem.ts`
+
+## Find exact imports by task
+
+All public APIs are exported from `@irvinebroque/http-rfc-utils`.
+
+| Task | Exact imports |
+| --- | --- |
+| ETag generation and comparison | `generateETag`, `generateETagAsync`, `parseETag`, `compareETags` |
+| Conditional preconditions (`304`/`412`) | `evaluatePreconditions`, `handleConditionalRequest` |
+| HTTP date and timestamp handling | `formatHTTPDate`, `parseHTTPDate`, `toRFC3339`, `parseRFC3339` |
+| Cache-Control creation and parsing | `cacheControl`, `getCacheHeaders`, `parseCacheControl`, `CachePresets` |
+| Problem Details responses | `createProblem`, `problemResponse`, `Problems` |
+| Common response builders | `jsonResponse`, `simpleJsonResponse`, `csvResponse`, `noContentResponse` |
+| Accept negotiation and CSV output | `parseAccept`, `negotiate`, `getResponseFormat`, `toCSV` |
+| Language and encoding negotiation | `parseAcceptLanguage`, `negotiateLanguage`, `parseAcceptEncoding`, `negotiateEncoding` |
+| Link header parsing and formatting | `parseLinkHeader`, `formatLinkHeader`, `buildLinkHeader` |
+| Linkset and API catalog documents | `parseLinksetJson`, `formatLinksetJson`, `createApiCatalog`, `parseApiCatalog` |
+| Pagination helpers | `parsePaginationParams`, `encodeCursor`, `decodeCursor`, `buildPaginationLinks` |
+| CORS policies and preflight headers | `buildCorsHeadersForOrigin`, `buildPreflightHeaders`, `isOriginAllowed`, `corsHeaders` |
+| Content-Disposition with RFC 8187 params | `parseContentDisposition`, `formatContentDisposition`, `formatHeaderParam` |
+| Prefer and Forwarded headers | `parsePrefer`, `formatPrefer`, `formatPreferenceApplied`, `parseForwarded`, `formatForwarded` |
+| Retry-After, Vary, and Sunset | `parseRetryAfter`, `formatRetryAfter`, `mergeVary`, `parseSunset`, `formatSunset` |
+| Structured Field Values | `parseSfList`, `parseSfDict`, `parseSfItem`, `serializeSfList`, `serializeSfDict`, `serializeSfItem`, `SfDate` |
+| JSON Pointer and JSONPath queries | `parseJsonPointer`, `evaluateJsonPointer`, `parseJsonPath`, `queryJsonPath` |
+| URI and URI Template utilities | `normalizeUri`, `compareUris`, `parseUriTemplate`, `expandUriTemplate` |
+| HTTP message signatures | `parseSignatureInput`, `formatSignatureInput`, `parseSignature`, `createSignatureBase` |
+| Robots.txt parsing and matching | `parseRobotsTxt`, `formatRobotsTxt`, `matchUserAgent`, `isAllowed` |
+| security.txt handling | `parseSecurityTxt`, `formatSecurityTxt`, `isSecurityTxtExpired`, `validateSecurityTxt` |
+| WebFinger (JRD) | `parseJrd`, `formatJrd`, `validateJrd`, `matchResource`, `filterByRel`, `JRD_CONTENT_TYPE` |
+| Host metadata (XRD/JSON) | `parseHostMeta`, `formatHostMeta`, `parseHostMetaJson`, `formatHostMetaJson` |
 
 ## RFC Map
 
@@ -125,6 +177,10 @@ Use these RFCs as the source of truth for HTTP behavior and field formats:
 | `src/uri.ts` | RFC 3986 §§2, 3.1, 3.2.2, 5.2.4, 6.2 | `percentEncode`, `percentDecode`, `normalizeUri`, `removeDotSegments`, `compareUris`, `isUnreserved`, `isReserved` | URI percent-encoding, normalization, and comparison. |
 | `src/uri-template.ts` | RFC 6570 §§1.2, 2-3 | `parseUriTemplate`, `expandUriTemplate`, `isValidUriTemplate`, `getTemplateVariables`, `compileUriTemplate` | Parse and expand URI Templates with support for all Level 4 operators and modifiers. |
 | `src/http-signatures.ts` | RFC 9421 §§2-4 | `parseSignatureInput`, `formatSignatureInput`, `parseSignature`, `formatSignature`, `parseComponentIdentifier`, `formatComponentIdentifier`, `canonicalizeFieldValue`, `binaryWrapFieldValues`, `deriveComponentValue`, `createSignatureBase`, `isDerivedComponent`, `DERIVED_COMPONENTS` | Parse/format Signature-Input and Signature fields; create signature base strings for HTTP message signatures. |
+| `src/robots.ts` | RFC 9309 §§2.1-2.4 | `parseRobotsTxt`, `formatRobotsTxt`, `matchUserAgent`, `isAllowed` | Parse and format robots.txt; match user agents; check path access with longest-match-wins, wildcards, and `$`. |
+| `src/security-txt.ts` | RFC 9116 §§2.3, 2.5, 3 | `parseSecurityTxt`, `formatSecurityTxt`, `isSecurityTxtExpired`, `validateSecurityTxt` | Parse and format security.txt with CRLF; validate required fields and expiry. |
+| `src/webfinger.ts` | RFC 7033 §§4.2-4.4 | `parseJrd`, `formatJrd`, `validateJrd`, `matchResource`, `filterByRel`, `JRD_CONTENT_TYPE` | Parse/format WebFinger JRD; match resources; filter links by `rel`. |
+| `src/host-meta.ts` | RFC 6415 §§2-3 | `parseHostMeta`, `formatHostMeta`, `parseHostMetaJson`, `formatHostMetaJson` | Parse/format host-meta XRD XML and JSON. |
 | `src/cors.ts` | Fetch/CORS specs | `defaultCorsHeaders`, `buildCorsHeaders`, `buildCorsHeadersForOrigin`, `buildPreflightHeaders`, `isOriginAllowed`, `corsHeaders` | Build CORS headers for single or multiple origins. |
 
 ## Recipes
@@ -138,7 +194,7 @@ Use these RFCs as the source of truth for HTTP behavior and field formats:
 5. Otherwise return your response with `ETag` and `Last-Modified`.
 
 ```ts
-import { evaluatePreconditions } from 'http-rfc-utils';
+import { evaluatePreconditions } from '@irvinebroque/http-rfc-utils';
 
 const result = evaluatePreconditions(request, currentETag, lastModified);
 
@@ -157,7 +213,7 @@ if (!result.proceed) {
 3. Combine with `jsonResponse`/`simpleJsonResponse`.
 
 ```ts
-import { cacheControl, CachePresets } from 'http-rfc-utils';
+import { cacheControl, CachePresets } from '@irvinebroque/http-rfc-utils';
 
 const headers = {
     'Cache-Control': cacheControl(CachePresets.revalidate),
@@ -173,7 +229,7 @@ const headers = {
 ### Link header parsing
 
 ```ts
-import { parseLinkHeader } from 'http-rfc-utils';
+import { parseLinkHeader } from '@irvinebroque/http-rfc-utils';
 
 const links = parseLinkHeader(response.headers.get('Link') ?? '');
 ```
@@ -211,6 +267,10 @@ const links = parseLinkHeader(response.headers.get('Link') ?? '');
 - `uri`: RFC 3986 URI percent-encoding, normalization, and comparison.
 - `uri-template`: RFC 6570 URI Template parsing and expansion; all Level 4 operators and modifiers.
 - `http-signatures`: RFC 9421 HTTP Message Signatures; Signature-Input/Signature field parsing; signature base creation.
+- `robots`: RFC 9309 robots.txt parsing/formatting; user-agent matching and path access checking.
+- `security-txt`: RFC 9116 security.txt parsing/formatting (CRLF); validation and expiry checking.
+- `webfinger`: RFC 7033 JRD parsing/formatting; resource matching and rel filtering.
+- `host-meta`: RFC 6415 host-meta XRD XML and JSON parsing/formatting.
 - `cors`: permissive defaults plus origin-aware header builder.
 
 ## Notes
@@ -224,5 +284,5 @@ const links = parseLinkHeader(response.headers.get('Link') ?? '');
 ## Testing
 
 ```bash
-npm test
+pnpm test
 ```
