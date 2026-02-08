@@ -136,6 +136,10 @@ All public APIs are exported from `@irvinebroque/http-rfc-utils`.
 | JSON Pointer and JSONPath queries | `parseJsonPointer`, `evaluateJsonPointer`, `parseJsonPath`, `queryJsonPath` |
 | URI and URI Template utilities | `normalizeUri`, `compareUris`, `parseUriTemplate`, `expandUriTemplate` |
 | HTTP message signatures | `parseSignatureInput`, `formatSignatureInput`, `parseSignature`, `createSignatureBase` |
+| Robots.txt parsing and matching | `parseRobotsTxt`, `formatRobotsTxt`, `matchUserAgent`, `isAllowed` |
+| security.txt handling | `parseSecurityTxt`, `formatSecurityTxt`, `isSecurityTxtExpired`, `validateSecurityTxt` |
+| WebFinger (JRD) | `parseJrd`, `formatJrd`, `validateJrd`, `matchResource`, `filterByRel`, `JRD_CONTENT_TYPE` |
+| Host metadata (XRD/JSON) | `parseHostMeta`, `formatHostMeta`, `parseHostMetaJson`, `formatHostMetaJson` |
 
 ## RFC Map
 
@@ -173,6 +177,10 @@ All public APIs are exported from `@irvinebroque/http-rfc-utils`.
 | `src/uri.ts` | RFC 3986 §§2, 3.1, 3.2.2, 5.2.4, 6.2 | `percentEncode`, `percentDecode`, `normalizeUri`, `removeDotSegments`, `compareUris`, `isUnreserved`, `isReserved` | URI percent-encoding, normalization, and comparison. |
 | `src/uri-template.ts` | RFC 6570 §§1.2, 2-3 | `parseUriTemplate`, `expandUriTemplate`, `isValidUriTemplate`, `getTemplateVariables`, `compileUriTemplate` | Parse and expand URI Templates with support for all Level 4 operators and modifiers. |
 | `src/http-signatures.ts` | RFC 9421 §§2-4 | `parseSignatureInput`, `formatSignatureInput`, `parseSignature`, `formatSignature`, `parseComponentIdentifier`, `formatComponentIdentifier`, `canonicalizeFieldValue`, `binaryWrapFieldValues`, `deriveComponentValue`, `createSignatureBase`, `isDerivedComponent`, `DERIVED_COMPONENTS` | Parse/format Signature-Input and Signature fields; create signature base strings for HTTP message signatures. |
+| `src/robots.ts` | RFC 9309 §§2.1-2.4 | `parseRobotsTxt`, `formatRobotsTxt`, `matchUserAgent`, `isAllowed` | Parse and format robots.txt; match user agents; check path access with longest-match-wins, wildcards, and `$`. |
+| `src/security-txt.ts` | RFC 9116 §§2.3, 2.5, 3 | `parseSecurityTxt`, `formatSecurityTxt`, `isSecurityTxtExpired`, `validateSecurityTxt` | Parse and format security.txt with CRLF; validate required fields and expiry. |
+| `src/webfinger.ts` | RFC 7033 §§4.2-4.4 | `parseJrd`, `formatJrd`, `validateJrd`, `matchResource`, `filterByRel`, `JRD_CONTENT_TYPE` | Parse/format WebFinger JRD; match resources; filter links by `rel`. |
+| `src/host-meta.ts` | RFC 6415 §§2-3 | `parseHostMeta`, `formatHostMeta`, `parseHostMetaJson`, `formatHostMetaJson` | Parse/format host-meta XRD XML and JSON. |
 | `src/cors.ts` | Fetch/CORS specs | `defaultCorsHeaders`, `buildCorsHeaders`, `buildCorsHeadersForOrigin`, `buildPreflightHeaders`, `isOriginAllowed`, `corsHeaders` | Build CORS headers for single or multiple origins. |
 
 ## Recipes
@@ -259,6 +267,10 @@ const links = parseLinkHeader(response.headers.get('Link') ?? '');
 - `uri`: RFC 3986 URI percent-encoding, normalization, and comparison.
 - `uri-template`: RFC 6570 URI Template parsing and expansion; all Level 4 operators and modifiers.
 - `http-signatures`: RFC 9421 HTTP Message Signatures; Signature-Input/Signature field parsing; signature base creation.
+- `robots`: RFC 9309 robots.txt parsing/formatting; user-agent matching and path access checking.
+- `security-txt`: RFC 9116 security.txt parsing/formatting (CRLF); validation and expiry checking.
+- `webfinger`: RFC 7033 JRD parsing/formatting; resource matching and rel filtering.
+- `host-meta`: RFC 6415 host-meta XRD XML and JSON parsing/formatting.
 - `cors`: permissive defaults plus origin-aware header builder.
 
 ## Notes
