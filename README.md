@@ -29,6 +29,8 @@ npm install http-rfc-utils
 - [RFC 7616](https://www.rfc-editor.org/rfc/rfc7616.html), Sections 3.3-3.5 (Digest authentication)
 - [RFC 4647](https://www.rfc-editor.org/rfc/rfc4647.html), Section 3 (Language tag matching)
 - [RFC 8941](https://www.rfc-editor.org/rfc/rfc8941.html), Sections 3-4 (Structured Field Values)
+- [RFC 9651](https://www.rfc-editor.org/rfc/rfc9651.html), Section 3.3.7 (Structured Field Date type)
+- [RFC 9745](https://www.rfc-editor.org/rfc/rfc9745.html), Sections 2-4 (Deprecation header)
 - [RFC 8942](https://www.rfc-editor.org/rfc/rfc8942.html), Sections 2.2, 3.1-3.2, 4.2 (Client Hints)
 - [RFC 9211](https://www.rfc-editor.org/rfc/rfc9211.html), Sections 2-2.8 (Cache-Status)
 - [RFC 9209](https://www.rfc-editor.org/rfc/rfc9209.html), Sections 2-2.4 (Proxy-Status)
@@ -67,6 +69,8 @@ Use these RFCs as the source of truth for HTTP behavior and field formats:
 - [RFC 7616](https://www.rfc-editor.org/rfc/rfc7616.html) - Sections 3.3-3.5
 - [RFC 4647](https://www.rfc-editor.org/rfc/rfc4647.html) - Section 3 (basic filtering)
 - [RFC 8941](https://www.rfc-editor.org/rfc/rfc8941.html) - Sections 3-4
+- [RFC 9651](https://www.rfc-editor.org/rfc/rfc9651.html) - Section 3.3.7 (Date type, obsoletes RFC 8941)
+- [RFC 9745](https://www.rfc-editor.org/rfc/rfc9745.html) - Sections 2-4
 - [RFC 8942](https://www.rfc-editor.org/rfc/rfc8942.html) - Sections 2.2, 3.1-3.2, 4.2
 - [RFC 9211](https://www.rfc-editor.org/rfc/rfc9211.html) - Sections 2-2.8
 - [RFC 9209](https://www.rfc-editor.org/rfc/rfc9209.html) - Sections 2-2.4
@@ -104,7 +108,8 @@ Use these RFCs as the source of truth for HTTP behavior and field formats:
 | `src/language.ts` | RFC 9110 §§12.4.2, 12.5.4; RFC 4647 §3 | `parseAcceptLanguage`, `negotiateLanguage` | Parse and negotiate `Accept-Language` with basic filtering. |
 | `src/encoding.ts` | RFC 9110 §§12.4.2, 12.4.3, 12.5.3 | `parseAcceptEncoding`, `negotiateEncoding` | Parse and negotiate `Accept-Encoding` values. |
 | `src/headers.ts` | RFC 9110 §§10.2.3, 12.5.5; RFC 8594 §3 | `parseRetryAfter`, `formatRetryAfter`, `mergeVary`, `parseSunset`, `formatSunset`, `isSunsetImminent` | Retry-After parsing/formatting, Vary merging, and Sunset header. |
-| `src/structured-fields.ts` | RFC 8941 §§3-4 | `parseSfList`, `parseSfDict`, `parseSfItem`, `serializeSfList`, `serializeSfDict`, `serializeSfItem` | Structured field parsing and serialization. |
+| `src/structured-fields.ts` | RFC 8941 §§3-4; RFC 9651 §3.3.7 | `parseSfList`, `parseSfDict`, `parseSfItem`, `serializeSfList`, `serializeSfDict`, `serializeSfItem`, `SfDate` | Structured field parsing and serialization with RFC 9651 Date type support. |
+| `src/deprecation.ts` | RFC 9745 §§2-4; RFC 9651 §3.3.7 | `parseDeprecation`, `formatDeprecation`, `isDeprecated`, `validateDeprecationSunsetOrder`, `buildDeprecationHeaders` | Parse/format Deprecation header; validate deprecation/sunset ordering. |
 | `src/client-hints.ts` | RFC 8942 §§2.2, 3.1-3.2, 4.2 | `parseAcceptCH`, `formatAcceptCH`, `filterClientHints`, `mergeClientHintsVary` | Accept-CH parsing and Vary helper for Client Hints. |
 | `src/cache-status.ts` | RFC 9211 §§2-2.8 | `parseCacheStatus`, `formatCacheStatus` | Parse and format Cache-Status responses. |
 | `src/proxy-status.ts` | RFC 9209 §§2-2.4 | `parseProxyStatus`, `formatProxyStatus`, `isProxyErrorType`, `PROXY_ERROR_TYPES` | Parse and format Proxy-Status responses; validate error types. |
@@ -192,7 +197,8 @@ const links = parseLinkHeader(response.headers.get('Link') ?? '');
 - `auth`: Basic, Bearer, and Digest Authorization + WWW-Authenticate parsing/formatting; Digest response computation.
 - `hsts`: Strict-Transport-Security parsing/formatting.
 - `headers`: Retry-After parsing/formatting, Vary merging, and Sunset header.
-- `structured-fields`: Structured Field Values parsing + serialization.
+- `structured-fields`: Structured Field Values parsing + serialization with RFC 9651 Date type.
+- `deprecation`: RFC 9745 Deprecation header parsing/formatting; deprecation/sunset validation.
 - `client-hints`: Accept-CH parsing and Vary helper for Client Hints.
 - `cache-status`: Cache-Status parsing and formatting.
 - `proxy-status`: Proxy-Status parsing and formatting; error type validation.

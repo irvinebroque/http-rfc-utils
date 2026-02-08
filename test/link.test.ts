@@ -39,6 +39,26 @@ describe('LinkRelation constants', () => {
     it('CANONICAL equals "canonical"', () => {
         assert.equal(LinkRelation.CANONICAL, 'canonical');
     });
+
+    // RFC 8594 §6: sunset link relation.
+    it('SUNSET equals "sunset"', () => {
+        assert.equal(LinkRelation.SUNSET, 'sunset');
+    });
+
+    // RFC 9745 §4: deprecation link relation.
+    it('DEPRECATION equals "deprecation"', () => {
+        assert.equal(LinkRelation.DEPRECATION, 'deprecation');
+    });
+
+    // RFC 9264 §6: linkset link relation.
+    it('LINKSET equals "linkset"', () => {
+        assert.equal(LinkRelation.LINKSET, 'linkset');
+    });
+
+    // RFC 9727 §7.2: api-catalog link relation.
+    it('API_CATALOG equals "api-catalog"', () => {
+        assert.equal(LinkRelation.API_CATALOG, 'api-catalog');
+    });
 });
 
 // RFC 8288 §3.2: Link-param quoting rules.

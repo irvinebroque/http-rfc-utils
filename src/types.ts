@@ -196,8 +196,35 @@ export interface RetryAfterValue {
     delaySeconds?: number;
 }
 
-// Structured Field Values (RFC 8941)
-export type SfBareItem = number | string | boolean | Uint8Array;
+// Structured Field Values (RFC 8941 + RFC 9651)
+
+/**
+ * Date bare item per RFC 9651 §3.3.7.
+ * Wraps a Unix timestamp in seconds to distinguish from plain numbers.
+ */
+export class SfDate {
+    /** Unix timestamp in seconds */
+    readonly timestamp: number;
+
+    constructor(timestamp: number) {
+        if (!Number.isInteger(timestamp)) {
+            throw new Error('SfDate timestamp must be an integer');
+        }
+        this.timestamp = timestamp;
+    }
+
+    /** Convert to JavaScript Date */
+    toDate(): Date {
+        return new Date(this.timestamp * 1000);
+    }
+
+    /** Create from JavaScript Date */
+    static fromDate(date: Date): SfDate {
+        return new SfDate(Math.floor(date.getTime() / 1000));
+    }
+}
+
+export type SfBareItem = number | string | boolean | Uint8Array | SfDate;
 
 export interface SfItem {
     value: SfBareItem;

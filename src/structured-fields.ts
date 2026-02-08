@@ -1,9 +1,12 @@
 /**
- * Structured Field Values per RFC 8941.
+ * Structured Field Values per RFC 8941 + RFC 9651.
  * RFC 8941 §3, §4.
+ * RFC 9651 §3.3.7, §4.1.10 (Date type).
+ * @see https://www.rfc-editor.org/rfc/rfc9651.html
  */
 
 import { Buffer } from 'node:buffer';
+import { SfDate } from './types.js';
 import type { SfBareItem, SfItem, SfInnerList, SfList, SfDictionary } from './types.js';
 
 // RFC 8941 §3.3.4: sf-token allows ALPHA (case-insensitive), digits, and tchar plus : and /
@@ -217,11 +220,29 @@ class Parser {
         if (char === ':') {
             return this.parseByteSequence();
         }
+        // RFC 9651 §3.3.7: Date bare item starts with '@'
+        if (char === '@') {
+            return this.parseDate();
+        }
         if (char === '-' || (char >= '0' && char <= '9')) {
             return this.parseNumber();
         }
 
         return this.parseToken();
+    }
+
+    // RFC 9651 §3.3.7: Date bare item.
+    // Dates are indicated by a leading '@' followed by an integer (unix seconds).
+    private parseDate(): SfDate | null {
+        if (this.consume() !== '@') {
+            return null;
+        }
+        // The value after '@' MUST be an sf-integer (RFC 9651 §3.3.7)
+        const numValue = this.parseNumber();
+        if (numValue === null || !Number.isInteger(numValue)) {
+            return null;
+        }
+        return new SfDate(numValue);
     }
 
     private parseKey(): string | null {
@@ -421,10 +442,15 @@ export function parseSfItem(value: string): SfItem | null {
     return item;
 }
 
-// RFC 8941 §4: Structured Field serialization.
+// RFC 8941 §4 + RFC 9651 §4.1.10: Structured Field serialization.
 function serializeBareItem(value: SfBareItem): string {
     if (typeof value === 'boolean') {
         return value ? '?1' : '?0';
+    }
+
+    // RFC 9651 §4.1.10: Date serialization.
+    if (value instanceof SfDate) {
+        return `@${value.timestamp}`;
     }
 
     if (typeof value === 'number') {

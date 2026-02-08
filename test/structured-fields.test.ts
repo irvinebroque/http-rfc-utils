@@ -8,6 +8,7 @@ import {
     serializeSfList,
     serializeSfDict,
 } from '../src/structured-fields.js';
+import { SfDate } from '../src/types.js';
 
 describe('Structured Fields (RFC 8941 Section 3)', () => {
     it('parses bare item types (RFC 8941 Section 3.3)', () => {
@@ -126,5 +127,107 @@ describe('Structured Fields (RFC 8941 Section 3)', () => {
     it('accepts integers at range boundaries', () => {
         assert.equal(serializeSfItem({ value: 999_999_999_999_999 }), '999999999999999');
         assert.equal(serializeSfItem({ value: -999_999_999_999_999 }), '-999999999999999');
+    });
+});
+
+describe('Structured Fields Date type (RFC 9651 Section 3.3.7)', () => {
+    it('parses Date bare item (@unix-seconds)', () => {
+        const parsed = parseSfItem('@1688169599');
+        assert.ok(parsed);
+        assert.ok(parsed.value instanceof SfDate);
+        assert.strictEqual((parsed.value as SfDate).timestamp, 1688169599);
+    });
+
+    it('parses Date with value 0 (epoch)', () => {
+        const parsed = parseSfItem('@0');
+        assert.ok(parsed);
+        assert.ok(parsed.value instanceof SfDate);
+        assert.strictEqual((parsed.value as SfDate).timestamp, 0);
+    });
+
+    it('parses negative Date', () => {
+        const parsed = parseSfItem('@-86400');
+        assert.ok(parsed);
+        assert.ok(parsed.value instanceof SfDate);
+        assert.strictEqual((parsed.value as SfDate).timestamp, -86400);
+    });
+
+    it('rejects Date with decimal', () => {
+        const parsed = parseSfItem('@1688169599.5');
+        assert.strictEqual(parsed, null);
+    });
+
+    it('parses Date with parameters', () => {
+        const parsed = parseSfItem('@1688169599;source=api');
+        assert.ok(parsed);
+        assert.ok(parsed.value instanceof SfDate);
+        assert.strictEqual((parsed.value as SfDate).timestamp, 1688169599);
+        assert.deepEqual(parsed.params, { source: 'api' });
+    });
+
+    it('serializes Date bare item', () => {
+        const result = serializeSfItem({ value: new SfDate(1688169599) });
+        assert.strictEqual(result, '@1688169599');
+    });
+
+    it('serializes Date with parameters', () => {
+        const result = serializeSfItem({ value: new SfDate(1688169599), params: { source: 'api' } });
+        assert.strictEqual(result, '@1688169599;source=api');
+    });
+
+    it('serializes Date at epoch', () => {
+        const result = serializeSfItem({ value: new SfDate(0) });
+        assert.strictEqual(result, '@0');
+    });
+
+    it('serializes negative Date', () => {
+        const result = serializeSfItem({ value: new SfDate(-86400) });
+        assert.strictEqual(result, '@-86400');
+    });
+
+    it('round-trips Date through parse and serialize', () => {
+        const original = '@1735689600';
+        const parsed = parseSfItem(original);
+        assert.ok(parsed);
+        const serialized = serializeSfItem(parsed);
+        assert.strictEqual(serialized, original);
+    });
+
+    it('SfDate.toDate converts to JS Date', () => {
+        const sfDate = new SfDate(1688169599);
+        const date = sfDate.toDate();
+        assert.strictEqual(date.toISOString(), '2023-06-30T23:59:59.000Z');
+    });
+
+    it('SfDate.fromDate creates from JS Date', () => {
+        const date = new Date('2023-06-30T23:59:59Z');
+        const sfDate = SfDate.fromDate(date);
+        assert.strictEqual(sfDate.timestamp, 1688169599);
+    });
+
+    it('SfDate.fromDate truncates sub-second precision', () => {
+        const date = new Date('2023-06-30T23:59:59.999Z');
+        const sfDate = SfDate.fromDate(date);
+        assert.strictEqual(sfDate.timestamp, 1688169599);
+    });
+
+    it('SfDate constructor rejects non-integer', () => {
+        assert.throws(() => new SfDate(1.5));
+    });
+
+    it('parses Date in dictionary value', () => {
+        const parsed = parseSfDict('deprecated=@1688169599');
+        assert.ok(parsed);
+        const item = parsed['deprecated'] as { value: unknown };
+        assert.ok(item.value instanceof SfDate);
+        assert.strictEqual((item.value as SfDate).timestamp, 1688169599);
+    });
+
+    it('parses Date in list', () => {
+        const parsed = parseSfList('@1688169599, @1735689600');
+        assert.ok(parsed);
+        assert.strictEqual(parsed.length, 2);
+        assert.ok((parsed[0] as { value: unknown }).value instanceof SfDate);
+        assert.ok((parsed[1] as { value: unknown }).value instanceof SfDate);
     });
 });
