@@ -6,7 +6,7 @@
  */
 
 import { Buffer } from 'node:buffer';
-import { SfDate } from './types.js';
+import { SfDate, SfToken } from './types.js';
 import type { SfBareItem, SfItem, SfInnerList, SfList, SfDictionary } from './types.js';
 
 // RFC 8941 §3.3.4: sf-token allows ALPHA (case-insensitive), digits, and tchar plus : and /
@@ -109,6 +109,11 @@ class Parser {
             }
             if (this.peek() === ',') {
                 this.consume();
+                this.skipOWS();
+                // RFC 8941 §3.1: A trailing comma does not produce a member.
+                if (this.eof()) {
+                    return null;
+                }
                 continue;
             }
             return null;
@@ -163,6 +168,11 @@ class Parser {
             }
             if (this.peek() === ',') {
                 this.consume();
+                this.skipOWS();
+                // RFC 8941 §3.2: A trailing comma does not produce a member.
+                if (this.eof()) {
+                    return null;
+                }
                 continue;
             }
             return null;
@@ -374,7 +384,7 @@ class Parser {
     }
 
     // RFC 8941 §3.3.4: Token parsing.
-    private parseToken(): string | null {
+    private parseToken(): SfToken | null {
         let token = '';
         while (!this.eof()) {
             const char = this.peek();
@@ -390,7 +400,7 @@ class Parser {
             return null;
         }
 
-        return token;
+        return new SfToken(token);
     }
 }
 
@@ -479,8 +489,8 @@ function serializeBareItem(value: SfBareItem): string {
         return `:${base64}:`;
     }
 
-    if (TOKEN_RE.test(value)) {
-        return value;
+    if (value instanceof SfToken) {
+        return value.value;
     }
 
     const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');

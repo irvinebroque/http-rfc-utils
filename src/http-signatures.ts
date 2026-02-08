@@ -99,6 +99,9 @@ export function parseSignatureInput(value: string): SignatureInput[] | null {
 
         // Parse signature parameters from inner list params
         const params = parseSignatureParamsFromSf(innerList.params);
+        if (params === null) {
+            return null;
+        }
 
         results.push({ label, components, params });
     }
@@ -145,17 +148,23 @@ function parseComponentIdentifierFromItem(item: SfItem): SignatureComponent | nu
  */
 function parseSignatureParamsFromSf(
     sfParams?: Record<string, SfBareItem>
-): SignatureParams | undefined {
+): SignatureParams | undefined | null {
     if (!sfParams) {
         return undefined;
     }
 
     const params: SignatureParams = {};
 
-    if (typeof sfParams.created === 'number') {
+    if (sfParams.created !== undefined) {
+        if (typeof sfParams.created !== 'number' || !Number.isInteger(sfParams.created)) {
+            return null;
+        }
         params.created = sfParams.created;
     }
-    if (typeof sfParams.expires === 'number') {
+    if (sfParams.expires !== undefined) {
+        if (typeof sfParams.expires !== 'number' || !Number.isInteger(sfParams.expires)) {
+            return null;
+        }
         params.expires = sfParams.expires;
     }
     if (typeof sfParams.nonce === 'string') {
@@ -226,9 +235,15 @@ export function formatSignatureInput(inputs: SignatureInput[]): string {
         if (input.params) {
             const params: Record<string, SfBareItem> = {};
             if (input.params.created !== undefined) {
+                if (!Number.isInteger(input.params.created)) {
+                    throw new Error('Signature parameter "created" must be an integer');
+                }
                 params.created = input.params.created;
             }
             if (input.params.expires !== undefined) {
+                if (!Number.isInteger(input.params.expires)) {
+                    throw new Error('Signature parameter "expires" must be an integer');
+                }
                 params.expires = input.params.expires;
             }
             if (input.params.nonce !== undefined) {
@@ -790,6 +805,9 @@ export function createSignatureBase(
 
     // RFC 9421 §3.1: Build @signature-params as the final line
     const signatureParams = buildSignatureParamsValue(components, params);
+    if (signatureParams === null) {
+        return null;
+    }
     lines.push(`"@signature-params": ${signatureParams}`);
 
     // RFC 9421 §2.5: Lines separated by single LF (no trailing LF)
@@ -805,7 +823,7 @@ export function createSignatureBase(
 function buildSignatureParamsValue(
     components: SignatureComponent[],
     params?: SignatureParams
-): string {
+): string | null {
     // Build the inner list representation
     const items: string[] = components.map(formatComponentIdentifier);
     let result = `(${items.join(' ')})`;
@@ -813,9 +831,15 @@ function buildSignatureParamsValue(
     // Add parameters in the defined order
     if (params) {
         if (params.created !== undefined) {
+            if (!Number.isInteger(params.created)) {
+                return null;
+            }
             result += `;created=${params.created}`;
         }
         if (params.expires !== undefined) {
+            if (!Number.isInteger(params.expires)) {
+                return null;
+            }
             result += `;expires=${params.expires}`;
         }
         if (params.nonce !== undefined) {

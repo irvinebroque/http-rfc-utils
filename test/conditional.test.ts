@@ -203,6 +203,14 @@ describe('RFC 9110 Conditional Requests', () => {
             assert.equal(result, true);
         });
 
+        // RFC 9110 §5.6.7, §13.1.3: compare at HTTP-date whole-second granularity.
+        it('returns true (not modified) when lastModified is later in the same second', () => {
+            const lastModified = new Date('2024-01-15T12:00:00.900Z');
+            const headerValue = baseDate.toUTCString();
+            const result = evaluateIfModifiedSince(headerValue, lastModified);
+            assert.equal(result, true);
+        });
+
         it('returns true (not modified) when lastModified is before header date', () => {
             const lastModified = new Date('2024-01-14T12:00:00Z');
             const headerValue = baseDate.toUTCString();
@@ -236,6 +244,14 @@ describe('RFC 9110 Conditional Requests', () => {
 
         it('returns true (passes) when lastModified equals header date', () => {
             const lastModified = new Date('2024-01-15T12:00:00Z');
+            const headerValue = baseDate.toUTCString();
+            const result = evaluateIfUnmodifiedSince(headerValue, lastModified);
+            assert.equal(result, true);
+        });
+
+        // RFC 9110 §5.6.7, §13.1.4: compare at HTTP-date whole-second granularity.
+        it('returns true (passes) when lastModified is later in the same second', () => {
+            const lastModified = new Date('2024-01-15T12:00:00.900Z');
             const headerValue = baseDate.toUTCString();
             const result = evaluateIfUnmodifiedSince(headerValue, lastModified);
             assert.equal(result, true);

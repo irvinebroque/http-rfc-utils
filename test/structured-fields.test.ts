@@ -8,7 +8,7 @@ import {
     serializeSfList,
     serializeSfDict,
 } from '../src/structured-fields.js';
-import { SfDate } from '../src/types.js';
+import { SfDate, SfToken } from '../src/types.js';
 
 describe('Structured Fields (RFC 8941 Section 3)', () => {
     it('parses bare item types (RFC 8941 Section 3.3)', () => {
@@ -60,7 +60,7 @@ describe('Structured Fields (RFC 8941 Section 3)', () => {
 
     it('serializes list and dictionary (RFC 8941 Section 4)', () => {
         const list = serializeSfList([{ value: 'token' }, { items: [{ value: 1 }] }]);
-        assert.equal(list, 'token, (1)');
+        assert.equal(list, '"token", (1)');
 
         const dict = serializeSfDict({
             a: { value: true },
@@ -71,25 +71,57 @@ describe('Structured Fields (RFC 8941 Section 3)', () => {
 
     it('serializes items with parameters (RFC 8941 Section 3.1.2)', () => {
         const item = serializeSfItem({ value: 'token', params: { foo: 'bar' } });
-        assert.equal(item, 'token;foo=bar');
+        assert.equal(item, '"token";foo="bar"');
     });
 
     // RFC 8941 §3.3.4: Tokens can contain uppercase and special chars.
     it('parses token with uppercase letters', () => {
         const parsed = parseSfItem('FooBar');
-        assert.deepEqual(parsed, { value: 'FooBar' });
+        assert.ok(parsed);
+        assert.ok(parsed.value instanceof SfToken);
+        assert.equal(parsed.value.value, 'FooBar');
     });
 
     // RFC 8941 §3.3.4: Tokens can contain colon and slash.
     it('parses token with colon and slash', () => {
         const parsed = parseSfItem('text/html');
-        assert.deepEqual(parsed, { value: 'text/html' });
+        assert.ok(parsed);
+        assert.ok(parsed.value instanceof SfToken);
+        assert.equal(parsed.value.value, 'text/html');
     });
 
     // RFC 8941 §3.3.4: Tokens can contain various tchar characters.
     it('parses token with tchar special characters', () => {
         const parsed = parseSfItem("foo!#$%&'*+^_`|~bar");
-        assert.deepEqual(parsed, { value: "foo!#$%&'*+^_`|~bar" });
+        assert.ok(parsed);
+        assert.ok(parsed.value instanceof SfToken);
+        assert.equal(parsed.value.value, "foo!#$%&'*+^_`|~bar");
+    });
+
+    // RFC 8941 §3.3.3 + §4: Strings and tokens are distinct bare item types.
+    it('round-trips sf-string without being converted to token', () => {
+        const parsed = parseSfItem('"hello"');
+        assert.ok(parsed);
+        assert.equal(typeof parsed.value, 'string');
+        assert.equal(serializeSfItem(parsed), '"hello"');
+    });
+
+    // RFC 8941 §3.3.4 + §4: Explicit sf-token serialization.
+    it('serializes SfToken values as bare tokens', () => {
+        const serialized = serializeSfItem({ value: new SfToken('hello') });
+        assert.equal(serialized, 'hello');
+    });
+
+    // RFC 8941 §3.1: Trailing commas are invalid in Lists.
+    it('rejects list with trailing comma', () => {
+        assert.equal(parseSfList('a,'), null);
+        assert.equal(parseSfList('a,   '), null);
+    });
+
+    // RFC 8941 §3.2: Trailing commas are invalid in Dictionaries.
+    it('rejects dictionary with trailing comma', () => {
+        assert.equal(parseSfDict('a=1,'), null);
+        assert.equal(parseSfDict('a=1,   '), null);
     });
 
     // RFC 8941 §3.3.3: Only \" and \\ are valid escapes.
@@ -162,7 +194,8 @@ describe('Structured Fields Date type (RFC 9651 Section 3.3.7)', () => {
         assert.ok(parsed);
         assert.ok(parsed.value instanceof SfDate);
         assert.strictEqual((parsed.value as SfDate).timestamp, 1688169599);
-        assert.deepEqual(parsed.params, { source: 'api' });
+        assert.ok(parsed.params?.source instanceof SfToken);
+        assert.equal((parsed.params?.source as SfToken).value, 'api');
     });
 
     it('serializes Date bare item', () => {
@@ -172,7 +205,7 @@ describe('Structured Fields Date type (RFC 9651 Section 3.3.7)', () => {
 
     it('serializes Date with parameters', () => {
         const result = serializeSfItem({ value: new SfDate(1688169599), params: { source: 'api' } });
-        assert.strictEqual(result, '@1688169599;source=api');
+        assert.strictEqual(result, '@1688169599;source="api"');
     });
 
     it('serializes Date at epoch', () => {

@@ -319,6 +319,22 @@ describe('normalizeUri (RFC 3986 Section 6.2.2)', () => {
         it('adds empty path / when authority present', () => {
             assert.strictEqual(normalizeUri('http://example.com'), 'http://example.com/');
         });
+
+        // RFC 3986 §3: Non-authority schemes use "scheme:path" (no "//").
+        it('does not force authority form for mailto URIs', () => {
+            assert.strictEqual(
+                normalizeUri('MAILTO:User%2EName@Example.COM'),
+                'mailto:User.Name@Example.COM'
+            );
+        });
+
+        // RFC 3986 §3: URN syntax is "urn:NID:NSS" without authority.
+        it('does not force authority form for URN URIs', () => {
+            assert.strictEqual(
+                normalizeUri('URN:example:A%2Db%2Fc'),
+                'urn:example:A-b%2Fc'
+            );
+        });
     });
 
     // Combined normalization

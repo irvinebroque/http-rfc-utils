@@ -7,6 +7,11 @@ import { parseETag, compareETags } from './etag.js';
 import { parseHTTPDate } from './datetime.js';
 
 const RANGE_PREFIX = /^bytes=/i;
+const DIGITS_ONLY = /^\d+$/;
+
+function isStrictDigits(value: string): boolean {
+    return DIGITS_ONLY.test(value);
+}
 
 /**
  * Parse a Range header into raw byte ranges.
@@ -47,6 +52,9 @@ export function parseRange(header: string): RangeSpec | null {
         const endStr = rangePart.slice(dashIndex + 1).trim();
 
         if (startStr === '') {
+            if (!isStrictDigits(endStr)) {
+                return null;
+            }
             const suffixLength = parseInt(endStr, 10);
             if (isNaN(suffixLength) || suffixLength <= 0) {
                 return null;
@@ -55,6 +63,9 @@ export function parseRange(header: string): RangeSpec | null {
             continue;
         }
 
+        if (!isStrictDigits(startStr)) {
+            return null;
+        }
         const start = parseInt(startStr, 10);
         if (isNaN(start) || start < 0) {
             return null;
@@ -65,6 +76,9 @@ export function parseRange(header: string): RangeSpec | null {
             continue;
         }
 
+        if (!isStrictDigits(endStr)) {
+            return null;
+        }
         const end = parseInt(endStr, 10);
         if (isNaN(end) || end < start) {
             return null;
@@ -108,7 +122,12 @@ export function parseContentRange(header: string): ContentRange | null {
         return null;
     }
 
-    const size = sizePart.trim() === '*' ? '*' : parseInt(sizePart.trim(), 10);
+    const sizeToken = sizePart.trim();
+    if (sizeToken !== '*' && !isStrictDigits(sizeToken)) {
+        return null;
+    }
+
+    const size = sizeToken === '*' ? '*' : parseInt(sizeToken, 10);
     if (size !== '*' && (isNaN(size) || size < 0)) {
         return null;
     }
@@ -126,8 +145,15 @@ export function parseContentRange(header: string): ContentRange | null {
         return null;
     }
 
-    const start = parseInt(rangePart.slice(0, dashIndex).trim(), 10);
-    const end = parseInt(rangePart.slice(dashIndex + 1).trim(), 10);
+    const startToken = rangePart.slice(0, dashIndex).trim();
+    const endToken = rangePart.slice(dashIndex + 1).trim();
+
+    if (!isStrictDigits(startToken) || !isStrictDigits(endToken)) {
+        return null;
+    }
+
+    const start = parseInt(startToken, 10);
+    const end = parseInt(endToken, 10);
 
     if (isNaN(start) || isNaN(end) || start < 0 || end < start) {
         return null;

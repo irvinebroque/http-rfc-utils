@@ -5,6 +5,7 @@
  */
 
 import type { ClientHintList } from './types.js';
+import { SfToken } from './types.js';
 import { mergeVary } from './headers.js';
 import { parseSfList, serializeSfList } from './structured-fields.js';
 
@@ -35,13 +36,13 @@ export function parseAcceptCH(value: string | string[]): ClientHintList | null {
             if (member.params && Object.keys(member.params).length > 0) {
                 return null;
             }
-            if (typeof member.value !== 'string') {
+            if (!(member.value instanceof SfToken)) {
                 return null;
             }
-            if (!SF_TOKEN.test(member.value)) {
+            if (!SF_TOKEN.test(member.value.value)) {
                 return null;
             }
-            hints.push(member.value.toLowerCase());
+            hints.push(member.value.value.toLowerCase());
         }
     }
 
@@ -67,7 +68,7 @@ export function formatAcceptCH(hints: ClientHintList): string {
         if (!SF_TOKEN.test(token)) {
             throw new Error('Invalid client hint token');
         }
-        return { value: token };
+        return { value: new SfToken(token) };
     });
 
     return serializeSfList(list);

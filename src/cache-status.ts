@@ -5,6 +5,7 @@
  */
 
 import type { CacheStatusEntry, CacheStatusParams, SfBareItem, SfItem, SfList } from './types.js';
+import { SfToken } from './types.js';
 import { parseSfList, serializeSfList } from './structured-fields.js';
 
 const SF_TOKEN = /^[a-z*][a-z0-9_\-\.\*]*$/;
@@ -29,8 +30,8 @@ function parseCacheStatusParams(params?: Record<string, SfBareItem>): CacheStatu
                 }
                 break;
             case 'fwd':
-                if (typeof value === 'string') {
-                    result.fwd = value;
+                if (value instanceof SfToken) {
+                    result.fwd = value.value;
                 }
                 break;
             case 'fwd-status':
@@ -86,7 +87,7 @@ function buildCacheStatusParams(params: CacheStatusParams): Record<string, SfBar
         if (!SF_TOKEN.test(params.fwd)) {
             throw new Error('Invalid Cache-Status fwd token');
         }
-        result.fwd = params.fwd;
+        result.fwd = new SfToken(params.fwd);
     }
     if (params.fwdStatus !== undefined) {
         if (!isInteger(params.fwdStatus)) {
@@ -144,6 +145,13 @@ export function parseCacheStatus(header: string): CacheStatusEntry[] | null {
             return null;
         }
         if (typeof member.value !== 'string') {
+            if (member.value instanceof SfToken) {
+                entries.push({
+                    cache: member.value.value,
+                    params: parseCacheStatusParams(member.params),
+                });
+                continue;
+            }
             return null;
         }
 
@@ -163,7 +171,8 @@ export function parseCacheStatus(header: string): CacheStatusEntry[] | null {
 export function formatCacheStatus(entries: CacheStatusEntry[]): string {
     const list: SfList = entries.map((entry) => {
         const params = buildCacheStatusParams(entry.params ?? {});
-        const item: SfItem = params ? { value: entry.cache, params } : { value: entry.cache };
+        const cacheToken = new SfToken(entry.cache);
+        const item: SfItem = params ? { value: cacheToken, params } : { value: cacheToken };
         return item;
     });
 

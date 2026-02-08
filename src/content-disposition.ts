@@ -38,6 +38,7 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
     }
 
     const params: Record<string, string> = {};
+    let hasValidFilenameStar = false;
 
     for (let i = 1; i < parts.length; i++) {
         const part = parts[i]!.trim();
@@ -59,9 +60,10 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
             const decoded = decodeExtValue(value);
             if (decoded !== null) {
                 value = decoded.value;
+                hasValidFilenameStar = true;
+                params.filename = value;
             }
             params['filename*'] = value;
-            params.filename = value;
             continue;
         }
 
@@ -73,7 +75,7 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
         }
 
         if (key === 'filename') {
-            if (params['filename*'] !== undefined || params.filename !== undefined) {
+            if (hasValidFilenameStar || params.filename !== undefined) {
                 continue;
             }
             params.filename = value;

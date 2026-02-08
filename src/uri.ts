@@ -303,6 +303,9 @@ export function normalizeUri(uri: string): string {
         return normalizeUriBasic(uri);
     }
 
+    // RFC 3986 §3: A URI has authority only when hier-part starts with "//".
+    const hasAuthority = hasUriAuthority(uri);
+
     // RFC 3986 §6.2.2.1: Lowercase scheme
     const scheme = url.protocol.slice(0, -1).toLowerCase();
 
@@ -322,8 +325,8 @@ export function normalizeUri(uri: string): string {
     // RFC 3986 §6.2.2.3: Path segment normalization
     path = removeDotSegments(path);
 
-    // RFC 3986 §6.2.3: Ensure non-empty path when authority present
-    if (host && !path) {
+    // RFC 3986 §6.2.3: Ensure non-empty path when authority present.
+    if (hasAuthority && !path) {
         path = '/';
     }
 
@@ -339,27 +342,39 @@ export function normalizeUri(uri: string): string {
         fragment = '#' + normalizePercentEncoding(url.hash.slice(1));
     }
 
-    // Reconstruct URI
-    let result = scheme + '://';
+    // Reconstruct URI.
+    let result = scheme + ':';
 
-    // Add userinfo if present (rare)
-    if (url.username) {
-        result += normalizePercentEncoding(url.username);
-        if (url.password) {
-            result += ':' + normalizePercentEncoding(url.password);
+    if (hasAuthority) {
+        result += '//';
+
+        // Add userinfo if present (rare).
+        if (url.username) {
+            result += normalizePercentEncoding(url.username);
+            if (url.password) {
+                result += ':' + normalizePercentEncoding(url.password);
+            }
+            result += '@';
         }
-        result += '@';
-    }
 
-    result += host;
+        result += host;
 
-    if (port) {
-        result += ':' + port;
+        if (port) {
+            result += ':' + port;
+        }
     }
 
     result += path + query + fragment;
 
     return result;
+}
+
+function hasUriAuthority(uri: string): boolean {
+    const schemeEnd = uri.indexOf(':');
+    if (schemeEnd <= 0) {
+        return false;
+    }
+    return uri.slice(schemeEnd + 1).startsWith('//');
 }
 
 /**

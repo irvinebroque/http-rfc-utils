@@ -31,9 +31,11 @@ describe('parseRFC3339', () => {
         assert.equal(result, null);
     });
 
-    it('rejects leap seconds for strict parsing', () => {
+    // RFC 3339 §5.7: second value 60 is allowed for leap seconds.
+    it('accepts leap seconds and maps to the instant after :59', () => {
         const result = parseRFC3339('2026-02-01T23:59:60Z');
-        assert.equal(result, null);
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '2026-02-02T00:00:00.000Z');
     });
 
     it('rejects invalid offsets', () => {
@@ -101,15 +103,24 @@ describe('parseRFC3339 RFC examples', () => {
         assert.equal(result!.toISOString(), '1996-12-20T00:39:57.000Z');
     });
 
-    // RFC 3339 §5.7: Leap seconds not representable in JavaScript Date.
-    it('rejects §5.8 example 3: leap second at end of 1990', () => {
+    // RFC 3339 §5.7: leap second is accepted and mapped to next representable instant.
+    it('parses §5.8 example 3: leap second at end of 1990', () => {
         const result = parseRFC3339('1990-12-31T23:59:60Z');
-        assert.equal(result, null);
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '1991-01-01T00:00:00.000Z');
     });
 
-    it('rejects §5.8 example 4: leap second in PST', () => {
+    it('parses §5.8 example 4: leap second in PST', () => {
         const result = parseRFC3339('1990-12-31T15:59:60-08:00');
-        assert.equal(result, null);
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '1991-01-01T00:00:00.000Z');
+    });
+
+    // RFC 3339 §5.7: secfrac remains valid when leap second is used.
+    it('maps leap second fractional part after :59 boundary', () => {
+        const result = parseRFC3339('1990-12-31T23:59:60.250Z');
+        assert.ok(result instanceof Date);
+        assert.equal(result!.toISOString(), '1991-01-01T00:00:00.250Z');
     });
 
     it('parses §5.8 example 5: historical offset (Netherlands)', () => {

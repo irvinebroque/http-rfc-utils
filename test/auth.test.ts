@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 import {
     formatBasicAuthorization,
@@ -25,6 +26,10 @@ import {
     hashDigestUsername,
 } from '../src/auth.js';
 import type { DigestChallenge, DigestCredentials } from '../src/types.js';
+
+function nodeHexHash(algorithm: 'md5' | 'sha256' | 'sha512-256', input: string): string {
+    return createHash(algorithm).update(input).digest('hex');
+}
 
 describe('Basic Authentication (RFC 7617 Section 2)', () => {
     it('round-trips Basic credentials (RFC 7617 Section 2)', () => {
@@ -494,6 +499,65 @@ describe('Digest Authentication (RFC 7616)', () => {
             assert.equal(response.length, 64);
         });
 
+        it('computes response with qop=auth using SHA-512-256 (RFC 7616 §3.4.1)', async () => {
+            const input = {
+                username: 'Mufasa',
+                password: 'Circle of Life',
+                realm: 'http-auth@example.org',
+                method: 'GET',
+                uri: '/dir/index.html',
+                nonce: '7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v',
+                cnonce: 'f2/wE4q74E6zIJEtWaHKaf5wv/H5QzzpXusqGemxURZJ',
+                nc: '00000001',
+                qop: 'auth' as const,
+            };
+
+            const response = await computeDigestResponse({
+                ...input,
+                algorithm: 'SHA-512-256',
+            });
+
+            const ha1 = nodeHexHash('sha512-256', `${input.username}:${input.realm}:${input.password}`);
+            const ha2 = nodeHexHash('sha512-256', `${input.method}:${input.uri}`);
+            const expected = nodeHexHash(
+                'sha512-256',
+                `${ha1}:${input.nonce}:${input.nc}:${input.cnonce}:${input.qop}:${ha2}`
+            );
+
+            assert.equal(response, expected);
+            assert.equal(response.length, 64);
+        });
+
+        it('computes response with SHA-512-256-sess using true sha512-256 (RFC 7616 §3.4.1)', async () => {
+            const input = {
+                username: 'Mufasa',
+                password: 'Circle of Life',
+                realm: 'http-auth@example.org',
+                method: 'GET',
+                uri: '/dir/index.html',
+                nonce: '7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v',
+                cnonce: 'f2/wE4q74E6zIJEtWaHKaf5wv/H5QzzpXusqGemxURZJ',
+                nc: '00000001',
+                qop: 'auth' as const,
+            };
+
+            const response = await computeDigestResponse({
+                ...input,
+                algorithm: 'SHA-512-256-sess',
+            });
+
+            const hUserRealmPass = nodeHexHash('sha512-256', `${input.username}:${input.realm}:${input.password}`);
+            const ha1 = nodeHexHash('sha512-256', `${hUserRealmPass}:${input.nonce}:${input.cnonce}`);
+            const ha2 = nodeHexHash('sha512-256', `${input.method}:${input.uri}`);
+            const expected = nodeHexHash(
+                'sha512-256',
+                `${ha1}:${input.nonce}:${input.nc}:${input.cnonce}:${input.qop}:${ha2}`
+            );
+
+            assert.equal(response, expected);
+            assert.equal(response.length, 64);
+        });
+
         it('computes response without qop (legacy)', async () => {
             const response = await computeDigestResponse({
                 username: 'Mufasa',
@@ -564,6 +628,15 @@ describe('Digest Authentication (RFC 7616)', () => {
         it('hashes username with SHA-256', async () => {
             const hashed = await hashDigestUsername('Mufasa', 'http-auth@example.org', 'SHA-256');
             // SHA-256 hash is 64 hex chars
+            assert.equal(hashed.length, 64);
+        });
+
+        it('hashes username with SHA-512-256 using true algorithm (RFC 7616 §3.4.4)', async () => {
+            const username = 'Mufasa';
+            const realm = 'http-auth@example.org';
+            const hashed = await hashDigestUsername(username, realm, 'SHA-512-256');
+            const expected = nodeHexHash('sha512-256', `${username}:${realm}`);
+            assert.equal(hashed, expected);
             assert.equal(hashed.length, 64);
         });
 

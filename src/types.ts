@@ -224,7 +224,20 @@ export class SfDate {
     }
 }
 
-export type SfBareItem = number | string | boolean | Uint8Array | SfDate;
+/**
+ * Token bare item per RFC 8941 §3.3.4.
+ *
+ * Distinguishes tokens from strings so serializers can preserve type fidelity.
+ */
+export class SfToken {
+    readonly value: string;
+
+    constructor(value: string) {
+        this.value = value;
+    }
+}
+
+export type SfBareItem = number | string | boolean | Uint8Array | SfDate | SfToken;
 
 export interface SfItem {
     value: SfBareItem;

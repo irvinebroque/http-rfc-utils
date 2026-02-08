@@ -78,6 +78,10 @@ export function parseStrictTransportSecurity(header: string): StrictTransportSec
         }
 
         const rawValue = trimmed.slice(eqIndex + 1).trim();
+        // RFC 6797 §6.1.1: max-age-value is delta-seconds (1*DIGIT), not a quoted-string.
+        if (lowerName === 'max-age' && rawValue.startsWith('"')) {
+            return null;
+        }
         const value = parseDirectiveValue(rawValue);
         if (value === null) {
             return null;

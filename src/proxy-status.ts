@@ -5,7 +5,10 @@
  */
 
 import type { ProxyStatusEntry, ProxyStatusParams, ProxyErrorType, SfBareItem, SfItem, SfList } from './types.js';
+import { SfToken } from './types.js';
 import { parseSfList, serializeSfList } from './structured-fields.js';
+
+const SF_TOKEN = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:\/]*$/;
 
 /**
  * All 32 proxy error types defined in RFC 9209 §2.3.
@@ -72,20 +75,20 @@ function parseProxyStatusParams(params?: Record<string, SfBareItem>): ProxyStatu
         switch (key) {
             // RFC 9209 §2.1.1: error parameter is a Token.
             case 'error':
-                if (typeof value === 'string') {
-                    result.error = value;
+                if (value instanceof SfToken) {
+                    result.error = value.value;
                 }
                 break;
             // RFC 9209 §2.1.2: next-hop is a String or Token.
             case 'next-hop':
-                if (typeof value === 'string') {
-                    result.nextHop = value;
+                if (typeof value === 'string' || value instanceof SfToken) {
+                    result.nextHop = value instanceof SfToken ? value.value : value;
                 }
                 break;
             // RFC 9209 §2.1.3: next-protocol is a Token or Byte Sequence.
             case 'next-protocol':
-                if (typeof value === 'string') {
-                    result.nextProtocol = value;
+                if (value instanceof SfToken) {
+                    result.nextProtocol = value.value;
                 }
                 break;
             // RFC 9209 §2.1.4: received-status is an Integer.
@@ -102,8 +105,8 @@ function parseProxyStatusParams(params?: Record<string, SfBareItem>): ProxyStatu
                 break;
             // RFC 9209 §2.3.2: rcode extra parameter for dns_error.
             case 'rcode':
-                if (typeof value === 'string') {
-                    result.rcode = value;
+                if (value instanceof SfToken) {
+                    result.rcode = value.value;
                 }
                 break;
             // RFC 9209 §2.3.2: info-code extra parameter for dns_error.
@@ -120,8 +123,8 @@ function parseProxyStatusParams(params?: Record<string, SfBareItem>): ProxyStatu
                 break;
             // RFC 9209 §2.3.15: alert-message extra parameter for tls_alert_received.
             case 'alert-message':
-                if (typeof value === 'string') {
-                    result.alertMessage = value;
+                if (typeof value === 'string' || value instanceof SfToken) {
+                    result.alertMessage = value instanceof SfToken ? value.value : value;
                 }
                 break;
             default:
@@ -143,13 +146,13 @@ function buildProxyStatusParams(params: ProxyStatusParams): Record<string, SfBar
     const result: Record<string, SfBareItem> = {};
 
     if (params.error !== undefined) {
-        result.error = params.error;
+        result.error = new SfToken(params.error);
     }
     if (params.nextHop !== undefined) {
-        result['next-hop'] = params.nextHop;
+        result['next-hop'] = SF_TOKEN.test(params.nextHop) ? new SfToken(params.nextHop) : params.nextHop;
     }
     if (params.nextProtocol !== undefined) {
-        result['next-protocol'] = params.nextProtocol;
+        result['next-protocol'] = new SfToken(params.nextProtocol);
     }
     if (params.receivedStatus !== undefined) {
         if (!isInteger(params.receivedStatus)) {
@@ -161,7 +164,7 @@ function buildProxyStatusParams(params: ProxyStatusParams): Record<string, SfBar
         result.details = params.details;
     }
     if (params.rcode !== undefined) {
-        result.rcode = params.rcode;
+        result.rcode = new SfToken(params.rcode);
     }
     if (params.infoCode !== undefined) {
         if (!isInteger(params.infoCode)) {
@@ -213,12 +216,14 @@ export function parseProxyStatus(header: string): ProxyStatusEntry[] | null {
         if ('items' in member) {
             return null;
         }
-        if (typeof member.value !== 'string') {
+        if (!(typeof member.value === 'string' || member.value instanceof SfToken)) {
             return null;
         }
 
+        const proxy = member.value instanceof SfToken ? member.value.value : member.value;
+
         entries.push({
-            proxy: member.value,
+            proxy,
             params: parseProxyStatusParams(member.params),
         });
     }
@@ -233,7 +238,8 @@ export function parseProxyStatus(header: string): ProxyStatusEntry[] | null {
 export function formatProxyStatus(entries: ProxyStatusEntry[]): string {
     const list: SfList = entries.map((entry) => {
         const params = buildProxyStatusParams(entry.params ?? {});
-        const item: SfItem = params ? { value: entry.proxy, params } : { value: entry.proxy };
+        const proxyToken = new SfToken(entry.proxy);
+        const item: SfItem = params ? { value: proxyToken, params } : { value: proxyToken };
         return item;
     });
 

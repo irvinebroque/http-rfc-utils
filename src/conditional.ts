@@ -31,6 +31,12 @@ function buildConditionalHeaders(currentETag: ETag | null, lastModified: Date | 
     return headers;
 }
 
+function toWholeSecondPrecision(date: Date): number {
+    const normalized = new Date(date.getTime());
+    normalized.setUTCMilliseconds(0);
+    return normalized.getTime();
+}
+
 /**
  * Parse If-None-Match header into ETags or wildcard.
  *
@@ -174,8 +180,9 @@ export function evaluateIfModifiedSince(header: string, lastModified: Date | nul
         return false;
     }
 
-    // Not modified if lastModified <= sinceDate
-    return lastModified.getTime() <= sinceDate.getTime();
+    // RFC 9110 §5.6.7: HTTP-date has one-second granularity.
+    // RFC 9110 §13.1.3: evaluate using HTTP-date precision.
+    return toWholeSecondPrecision(lastModified) <= toWholeSecondPrecision(sinceDate);
 }
 
 /**
@@ -202,8 +209,9 @@ export function evaluateIfUnmodifiedSince(header: string, lastModified: Date | n
         return true;
     }
 
-    // Precondition passes if lastModified <= sinceDate (not modified after that date)
-    return lastModified.getTime() <= sinceDate.getTime();
+    // RFC 9110 §5.6.7: HTTP-date has one-second granularity.
+    // RFC 9110 §13.1.4: evaluate using HTTP-date precision.
+    return toWholeSecondPrecision(lastModified) <= toWholeSecondPrecision(sinceDate);
 }
 
 /**

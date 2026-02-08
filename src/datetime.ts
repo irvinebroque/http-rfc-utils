@@ -63,7 +63,8 @@ export function parseRFC3339(str: string): Date | null {
         return null;
     }
 
-    if (seconds < 0 || seconds > 59) {
+    // RFC 3339 §5.7: leap second allows second value 60.
+    if (seconds < 0 || seconds > 60) {
         return null;
     }
 
@@ -91,7 +92,12 @@ export function parseRFC3339(str: string): Date | null {
         return null;
     }
 
-    const utcMillis = Date.UTC(year, month - 1, day, hours, minutes, seconds, milliseconds);
+    // JavaScript Date cannot represent :60 directly, so map leap-second inputs to
+    // the representable instant immediately after :59.
+    const wholeSeconds = seconds === 60 ? 59 : seconds;
+    const leapSecondAdjustment = seconds === 60 ? 1000 : 0;
+
+    const utcMillis = Date.UTC(year, month - 1, day, hours, minutes, wholeSeconds, milliseconds) + leapSecondAdjustment;
     if (isNaN(utcMillis)) {
         return null;
     }
