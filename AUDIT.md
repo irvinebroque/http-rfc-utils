@@ -1,9 +1,10 @@
 # RFC Audit Report - http-rfc-utils
-Date: 2026-02-02
-Scope: README.md, docs/src/content/docs/reference/rfcs.mdx, src/*.ts, test/*.test.ts
+Date: 2026-02-08
+Scope: README.md, AUDIT.md, src/*.ts, test/*.test.ts
 
 ## Scope matrix (claims vs code)
-| RFC | README.md | docs/reference/rfcs.mdx | Code modules | Tests | Notes |
+Legacy docs note: `docs/src/content/docs/reference/rfcs.mdx` is referenced by older audits but is not present in this repository snapshot; the "Legacy docs page" column is historical context only.
+| RFC | README.md | Legacy docs page | Code modules | Tests | Notes |
 | --- | --- | --- | --- | --- | --- |
 | RFC 9110 | Yes (sections list) | Yes | etag, conditional, datetime (HTTP-date), encoding, language, headers, range, response | etag, conditional, encoding, language, headers, datetime, range, integration | README top list omits Accept-Encoding/Range/Retry-After/Vary sections implemented in code. |
 | RFC 9111 | Yes | Yes | cache, response | cache, integration | - |

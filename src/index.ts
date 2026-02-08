@@ -538,3 +538,65 @@ export {
     noContentResponse,
     textResponse,
 } from './response.js';
+
+// =============================================================================
+// RFC 9309 — Robots Exclusion Protocol
+// =============================================================================
+export type {
+    RobotsGroup,
+    RobotsConfig,
+} from './types.js';
+
+export {
+    parseRobotsTxt,
+    formatRobotsTxt,
+    matchUserAgent,
+    isAllowed,
+} from './robots.js';
+
+// =============================================================================
+// RFC 9116 — security.txt
+// =============================================================================
+export type {
+    SecurityTxt,
+    SecurityTxtIssue,
+} from './types.js';
+
+export {
+    parseSecurityTxt,
+    formatSecurityTxt,
+    isSecurityTxtExpired,
+    validateSecurityTxt,
+} from './security-txt.js';
+
+// =============================================================================
+// RFC 7033 — WebFinger
+// =============================================================================
+export type {
+    WebFingerLink,
+    WebFingerResponse,
+} from './types.js';
+
+export {
+    JRD_CONTENT_TYPE,
+    parseJrd,
+    formatJrd,
+    validateJrd,
+    matchResource,
+    filterByRel,
+} from './webfinger.js';
+
+// =============================================================================
+// RFC 6415 — Host Metadata
+// =============================================================================
+export type {
+    HostMetaLink,
+    HostMeta,
+} from './types.js';
+
+export {
+    parseHostMeta,
+    formatHostMeta,
+    parseHostMetaJson,
+    formatHostMetaJson,
+} from './host-meta.js';
