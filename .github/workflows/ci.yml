@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -18,6 +20,29 @@ jobs:
         with:
           node-version: 25
           cache: pnpm
+
+      - name: Ensure changeset exists
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          git fetch origin "$BASE_REF" --depth=1
+
+          has_changeset='false'
+          while IFS= read -r file; do
+            case "$file" in
+              .changeset/*.md)
+                if [ "$file" != '.changeset/README.md' ]; then
+                  has_changeset='true'
+                  break
+                fi
+                ;;
+            esac
+          done < <(git diff --name-only "origin/$BASE_REF"...HEAD)
+
+          if [ "$has_changeset" != 'true' ]; then
+            echo 'No changeset found in this PR. Add one with `pnpm changeset`.'
+            exit 1
+          fi
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
