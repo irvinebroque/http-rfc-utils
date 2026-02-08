@@ -96,7 +96,7 @@ return new Response(JSON.stringify(body), {
 
 Use the RFC list in `AGENTS.md` as the project source of truth for implementation work.
 
-Use `AUDIT.md` for current coverage status, partials, and explicit out-of-scope behavior.
+Use the RFC map below for module-level coverage and exported API references.
 
 ## Requirements
 
