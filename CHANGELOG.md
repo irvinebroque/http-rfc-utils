@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- [`4cbddd8`](https://github.com/irvinebroque/http-rfc-utils/commit/4cbddd87c39459b7d66860feddb9fe057ffd2c00) Thanks [@irvinebroque](https://github.com/irvinebroque)! - Add RFC 9651 Structured Fields Date type (SfDate class with @timestamp syntax) and RFC 9745 Deprecation header support (parseDeprecation, formatDeprecation, isDeprecated, buildDeprecationHeaders). Add DEPRECATION link relation.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
