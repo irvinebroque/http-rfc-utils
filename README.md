@@ -86,6 +86,10 @@ return new Response(JSON.stringify(body), {
 - [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986.html), Sections 2, 3.1, 3.2.2, 5.2.4, 6.2 (URI Generic Syntax)
 - [RFC 6570](https://www.rfc-editor.org/rfc/rfc6570.html), Sections 1.2, 2-3 (URI Template)
 - [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html), Sections 2-4 (HTTP Message Signatures)
+- [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html), Sections 2.1-2.4 (Robots Exclusion Protocol)
+- [RFC 9116](https://www.rfc-editor.org/rfc/rfc9116.html), Sections 2.3, 2.5, 3 (security.txt)
+- [RFC 7033](https://www.rfc-editor.org/rfc/rfc7033.html), Sections 4.2-4.4 (WebFinger)
+- [RFC 6415](https://www.rfc-editor.org/rfc/rfc6415.html), Sections 2-3 (Host Metadata)
 - Fetch/CORS specs (CORS headers)
 
 ## RFC References

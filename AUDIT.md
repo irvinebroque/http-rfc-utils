@@ -41,6 +41,10 @@ Legacy docs note: `docs/src/content/docs/reference/rfcs.mdx` is referenced by ol
 | RFC 6570 | Yes (1.2, 2-3) | No | uri-template | uri-template | URI Template parsing and expansion; all Level 4 operators and modifiers. |
 | RFC 9421 | Yes (2-4) | No | http-signatures | http-signatures | HTTP Message Signatures; signature base creation; cryptographic operations out-of-scope. |
 | Fetch/CORS | Yes | Mentioned (alignment note) | cors, response | cors, integration | - |
+| RFC 9309 | Yes (2.1-2.4) | No | robots | robots | Robots exclusion protocol: parsing, formatting, path matching with wildcards and $. |
+| RFC 9116 | Yes (2.3, 2.5, 3) | No | security-txt | security-txt | security.txt: parsing, formatting (CRLF), validation, expiry checking. |
+| RFC 7033 | Yes (4.2-4.4) | No | webfinger | webfinger | WebFinger JRD: parsing, formatting, validation, resource matching, rel filtering. |
+| RFC 6415 | Yes (2-3) | No | host-meta | host-meta | Host metadata: XRD XML and JSON parsing/formatting. |
 
 ## RFC checklists (normative + ABNF)
 Status legend: Compliant / Partial / Out-of-scope
@@ -776,6 +780,46 @@ Status legend: Compliant / Partial / Out-of-scope
 | src/link.ts | RFC 8594 6 | Compliant | SUNSET relation type added to LinkRelation. |
 | src/linkset.ts | RFC 9264 4.1, 4.2, 5; RFC 9727 2-4, 7 | Compliant | Parses/formats both application/linkset and application/linkset+json; linkset relation type added; API Catalog creation/parsing with profile support. |
 | src/http-signatures.ts | RFC 9421 2-4 | Partial | Signature-Input/Signature parsing/formatting; signature base creation; derived components; cryptographic operations out-of-scope. |
+| src/robots.ts | RFC 9309 2.1-2.4 | Compliant | Robots.txt parsing, formatting, user-agent matching, path matching with wildcards and $, longest-match-wins. |
+| src/security-txt.ts | RFC 9116 2.3, 2.5, 3 | Compliant | security.txt parsing, formatting (CRLF), validation, expiry checking. |
+| src/webfinger.ts | RFC 7033 4.2-4.4 | Compliant | WebFinger JRD parsing/formatting, validation, resource matching, rel filtering. |
+| src/host-meta.ts | RFC 6415 2-3 | Compliant | Host metadata XRD XML and JSON parsing/formatting; entity encoding. |
+
+### RFC 9309 (Robots Exclusion Protocol)
+Relevant sections: 2.1-2.4
+- [x] §2.1: Group structure parsing (user-agent + rules) — Compliant — `src/robots.ts`
+- [x] §2.2: Longest-match-wins for Allow vs Disallow — Compliant — `src/robots.ts`
+- [x] §2.2.2: Wildcard `*` and `$` end-of-URL matching — Compliant — `src/robots.ts`
+- [x] §2.3: Case-insensitive substring matching for User-agent — Compliant — `src/robots.ts`
+- [x] §2.4: Lines over 500 bytes SHOULD be ignored — Compliant — `src/robots.ts`
+- [x] Sitemap directive parsing — Compliant — `src/robots.ts`
+- [x] BOM stripping and CRLF normalization — Compliant — `src/robots.ts`
+
+### RFC 9116 (security.txt)
+Relevant sections: 2.3, 2.5, 3
+- [x] §2.3: CRLF line endings in output — Compliant — `src/security-txt.ts`
+- [x] §2.5.1: Contact is REQUIRED (validation) — Compliant — `src/security-txt.ts`
+- [x] §2.5.2: Canonical is RECOMMENDED (validation warning) — Compliant — `src/security-txt.ts`
+- [x] §2.5.3: Expires is REQUIRED, < 1 year (validation) — Compliant — `src/security-txt.ts`
+- [x] §3: Comment stripping, case-insensitive field names — Compliant — `src/security-txt.ts`
+- [x] Extension field preservation — Compliant — `src/security-txt.ts`
+
+### RFC 7033 (WebFinger)
+Relevant sections: 4.2-4.4
+- [x] §4.2: JRD Content-Type constant — Compliant — `src/webfinger.ts`
+- [x] §4.4: JRD parsing with subject, aliases, links, properties — Compliant — `src/webfinger.ts`
+- [x] §4.4: JRD formatting/serialization — Compliant — `src/webfinger.ts`
+- [x] §4.4: Validation (required subject, link rel) — Compliant — `src/webfinger.ts`
+- [x] §4.3: Resource matching with alias and subject lookup — Compliant — `src/webfinger.ts`
+- [x] §4.4: rel parameter filtering — Compliant — `src/webfinger.ts`
+
+### RFC 6415 (Host Metadata)
+Relevant sections: 2-3
+- [x] §2: XRD XML parsing (Link elements, Property elements) — Compliant — `src/host-meta.ts`
+- [x] §2: XRD XML formatting with correct namespace — Compliant — `src/host-meta.ts`
+- [x] §3: JSON format parsing and formatting — Compliant — `src/host-meta.ts`
+- [x] XML entity encoding/decoding — Compliant — `src/host-meta.ts`
+- [x] Round-trip serialization for both formats — Compliant — `src/host-meta.ts`
 
 ## Test mapping and coverage gaps
 Existing tests map to RFC sections as noted in test filenames and comments.
