@@ -11,6 +11,8 @@
 import { parseSfDict, serializeSfDict } from './structured-fields.js';
 import type { SfDictionary, SfItem } from './types.js';
 
+const UTF8_ENCODER = new TextEncoder();
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -391,7 +393,7 @@ export async function generateDigest(
     let buffer: ArrayBuffer;
 
     if (typeof data === 'string') {
-        buffer = new TextEncoder().encode(data).buffer as ArrayBuffer;
+        buffer = UTF8_ENCODER.encode(data).buffer as ArrayBuffer;
     } else if (data instanceof ArrayBuffer) {
         buffer = data;
     } else {

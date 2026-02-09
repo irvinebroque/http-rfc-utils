@@ -10,12 +10,25 @@ export type { RobotsConfig, RobotsGroup } from './types.js';
 
 // RFC 9309 §2.4: Lines with more than 500 bytes SHOULD be ignored.
 const MAX_LINE_BYTES = 500;
+const UTF8_ENCODER = new TextEncoder();
+
+interface CompiledRule {
+    regex: RegExp;
+    length: number;
+}
+
+interface CompiledRobotsGroup {
+    allow: CompiledRule[];
+    disallow: CompiledRule[];
+}
+
+const COMPILED_ROBOTS_GROUPS = new WeakMap<RobotsGroup, CompiledRobotsGroup>();
 
 /**
  * Check if a line exceeds the 500-byte limit per RFC 9309 §2.4.
  */
 function exceedsMaxLineBytes(line: string): boolean {
-    return new TextEncoder().encode(line).byteLength > MAX_LINE_BYTES;
+    return UTF8_ENCODER.encode(line).byteLength > MAX_LINE_BYTES;
 }
 
 /**
@@ -243,6 +256,27 @@ function effectiveLength(pattern: string): number {
     return pattern.replace(/\$$/g, '').replace(/\*/g, '').length;
 }
 
+function getCompiledGroup(group: RobotsGroup): CompiledRobotsGroup {
+    const cached = COMPILED_ROBOTS_GROUPS.get(group);
+    if (cached) {
+        return cached;
+    }
+
+    const compiled: CompiledRobotsGroup = {
+        allow: group.allow.map((pattern) => ({
+            regex: pathPatternToRegex(pattern),
+            length: effectiveLength(pattern),
+        })),
+        disallow: group.disallow.map((pattern) => ({
+            regex: pathPatternToRegex(pattern),
+            length: effectiveLength(pattern),
+        })),
+    };
+
+    COMPILED_ROBOTS_GROUPS.set(group, compiled);
+    return compiled;
+}
+
 /**
  * Check if a path is allowed for a given user agent.
  * RFC 9309 §2.2: Longest-match-wins for Allow vs Disallow.
@@ -262,23 +296,20 @@ export function isAllowed(config: RobotsConfig, userAgent: string, path: string)
     // RFC 9309 §2.2: Longest match wins. If tied, Allow takes precedence.
     let bestAllow = -1;
     let bestDisallow = -1;
+    const compiledGroup = getCompiledGroup(group);
 
-    for (const pattern of group.allow) {
-        const regex = pathPatternToRegex(pattern);
-        if (regex.test(path)) {
-            const len = effectiveLength(pattern);
-            if (len > bestAllow) {
-                bestAllow = len;
+    for (const rule of compiledGroup.allow) {
+        if (rule.regex.test(path)) {
+            if (rule.length > bestAllow) {
+                bestAllow = rule.length;
             }
         }
     }
 
-    for (const pattern of group.disallow) {
-        const regex = pathPatternToRegex(pattern);
-        if (regex.test(path)) {
-            const len = effectiveLength(pattern);
-            if (len > bestDisallow) {
-                bestDisallow = len;
+    for (const rule of compiledGroup.disallow) {
+        if (rule.regex.test(path)) {
+            if (rule.length > bestDisallow) {
+                bestDisallow = rule.length;
             }
         }
     }

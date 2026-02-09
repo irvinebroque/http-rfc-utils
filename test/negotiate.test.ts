@@ -194,6 +194,12 @@ describe('negotiate', () => {
         assert.equal(result, null);
     });
 
+    // RFC 7231 §5.3.2: Invalid offered media types are ignored as candidates.
+    it('ignores invalid supported media types', () => {
+        const result = negotiate('application/json', ['invalid/media/type', 'application/json']);
+        assert.equal(result, 'application/json');
+    });
+
     it('rejects param-specific ranges when supported lacks params', () => {
         const result = negotiate('text/plain;format=flowed', ['text/plain']);
         assert.equal(result, null);
@@ -319,6 +325,12 @@ describe('getResponseFormat', () => {
     it('returns null when Accept excludes json/csv', () => {
         const result = getResponseFormat('text/html');
         assert.equal(result, null);
+    });
+
+    // RFC 7231 §5.3.2: Malformed media-ranges are ignored.
+    it('ignores malformed entries and still chooses acceptable format', () => {
+        const result = getResponseFormat('text/html/extra, text/csv;q=0.9');
+        assert.equal(result, 'csv');
     });
 });
 

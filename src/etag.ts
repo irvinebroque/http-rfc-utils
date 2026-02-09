@@ -9,6 +9,7 @@ import type { ETag } from './types.js';
 export type { ETag } from './types.js';
 
 const MAX_ETAG_CHAR = 0xFF;
+const UTF8_ENCODER = new TextEncoder();
 
 // RFC 9110 §8.8.3: etagc character set validation.
 function isValidETagValue(value: string): boolean {
@@ -47,6 +48,14 @@ function djb2Hash(str: string): string {
     return (hash >>> 0).toString(16);
 }
 
+function djb2HashBytes(bytes: Uint8Array): string {
+    let hash = 5381;
+    for (let i = 0; i < bytes.length; i++) {
+        hash = ((hash << 5) + hash) ^ bytes[i]!;
+    }
+    return (hash >>> 0).toString(16);
+}
+
 /**
  * Convert data to a string representation for hashing
  */
@@ -54,17 +63,17 @@ function dataToString(data: unknown): string {
     if (typeof data === 'string') {
         return data;
     }
+    return JSON.stringify(data) ?? String(data);
+}
+
+function asByteView(data: unknown): Uint8Array | null {
     if (data instanceof ArrayBuffer) {
-        return Array.from(new Uint8Array(data))
-            .map(b => String.fromCharCode(b))
-            .join('');
+        return new Uint8Array(data);
     }
     if (ArrayBuffer.isView(data)) {
-        return Array.from(new Uint8Array(data.buffer, data.byteOffset, data.byteLength))
-            .map(b => String.fromCharCode(b))
-            .join('');
+        return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     }
-    return JSON.stringify(data) ?? String(data);
+    return null;
 }
 
 function toBufferSource(data: ArrayBuffer | ArrayBufferView): BufferSource {
@@ -81,8 +90,8 @@ function toBufferSource(data: ArrayBuffer | ArrayBufferView): BufferSource {
  */
 // RFC 9110 §8.8.3: Entity-tag field-value formatting.
 export function generateETag(data: unknown, options?: { weak?: boolean }): string {
-    const str = dataToString(data);
-    const hash = djb2Hash(str);
+    const byteView = asByteView(data);
+    const hash = byteView ? djb2HashBytes(byteView) : djb2Hash(dataToString(data));
     const weak = options?.weak ?? false;
     return weak ? `W/"${hash}"` : `"${hash}"`;
 }
@@ -105,8 +114,7 @@ export async function generateETagAsync(
         dataBuffer = toBufferSource(data);
     } else {
         const str = dataToString(data);
-        const encoder = new TextEncoder();
-        dataBuffer = encoder.encode(str);
+        dataBuffer = UTF8_ENCODER.encode(str);
     }
 
     const hashBuffer = await globalThis.crypto.subtle.digest(algorithm, dataBuffer);

@@ -588,6 +588,14 @@ describe('RFC 9535 JSONPath', () => {
                 const data = [{ s: 'foo' }, { s: 'bar' }, { s: 'baz' }];
                 assert.deepEqual(queryJsonPath('$[?match(@.s, "ba.")]', data), [{ s: 'bar' }, { s: 'baz' }]);
             });
+
+            // RFC 9535 §2.4.6: Invalid regex patterns evaluate to false.
+            it('returns false for invalid regex patterns', () => {
+                const data = [{ s: 'foo' }, { s: 'bar' }];
+                assert.deepEqual(queryJsonPath('$[?match(@.s, "(")]', data), []);
+                // Repeat to ensure behavior is stable across repeated evaluations.
+                assert.deepEqual(queryJsonPath('$[?match(@.s, "(")]', data), []);
+            });
         });
 
         // RFC 9535 §2.4.7: search()
@@ -689,6 +697,20 @@ describe('RFC 9535 JSONPath', () => {
             assert.equal(result.length, 4);
             assert.equal(result[0].path, "$['store']['book'][0]['author']");
             assert.equal(result[1].path, "$['store']['book'][1]['author']");
+        });
+
+        // RFC 9535 §2.7: Descendant queries still produce normalized paths.
+        it('returns normalized paths for descendant wildcard matches', () => {
+            const doc = { a: { b: 1 }, c: [{ d: 2 }] };
+            const result = queryJsonPathNodes('$..*', doc);
+            assert.ok(result !== null);
+
+            const paths = result.map((node) => node.path);
+            assert.ok(paths.includes("$['a']"));
+            assert.ok(paths.includes("$['a']['b']"));
+            assert.ok(paths.includes("$['c']"));
+            assert.ok(paths.includes("$['c'][0]"));
+            assert.ok(paths.includes("$['c'][0]['d']"));
         });
     });
 

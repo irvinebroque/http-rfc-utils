@@ -13,6 +13,8 @@ import type { ExtValue, ExtValueOptions } from './types.js';
  * (token except "*" / "'" / "%")
  */
 const ATTR_CHAR = /^[A-Za-z0-9!#$&+\-.^_`|~]$/;
+const UTF8_ENCODER = new TextEncoder();
+const HEX_UPPER = '0123456789ABCDEF';
 
 /**
  * Check if a character is a valid attr-char per RFC 8187 §3.2.1.
@@ -115,8 +117,7 @@ export function encodeExtValue(value: string, options: ExtValueOptions = {}): st
 
     // Build percent-encoded value, preserving attr-char
     let encoded = '';
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(value);
+    const bytes = UTF8_ENCODER.encode(value);
 
     for (const byte of bytes) {
         const char = String.fromCharCode(byte);
@@ -124,7 +125,7 @@ export function encodeExtValue(value: string, options: ExtValueOptions = {}): st
             encoded += char;
         } else {
             // Percent-encode with uppercase hex per RFC 3986 §2.1
-            encoded += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
+            encoded += '%' + HEX_UPPER[(byte >> 4) & 0x0f] + HEX_UPPER[byte & 0x0f];
         }
     }
 

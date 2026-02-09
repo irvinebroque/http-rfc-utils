@@ -159,24 +159,16 @@ function matchesMediaType(entry: AcceptEntry, mediaType: MediaType): number {
     return matchesMimeType(entry, mimeType);
 }
 
-/**
- * Check if an Accept entry matches a MIME type string.
- * Returns specificity score if match, 0 if no match.
- */
-function matchesMimeType(entry: AcceptEntry, mimeType: string): number {
-    const parsed = parseMimeTypeWithParams(mimeType);
+interface ParsedMimeType {
+    type: string;
+    subtype: string;
+    params: Map<string, string>;
+}
 
-    if (!parsed) {
-        return 0;
-    }
-
+function matchesParsedMimeType(entry: AcceptEntry, parsed: ParsedMimeType): number {
     const { type, subtype, params } = parsed;
 
     if (!paramsMatch(entry.params, params)) {
-        return 0;
-    }
-
-    if (!type || !subtype) {
         return 0;
     }
 
@@ -198,7 +190,21 @@ function matchesMimeType(entry: AcceptEntry, mimeType: string): number {
     return 0;
 }
 
-function parseMimeTypeWithParams(mimeType: string): { type: string; subtype: string; params: Map<string, string> } | null {
+/**
+ * Check if an Accept entry matches a MIME type string.
+ * Returns specificity score if match, 0 if no match.
+ */
+function matchesMimeType(entry: AcceptEntry, mimeType: string): number {
+    const parsed = parseMimeTypeWithParams(mimeType);
+
+    if (!parsed) {
+        return 0;
+    }
+
+    return matchesParsedMimeType(entry, parsed);
+}
+
+function parseMimeTypeWithParams(mimeType: string): ParsedMimeType | null {
     const parts = splitQuotedValue(mimeType, ';').map(p => p.trim());
     const mediaType = parts[0];
 
@@ -268,6 +274,52 @@ function parseTypeAndSubtype(mediaType: string | undefined): { type: string; sub
     return { type, subtype };
 }
 
+function negotiateWithEntries(entries: AcceptEntry[], supported: string[]): string | null {
+    // RFC 7231 §5.3.2: each candidate's quality comes from its highest-precedence matching media-range.
+    let bestMatch: string | null = null;
+    let bestSpecificity = 0;
+    let bestQ = 0;
+
+    const parsedSupported = supported.map((mimeType) => ({
+        mimeType,
+        parsed: parseMimeTypeWithParams(mimeType),
+    }));
+
+    for (const candidate of parsedSupported) {
+        if (!candidate.parsed) {
+            continue;
+        }
+
+        let candidateSpecificity = -1;
+        let candidateQ = 0;
+
+        for (const entry of entries) {
+            const specificity = matchesParsedMimeType(entry, candidate.parsed);
+            if (specificity === 0) {
+                continue;
+            }
+
+            if (specificity > candidateSpecificity || (specificity === candidateSpecificity && entry.q > candidateQ)) {
+                candidateSpecificity = specificity;
+                candidateQ = entry.q;
+            }
+        }
+
+        if (candidateSpecificity < 0 || candidateQ === 0) {
+            continue;
+        }
+
+        // Prefer higher q, then higher precedence specificity.
+        if (candidateQ > bestQ || (candidateQ === bestQ && candidateSpecificity > bestSpecificity)) {
+            bestMatch = candidate.mimeType;
+            bestSpecificity = candidateSpecificity;
+            bestQ = candidateQ;
+        }
+    }
+
+    return bestMatch;
+}
+
 function paramsMatch(required: Map<string, string>, candidate: Map<string, string>): boolean {
     if (required.size === 0) {
         return true;
@@ -324,40 +376,7 @@ export function negotiate(input: Request | string | undefined | null, supported:
         return supported[0] ?? null;
     }
 
-    // RFC 7231 §5.3.2: each candidate's quality comes from its highest-precedence matching media-range.
-    let bestMatch: string | null = null;
-    let bestSpecificity = 0;
-    let bestQ = 0;
-
-    for (const mimeType of supported) {
-        let candidateSpecificity = -1;
-        let candidateQ = 0;
-
-        for (const entry of entries) {
-            const specificity = matchesMimeType(entry, mimeType);
-            if (specificity === 0) {
-                continue;
-            }
-
-            if (specificity > candidateSpecificity || (specificity === candidateSpecificity && entry.q > candidateQ)) {
-                candidateSpecificity = specificity;
-                candidateQ = entry.q;
-            }
-        }
-
-        if (candidateSpecificity < 0 || candidateQ === 0) {
-            continue;
-        }
-
-        // Prefer higher q, then higher precedence specificity.
-        if (candidateQ > bestQ || (candidateQ === bestQ && candidateSpecificity > bestSpecificity)) {
-            bestMatch = mimeType;
-            bestSpecificity = candidateSpecificity;
-            bestQ = candidateQ;
-        }
-    }
-
-    return bestMatch;
+    return negotiateWithEntries(entries, supported);
 }
 
 /**
@@ -391,7 +410,7 @@ export function getResponseFormat(input: Request | string | undefined | null): '
         return 'json';
     }
 
-    const best = negotiate(acceptHeader, ['application/json', 'text/csv']);
+    const best = negotiateWithEntries(entries, ['application/json', 'text/csv']);
     if (!best) {
         return null;
     }

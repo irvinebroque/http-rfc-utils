@@ -955,6 +955,12 @@ interface EvalContext {
     root: unknown;
     current: unknown;
     currentPath: (string | number)[];
+    regexCache: Map<string, RegExp | null>;
+}
+
+interface EvalNode {
+    value: unknown;
+    segments: (string | number)[];
 }
 
 /**
@@ -1010,7 +1016,7 @@ export function queryJsonPathNodes(
     const ast = parseJsonPath(query);
     if (ast === null) return null;
 
-    return evaluateQuery(ast, document);
+    return evaluateQuery(ast, document).map(materializeNodePath);
 }
 
 /**
@@ -1038,19 +1044,19 @@ export function isValidJsonPath(query: string): boolean {
  */
 export function formatNormalizedPath(segments: (string | number)[]): string {
     // RFC 9535 §2.7: normalized-path = root-identifier *(normal-index-segment / normal-name-segment)
-    let path = '$';
+    const pathParts: string[] = ['$'];
     for (const seg of segments) {
         if (typeof seg === 'number') {
-            path += `[${seg}]`;
+            pathParts.push(`[${seg}]`);
         } else {
             // Escape single quotes and backslashes
             const escaped = seg
                 .replace(/\\/g, '\\\\')
                 .replace(/'/g, "\\'");
-            path += `['${escaped}']`;
+            pathParts.push(`['${escaped}']`);
         }
     }
-    return path;
+    return pathParts.join('');
 }
 
 /**
@@ -1077,17 +1083,18 @@ export function compileJsonPath(
     };
 }
 
-function evaluateQuery(ast: JsonPathQuery, document: unknown): JsonPathNode[] {
+function evaluateQuery(ast: JsonPathQuery, document: unknown): EvalNode[] {
     // RFC 9535 §2.1.2: Start with root node
     const ctx: EvalContext = {
         root: document,
         current: document,
         currentPath: [],
+        regexCache: new Map(),
     };
 
-    let nodes: JsonPathNode[] = [{
+    let nodes: EvalNode[] = [{
         value: document,
-        path: '$',
+        segments: [],
     }];
 
     // Apply each segment in sequence
@@ -1098,11 +1105,18 @@ function evaluateQuery(ast: JsonPathQuery, document: unknown): JsonPathNode[] {
     return nodes;
 }
 
+function materializeNodePath(node: EvalNode): JsonPathNode {
+    return {
+        value: node.value,
+        path: formatNormalizedPath(node.segments),
+    };
+}
+
 function evaluateSegment(
     segment: JsonPathSegment,
-    nodes: JsonPathNode[],
+    nodes: EvalNode[],
     ctx: EvalContext
-): JsonPathNode[] {
+): EvalNode[] {
     if (segment.type === 'child') {
         return evaluateChildSegment(segment, nodes, ctx);
     } else {
@@ -1112,11 +1126,11 @@ function evaluateSegment(
 
 function evaluateChildSegment(
     segment: JsonPathChildSegment,
-    nodes: JsonPathNode[],
+    nodes: EvalNode[],
     ctx: EvalContext
-): JsonPathNode[] {
+): EvalNode[] {
     // RFC 9535 §2.5.1.2: Apply selectors to each input node
-    const result: JsonPathNode[] = [];
+    const result: EvalNode[] = [];
 
     for (const node of nodes) {
         for (const selector of segment.selectors) {
@@ -1130,106 +1144,61 @@ function evaluateChildSegment(
 
 function evaluateDescendantSegment(
     segment: JsonPathDescendantSegment,
-    nodes: JsonPathNode[],
+    nodes: EvalNode[],
     ctx: EvalContext
-): JsonPathNode[] {
+): EvalNode[] {
     // RFC 9535 §2.5.2.2: Select from node and all its descendants
-    const result: JsonPathNode[] = [];
+    const result: EvalNode[] = [];
 
     for (const node of nodes) {
-        // Collect all descendants including the node itself
-        const allNodes = collectDescendants(node);
-
-        for (const descNode of allNodes) {
+        forEachDescendant(node, (descNode) => {
             for (const selector of segment.selectors) {
                 const selected = evaluateSelector(selector, descNode, ctx);
                 result.push(...selected);
             }
-        }
+        });
     }
 
     return result;
 }
 
-function collectDescendants(node: JsonPathNode): JsonPathNode[] {
-    const result: JsonPathNode[] = [node];
-    const value = node.value;
+function forEachDescendant(node: EvalNode, visit: (descendant: EvalNode) => void): void {
+    const stack: EvalNode[] = [node];
 
-    if (Array.isArray(value)) {
-        for (let i = 0; i < value.length; i++) {
-            const childPath = parseNormalizedPath(node.path);
-            childPath.push(i);
-            const childNode: JsonPathNode = {
-                value: value[i],
-                path: formatNormalizedPath(childPath),
-            };
-            result.push(...collectDescendants(childNode));
-        }
-    } else if (value !== null && typeof value === 'object') {
-        for (const key of Object.keys(value)) {
-            const childPath = parseNormalizedPath(node.path);
-            childPath.push(key);
-            const childNode: JsonPathNode = {
-                value: (value as Record<string, unknown>)[key],
-                path: formatNormalizedPath(childPath),
-            };
-            result.push(...collectDescendants(childNode));
-        }
-    }
+    while (stack.length > 0) {
+        const current = stack.pop()!;
+        visit(current);
 
-    return result;
-}
-
-function parseNormalizedPath(path: string): (string | number)[] {
-    // Parse a normalized path back into segments
-    const segments: (string | number)[] = [];
-
-    if (!path.startsWith('$')) return segments;
-
-    let i = 1; // Skip $
-    while (i < path.length) {
-        if (path[i] === '[') {
-            i++; // Skip [
-
-            if (path[i] === "'") {
-                // String segment
-                i++; // Skip opening quote
-                let name = '';
-                while (i < path.length && path[i] !== "'") {
-                    if (path[i] === '\\' && i + 1 < path.length) {
-                        i++;
-                        name += path[i];
-                    } else {
-                        name += path[i];
-                    }
-                    i++;
-                }
-                i++; // Skip closing quote
-                segments.push(name);
-            } else {
-                // Numeric segment
-                let numStr = '';
-                while (i < path.length && path[i] !== ']') {
-                    numStr += path[i];
-                    i++;
-                }
-                segments.push(parseInt(numStr, 10));
+        const value = current.value;
+        if (Array.isArray(value)) {
+            for (let i = value.length - 1; i >= 0; i--) {
+                stack.push({
+                    value: value[i],
+                    segments: [...current.segments, i],
+                });
             }
+            continue;
+        }
 
-            i++; // Skip ]
-        } else {
-            break;
+        if (value !== null && typeof value === 'object') {
+            const record = value as Record<string, unknown>;
+            const keys = Object.keys(record);
+            for (let i = keys.length - 1; i >= 0; i--) {
+                const key = keys[i]!;
+                stack.push({
+                    value: record[key],
+                    segments: [...current.segments, key],
+                });
+            }
         }
     }
-
-    return segments;
 }
 
 function evaluateSelector(
     selector: JsonPathSelector,
-    node: JsonPathNode,
+    node: EvalNode,
     ctx: EvalContext
-): JsonPathNode[] {
+): EvalNode[] {
     switch (selector.type) {
         case 'name':
             return evaluateNameSelector(selector, node);
@@ -1246,8 +1215,8 @@ function evaluateSelector(
 
 function evaluateNameSelector(
     selector: JsonPathNameSelector,
-    node: JsonPathNode
-): JsonPathNode[] {
+    node: EvalNode
+): EvalNode[] {
     // RFC 9535 §2.3.1.2: Select member value by name
     const value = node.value;
 
@@ -1260,36 +1229,31 @@ function evaluateNameSelector(
         return [];
     }
 
-    const childPath = parseNormalizedPath(node.path);
-    childPath.push(selector.name);
+    const childSegments = [...node.segments, selector.name];
 
     return [{
         value: obj[selector.name],
-        path: formatNormalizedPath(childPath),
+        segments: childSegments,
     }];
 }
 
-function evaluateWildcardSelector(node: JsonPathNode): JsonPathNode[] {
+function evaluateWildcardSelector(node: EvalNode): EvalNode[] {
     // RFC 9535 §2.3.2.2: Select all children
     const value = node.value;
-    const result: JsonPathNode[] = [];
+    const result: EvalNode[] = [];
 
     if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
-            const childPath = parseNormalizedPath(node.path);
-            childPath.push(i);
             result.push({
                 value: value[i],
-                path: formatNormalizedPath(childPath),
+                segments: [...node.segments, i],
             });
         }
     } else if (value !== null && typeof value === 'object') {
         for (const key of Object.keys(value)) {
-            const childPath = parseNormalizedPath(node.path);
-            childPath.push(key);
             result.push({
                 value: (value as Record<string, unknown>)[key],
-                path: formatNormalizedPath(childPath),
+                segments: [...node.segments, key],
             });
         }
     }
@@ -1299,8 +1263,8 @@ function evaluateWildcardSelector(node: JsonPathNode): JsonPathNode[] {
 
 function evaluateIndexSelector(
     selector: JsonPathIndexSelector,
-    node: JsonPathNode
-): JsonPathNode[] {
+    node: EvalNode
+): EvalNode[] {
     // RFC 9535 §2.3.3.2: Select array element by index
     const value = node.value;
 
@@ -1319,19 +1283,18 @@ function evaluateIndexSelector(
         return [];
     }
 
-    const childPath = parseNormalizedPath(node.path);
-    childPath.push(index);
+    const childSegments = [...node.segments, index];
 
     return [{
         value: value[index],
-        path: formatNormalizedPath(childPath),
+        segments: childSegments,
     }];
 }
 
 function evaluateSliceSelector(
     selector: JsonPathSliceSelector,
-    node: JsonPathNode
-): JsonPathNode[] {
+    node: EvalNode
+): EvalNode[] {
     // RFC 9535 §2.3.4.2: Array slice
     const value = node.value;
 
@@ -1368,23 +1331,21 @@ function evaluateSliceSelector(
         upper = Math.min(Math.max(nStart, -1), len - 1);
     }
 
-    const result: JsonPathNode[] = [];
-    const basePath = parseNormalizedPath(node.path);
+    const result: EvalNode[] = [];
+    const baseSegments = node.segments;
 
     if (step > 0) {
         for (let i = lower; i < upper; i += step) {
-            const childPath = [...basePath, i];
             result.push({
                 value: value[i],
-                path: formatNormalizedPath(childPath),
+                segments: [...baseSegments, i],
             });
         }
     } else {
         for (let i = upper; i > lower; i += step) {
-            const childPath = [...basePath, i];
             result.push({
                 value: value[i],
-                path: formatNormalizedPath(childPath),
+                segments: [...baseSegments, i],
             });
         }
     }
@@ -1398,26 +1359,25 @@ function normalize(i: number, len: number): number {
 
 function evaluateFilterSelector(
     selector: JsonPathFilterSelector,
-    node: JsonPathNode,
+    node: EvalNode,
     ctx: EvalContext
-): JsonPathNode[] {
+): EvalNode[] {
     // RFC 9535 §2.3.5.2: Filter children by logical expression
     const value = node.value;
-    const result: JsonPathNode[] = [];
+    const result: EvalNode[] = [];
 
     if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
-            const childPath = parseNormalizedPath(node.path);
-            childPath.push(i);
-            const childNode: JsonPathNode = {
+            const childSegments = [...node.segments, i];
+            const childNode: EvalNode = {
                 value: value[i],
-                path: formatNormalizedPath(childPath),
+                segments: childSegments,
             };
 
             const childCtx: EvalContext = {
                 ...ctx,
                 current: value[i],
-                currentPath: childPath,
+                currentPath: childSegments,
             };
 
             if (evaluateLogicalExpr(selector.expression, childCtx)) {
@@ -1426,18 +1386,17 @@ function evaluateFilterSelector(
         }
     } else if (value !== null && typeof value === 'object') {
         for (const key of Object.keys(value)) {
-            const childPath = parseNormalizedPath(node.path);
-            childPath.push(key);
+            const childSegments = [...node.segments, key];
             const childValue = (value as Record<string, unknown>)[key];
-            const childNode: JsonPathNode = {
+            const childNode: EvalNode = {
                 value: childValue,
-                path: formatNormalizedPath(childPath),
+                segments: childSegments,
             };
 
             const childCtx: EvalContext = {
                 ...ctx,
                 current: childValue,
-                currentPath: childPath,
+                currentPath: childSegments,
             };
 
             if (evaluateLogicalExpr(selector.expression, childCtx)) {
@@ -1525,9 +1484,9 @@ function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): 
     const startValue = query.root === '$' ? ctx.root : ctx.current;
     const startPath = query.root === '$' ? [] : [...ctx.currentPath];
 
-    let nodes: JsonPathNode[] = [{
+    let nodes: EvalNode[] = [{
         value: startValue,
-        path: formatNormalizedPath(startPath),
+        segments: startPath,
     }];
 
     for (const segment of query.segments) {
@@ -1538,13 +1497,13 @@ function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): 
     return nodes.length === 1 ? nodes[0].value : undefined;
 }
 
-function evaluateFilterQuery(query: JsonPathQuery, ctx: EvalContext): JsonPathNode[] {
+function evaluateFilterQuery(query: JsonPathQuery, ctx: EvalContext): EvalNode[] {
     const startValue = query.root === '$' ? ctx.root : ctx.current;
     const startPath = query.root === '$' ? [] : [...ctx.currentPath];
 
-    let nodes: JsonPathNode[] = [{
+    let nodes: EvalNode[] = [{
         value: startValue,
-        path: formatNormalizedPath(startPath),
+        segments: startPath,
     }];
 
     for (const segment of query.segments) {
@@ -1596,8 +1555,9 @@ function deepEqual(a: unknown, b: unknown): boolean {
         const keysA = Object.keys(a as object);
         const keysB = Object.keys(b as object);
         if (keysA.length !== keysB.length) return false;
+        const keySetB = new Set(keysB);
         for (const key of keysA) {
-            if (!keysB.includes(key)) return false;
+            if (!keySetB.has(key)) return false;
             if (!deepEqual(
                 (a as Record<string, unknown>)[key],
                 (b as Record<string, unknown>)[key]
@@ -1681,6 +1641,21 @@ function fnCount(args: JsonPathFunctionArg[], ctx: EvalContext): number {
     return 0;
 }
 
+function getCachedRegex(ctx: EvalContext, cacheKey: string, pattern: string): RegExp | null {
+    if (ctx.regexCache.has(cacheKey)) {
+        return ctx.regexCache.get(cacheKey) ?? null;
+    }
+
+    try {
+        const compiled = new RegExp(pattern, 'u');
+        ctx.regexCache.set(cacheKey, compiled);
+        return compiled;
+    } catch {
+        ctx.regexCache.set(cacheKey, null);
+        return null;
+    }
+}
+
 // RFC 9535 §2.4.6: match() function - full regex match
 function fnMatch(args: JsonPathFunctionArg[], ctx: EvalContext): boolean {
     if (args.length !== 2) return false;
@@ -1692,13 +1667,13 @@ function fnMatch(args: JsonPathFunctionArg[], ctx: EvalContext): boolean {
         return false;
     }
 
-    try {
-        // RFC 9535 §2.4.6: Full match (anchored)
-        const re = new RegExp(`^(?:${pattern})$`, 'u');
-        return re.test(value);
-    } catch {
+    // RFC 9535 §2.4.6: Full match (anchored)
+    const re = getCachedRegex(ctx, `match:${pattern}`, `^(?:${pattern})$`);
+    if (!re) {
         return false;
     }
+
+    return re.test(value);
 }
 
 // RFC 9535 §2.4.7: search() function - partial regex match
@@ -1712,12 +1687,12 @@ function fnSearch(args: JsonPathFunctionArg[], ctx: EvalContext): boolean {
         return false;
     }
 
-    try {
-        const re = new RegExp(pattern, 'u');
-        return re.test(value);
-    } catch {
+    const re = getCachedRegex(ctx, `search:${pattern}`, pattern);
+    if (!re) {
         return false;
     }
+
+    return re.test(value);
 }
 
 // RFC 9535 §2.4.8: value() function

@@ -40,6 +40,8 @@ export const DERIVED_COMPONENTS: readonly DerivedComponentName[] = [
     '@status',
 ] as const;
 
+const UTF8_ENCODER = new TextEncoder();
+
 /**
  * Check if a component name is a derived component.
  * RFC 9421 §2.2.
@@ -581,15 +583,13 @@ export function canonicalizeFieldValue(values: string[]): string {
 export function binaryWrapFieldValues(values: string[]): Uint8Array {
     // RFC 9421 §2.1.4: For binary-wrapped fields, each field line value is
     // base64-encoded and the results are concatenated with ":"
-    const encoded = values.map(v => {
-        // Encode each value as UTF-8 bytes, then base64
-        const bytes = new TextEncoder().encode(v.trim());
-        return `:${Buffer.from(bytes).toString('base64')}:`;
-    });
+    const encoded: string[] = [];
+    for (const value of values) {
+        encoded.push(`:${Buffer.from(value.trim(), 'utf8').toString('base64')}:`);
+    }
 
     // Join with ", " and return as bytes
-    const combined = encoded.join(', ');
-    return new TextEncoder().encode(combined);
+    return UTF8_ENCODER.encode(encoded.join(', '));
 }
 
 /**

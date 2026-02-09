@@ -184,6 +184,10 @@ describe('percentDecode (RFC 3986 Section 2.1)', () => {
         assert.strictEqual(percentDecode('%GG'), '%GG');
         assert.strictEqual(percentDecode('%2'), '%2');
     });
+
+    it('decodes valid sequences even when invalid escapes are present', () => {
+        assert.strictEqual(percentDecode('a%GG%20'), 'a%GG ');
+    });
 });
 
 // RFC 3986 §5.2.4: Remove Dot Segments

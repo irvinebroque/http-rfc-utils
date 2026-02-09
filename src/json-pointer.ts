@@ -9,6 +9,9 @@
  * RFC 6901 §4: Decode ~1 to / first, then ~0 to ~.
  * Order matters to avoid ~01 becoming / instead of ~1.
  */
+const URI_FRAGMENT_ENCODER = new TextEncoder();
+const HEX_UPPER = '0123456789ABCDEF';
+
 function decodeToken(token: string): string {
     // RFC 6901 §4: first ~1 → /, then ~0 → ~
     return token.replace(/~1/g, '/').replace(/~0/g, '~');
@@ -211,14 +214,14 @@ export function toUriFragment(pointer: string): string {
     // Characters allowed in URI fragments per RFC 3986: unreserved / pchar / "/" / "?"
     // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
     // We encode the pointer directly, preserving / and ~ which are allowed.
-    let result = '';
+    const parts: string[] = [];
     for (const char of pointer) {
         if (char === '/') {
             // / is allowed in fragments, keep as-is
-            result += '/';
+            parts.push('/');
         } else if (char === '~') {
             // ~ is allowed in fragments (unreserved), keep as-is
-            result += '~';
+            parts.push('~');
         } else if (
             // unreserved characters (except ~ handled above)
             (char >= 'A' && char <= 'Z') ||
@@ -226,17 +229,17 @@ export function toUriFragment(pointer: string): string {
             (char >= '0' && char <= '9') ||
             char === '-' || char === '.' || char === '_'
         ) {
-            result += char;
+            parts.push(char);
         } else {
             // Percent-encode everything else
-            const bytes = new TextEncoder().encode(char);
+            const bytes = URI_FRAGMENT_ENCODER.encode(char);
             for (const byte of bytes) {
-                result += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
+                parts.push('%', HEX_UPPER[(byte >> 4) & 0x0f]!, HEX_UPPER[byte & 0x0f]!);
             }
         }
     }
 
-    return '#' + result;
+    return '#' + parts.join('');
 }
 
 /**

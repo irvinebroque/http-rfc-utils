@@ -13,6 +13,7 @@ export type { HostMeta, HostMetaLink } from './types.js';
  * RFC 6415 §2: XRD format uses this namespace.
  */
 const XRD_NAMESPACE = 'http://docs.oasis-open.org/ns/xri/xrd-1.0';
+const ATTR_REGEX_CACHE = new Map<string, RegExp>();
 
 // =============================================================================
 // XML Parsing/Formatting
@@ -80,7 +81,11 @@ function parseLinkAttributes(attrs: string): HostMetaLink | null {
  * Extract an attribute value from an XML attributes string.
  */
 function extractAttr(attrs: string, name: string): string | null {
-    const regex = new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i');
+    let regex = ATTR_REGEX_CACHE.get(name);
+    if (!regex) {
+        regex = new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i');
+        ATTR_REGEX_CACHE.set(name, regex);
+    }
     const match = regex.exec(attrs);
     return match ? decodeXmlEntities(match[1]) : null;
 }

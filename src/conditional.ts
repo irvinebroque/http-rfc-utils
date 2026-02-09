@@ -32,9 +32,8 @@ function buildConditionalHeaders(currentETag: ETag | null, lastModified: Date | 
 }
 
 function toWholeSecondPrecision(date: Date): number {
-    const normalized = new Date(date.getTime());
-    normalized.setUTCMilliseconds(0);
-    return normalized.getTime();
+    const ms = date.getTime();
+    return Math.floor(ms / 1000) * 1000;
 }
 
 /**

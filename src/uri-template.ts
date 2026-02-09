@@ -57,6 +57,22 @@ const UNRESERVED = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567
 // RFC 3986 §2.2: Reserved characters
 const RESERVED = ':/?#[]@!$&\'()*+,;=';
 
+const UNRESERVED_TABLE = createAsciiTable(UNRESERVED);
+const RESERVED_TABLE = createAsciiTable(RESERVED);
+const UTF8_ENCODER = new TextEncoder();
+const HEX_UPPER = '0123456789ABCDEF';
+
+function createAsciiTable(chars: string): boolean[] {
+    const table = Array<boolean>(128).fill(false);
+    for (let i = 0; i < chars.length; i++) {
+        const code = chars.charCodeAt(i);
+        if (code < 128) {
+            table[code] = true;
+        }
+    }
+    return table;
+}
+
 // =============================================================================
 // Character validation (RFC 6570 §2.3)
 // =============================================================================
@@ -104,33 +120,30 @@ function isOperator(char: string): char is UriTemplateOperator {
  */
 function encodeValue(str: string, allowReserved: boolean): string {
     const result: string[] = [];
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(str);
+    const bytes = UTF8_ENCODER.encode(str);
 
     for (let i = 0; i < bytes.length; i++) {
         const byte = bytes[i]!;
 
         if (byte < 128) {
-            const char = String.fromCharCode(byte);
-
             // Always allow unreserved
-            if (UNRESERVED.includes(char)) {
-                result.push(char);
+            if (UNRESERVED_TABLE[byte]) {
+                result.push(String.fromCharCode(byte));
                 continue;
             }
 
             // Allow reserved if operator permits
-            if (allowReserved && RESERVED.includes(char)) {
-                result.push(char);
+            if (allowReserved && RESERVED_TABLE[byte]) {
+                result.push(String.fromCharCode(byte));
                 continue;
             }
 
             // Allow already percent-encoded sequences if allowReserved
-            if (allowReserved && char === '%' && i + 2 < bytes.length) {
-                const hex1 = String.fromCharCode(bytes[i + 1]!);
-                const hex2 = String.fromCharCode(bytes[i + 2]!);
-                if (isHexDigit(hex1) && isHexDigit(hex2)) {
-                    result.push('%', hex1.toUpperCase(), hex2.toUpperCase());
+            if (allowReserved && byte === 0x25 && i + 2 < bytes.length) {
+                const hex1 = bytes[i + 1]!;
+                const hex2 = bytes[i + 2]!;
+                if (isHexDigitByte(hex1) && isHexDigitByte(hex2)) {
+                    result.push('%', toUpperHexChar(hex1), toUpperHexChar(hex2));
                     i += 2;
                     continue;
                 }
@@ -138,14 +151,30 @@ function encodeValue(str: string, allowReserved: boolean): string {
         }
 
         // Percent-encode the byte with uppercase hex
-        result.push('%', byte.toString(16).toUpperCase().padStart(2, '0'));
+        result.push('%', HEX_UPPER[(byte >> 4) & 0x0f]!, HEX_UPPER[byte & 0x0f]!);
     }
 
     return result.join('');
 }
 
 function isHexDigit(char: string): boolean {
-    return /^[0-9A-Fa-f]$/.test(char);
+    if (char.length !== 1) {
+        return false;
+    }
+    return isHexDigitByte(char.charCodeAt(0));
+}
+
+function isHexDigitByte(byte: number): boolean {
+    return (byte >= 0x30 && byte <= 0x39)
+        || (byte >= 0x41 && byte <= 0x46)
+        || (byte >= 0x61 && byte <= 0x66);
+}
+
+function toUpperHexChar(byte: number): string {
+    if (byte >= 0x61 && byte <= 0x66) {
+        return String.fromCharCode(byte - 0x20);
+    }
+    return String.fromCharCode(byte);
 }
 
 // =============================================================================

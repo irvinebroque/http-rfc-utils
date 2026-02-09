@@ -189,6 +189,12 @@ describe('Structured Fields Date type (RFC 9651 Section 3.3.7)', () => {
         assert.strictEqual(parsed, null);
     });
 
+    // RFC 9651 §3.3.7: Date uses sf-integer syntax, so fractional .0 is invalid.
+    it('rejects Date with fractional zero', () => {
+        const parsed = parseSfItem('@1688169599.0');
+        assert.strictEqual(parsed, null);
+    });
+
     it('parses Date with parameters', () => {
         const parsed = parseSfItem('@1688169599;source=api');
         assert.ok(parsed);
@@ -262,5 +268,18 @@ describe('Structured Fields Date type (RFC 9651 Section 3.3.7)', () => {
         assert.strictEqual(parsed.length, 2);
         assert.ok((parsed[0] as { value: unknown }).value instanceof SfDate);
         assert.ok((parsed[1] as { value: unknown }).value instanceof SfDate);
+    });
+});
+
+describe('Structured Fields serialization constraints (RFC 8941 Section 4)', () => {
+    // RFC 8941 §4.1.5: Decimal range is limited to +/- 999999999999.999.
+    it('rejects decimals outside the allowed range during serialization', () => {
+        assert.throws(() => serializeSfItem({ value: 1_000_000_000_000.001 }));
+        assert.throws(() => serializeSfItem({ value: -1_000_000_000_000.001 }));
+    });
+
+    // RFC 8941 §4.1.6: sf-string only allows visible ASCII characters.
+    it('rejects non-ASCII strings during serialization', () => {
+        assert.throws(() => serializeSfItem({ value: 'cafe\u00E9' }));
     });
 });

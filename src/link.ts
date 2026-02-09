@@ -47,6 +47,39 @@ export const LinkRelation = {
     API_CATALOG: 'api-catalog',  // RFC 9727 §7.2
 } as const;
 
+const ORDERED_LINK_PARAM_KEYS = ['type', 'title', 'media', 'anchor', 'rev'] as const;
+const FORMAT_LINK_SKIP_KEYS = new Set<string>([
+    'href',
+    'rel',
+    'titleLang',
+    'hreflang',
+    ...ORDERED_LINK_PARAM_KEYS,
+]);
+const SINGLE_USE_LINK_PARAMS = new Set(['rel', 'type', 'media', 'anchor']);
+
+function splitRelationTokens(value: string): string[] {
+    const rels: string[] = [];
+    let token = '';
+
+    for (let i = 0; i < value.length; i++) {
+        const char = value[i]!;
+        if (char === ' ' || char === '\t' || char === '\r' || char === '\n' || char === '\f' || char === '\v') {
+            if (token) {
+                rels.push(token);
+                token = '';
+            }
+            continue;
+        }
+        token += char;
+    }
+
+    if (token) {
+        rels.push(token);
+    }
+
+    return rels;
+}
+
 /**
  * Quote a value if needed for Link header attribute.
  * Values containing special characters must be quoted.
@@ -89,8 +122,7 @@ export function formatLink(link: LinkDefinition): string {
 
     // Add other parameters in a consistent order
     // Always quote values for consistency
-    const orderedKeys = ['type', 'title', 'media', 'anchor', 'rev'];
-    for (const key of orderedKeys) {
+    for (const key of ORDERED_LINK_PARAM_KEYS) {
         if (key in link && link[key] !== undefined) {
             const value = link[key];
             if (typeof value === 'string') {
@@ -111,9 +143,8 @@ export function formatLink(link: LinkDefinition): string {
     }
 
     // Add any extension attributes (skip titleLang as it's metadata)
-    const skipKeys = new Set(['href', 'rel', 'titleLang', ...orderedKeys, 'hreflang']);
     for (const [key, value] of Object.entries(link)) {
-        if (skipKeys.has(key)) {
+        if (FORMAT_LINK_SKIP_KEYS.has(key)) {
             continue;
         }
         if (value !== undefined) {
@@ -235,8 +266,7 @@ export function parseLinkHeader(header: string): LinkDefinition[] {
         const value = rawValue.startsWith('"') ? unquote(rawValue) : (rawValue || '');
 
         // RFC 8288 §3.4.1: These params MUST NOT appear more than once (ignore duplicates)
-        const singleUseParams = new Set(['rel', 'type', 'media', 'anchor']);
-        if (singleUseParams.has(name) && currentLink[name] !== undefined) {
+        if (SINGLE_USE_LINK_PARAMS.has(name) && currentLink[name] !== undefined) {
             currentParamName = '';
             currentParamValue = '';
             return;
@@ -346,10 +376,7 @@ export function parseLinkHeader(header: string): LinkDefinition[] {
                 return;
             }
 
-            const rels = currentLink.rel
-                .split(/\s+/)
-                .map(rel => rel.trim())
-                .filter(Boolean);
+            const rels = splitRelationTokens(currentLink.rel);
 
             for (const rel of rels) {
                 results.push({
