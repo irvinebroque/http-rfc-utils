@@ -155,7 +155,7 @@ jobs:
         run: pnpm ${{ matrix.check }}
 
   coverage:
-    name: Coverage
+    name: Run tests + audit coverage
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -229,7 +229,7 @@ jobs:
           check_result 'structure' '${{ needs.structure.result }}'
           check_result 'security' '${{ needs.security.result }}'
           check_result 'typecheck' '${{ needs.typecheck.result }}'
-          check_result 'coverage' '${{ needs.coverage.result }}'
+          check_result 'Run tests + audit coverage' '${{ needs.coverage.result }}'
           check_result 'build' '${{ needs.build.result }}'
 
           if [ "$failures" -ne 0 ]; then
