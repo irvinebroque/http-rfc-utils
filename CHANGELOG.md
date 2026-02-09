@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.1
+
+### Patch Changes
+
+- [#12](https://github.com/irvinebroque/http-rfc-utils/pull/12) [`7e22c15`](https://github.com/irvinebroque/http-rfc-utils/commit/7e22c15653ec1a4507eceda03692ce2a7d8fe031) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Reorganize package documentation for npm and coding-agent discoverability by introducing a concise, npm-focused README with clearer RFC coverage snapshots.
+  Move exhaustive API import and RFC mapping references into dedicated docs pages and add a contributor workflow guide.
+
+- [#11](https://github.com/irvinebroque/http-rfc-utils/pull/11) [`3799d76`](https://github.com/irvinebroque/http-rfc-utils/commit/3799d7698a07e495015819f955460b7d722abb4a) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Improve CI reliability and clarity by splitting quality gates into parallel jobs with explicit names, plus a stable required-checks aggregator for branch protection.
+  Separate coverage generation from coverage threshold enforcement so CI logs and scripts reflect exactly what each step does.
+
+- [#15](https://github.com/irvinebroque/http-rfc-utils/pull/15) [`6b63c05`](https://github.com/irvinebroque/http-rfc-utils/commit/6b63c05bac9784e80ad7fe368d3f7c627e9253c8) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Rename the CI coverage job label to improve check readability.
+
+- [#13](https://github.com/irvinebroque/http-rfc-utils/pull/13) [`c2fb499`](https://github.com/irvinebroque/http-rfc-utils/commit/c2fb499f3464e9de8f79eeee20fdb4739c5ac1bf) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Fix Changesets changelog loading in CI by importing `@changesets/changelog-github` from its default export so release PR/version steps can resolve changelog functions.
+
+- [#10](https://github.com/irvinebroque/http-rfc-utils/pull/10) [`67647d8`](https://github.com/irvinebroque/http-rfc-utils/commit/67647d8e73da54c96527e394f061e44e606a0395) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Refactor internal module structure and tighten type-safety guardrails while preserving the public API exported from `src/index.ts`.
+  Split large `types`, `auth`, and `jsonpath` modules into focused submodules with compatibility facades, add structure/typecheck workflows (`pnpm check:structure`, strict/lib type checks), improve JSONPath and key-guard typing, and align tooling/docs metadata for consistent CI and API extraction.
+
 ## 0.3.0
 
 ### Minor Changes
