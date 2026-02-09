@@ -6,23 +6,22 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  changeset:
+    name: Changeset
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
       - name: Ensure changeset exists
-        if: github.event_name == 'pull_request'
         run: |
           BASE_REF="${{ github.event.pull_request.base.ref }}"
           git fetch origin "$BASE_REF" --depth=1
@@ -44,13 +43,29 @@ jobs:
             exit 1
           fi
 
+  api-semver:
+    name: API and SemVer
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
       - run: pnpm install --frozen-lockfile
+
       - name: Generate API extraction artifact
-        if: github.event_name == 'pull_request'
         run: pnpm api:extract
 
       - name: Enforce SemVer public API policy
-        if: github.event_name == 'pull_request'
         run: |
           mkdir -p temp/semver
           set +e
@@ -65,15 +80,159 @@ jobs:
           exit "$semver_status"
 
       - name: Upload SemVer report artifact
-        if: github.event_name == 'pull_request' && always()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: semver-report
           path: temp/semver/report.json
           if-no-files-found: warn
 
-      - run: pnpm security:ci
-      - run: pnpm typecheck:all
-      - run: pnpm typecheck:strict
-      - run: pnpm typecheck:lib
-      - run: pnpm test:coverage:check
+  structure:
+    name: Structure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Structure checks
+        run: pnpm check:structure
+
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Security fuzz (quick)
+        run: pnpm fuzz:quick
+
+  typecheck:
+    name: Typecheck (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: all
+            check: typecheck:all
+          - label: strict
+            check: typecheck:strict
+          - label: lib
+            check: typecheck:lib
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run ${{ matrix.check }}
+        run: pnpm ${{ matrix.check }}
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Test with coverage
+        run: pnpm test:coverage
+
+      - name: Coverage threshold checks
+        run: pnpm test:coverage:check
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+  required-checks:
+    name: Required checks
+    if: always()
+    needs:
+      - changeset
+      - api-semver
+      - structure
+      - security
+      - typecheck
+      - coverage
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify required job results
+        run: |
+          failures=0
+
+          check_result() {
+            local name="$1"
+            local result="$2"
+            if [ "$result" = "success" ] || [ "$result" = "skipped" ]; then
+              echo "$name: $result"
+            else
+              echo "$name: $result"
+              failures=1
+            fi
+          }
+
+          check_result 'changeset' '${{ needs.changeset.result }}'
+          check_result 'api-semver' '${{ needs["api-semver"].result }}'
+          check_result 'structure' '${{ needs.structure.result }}'
+          check_result 'security' '${{ needs.security.result }}'
+          check_result 'typecheck' '${{ needs.typecheck.result }}'
+          check_result 'coverage' '${{ needs.coverage.result }}'
+          check_result 'build' '${{ needs.build.result }}'
+
+          if [ "$failures" -ne 0 ]; then
+            echo 'One or more required jobs failed.'
+            exit 1
+          fi

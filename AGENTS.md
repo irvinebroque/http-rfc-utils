@@ -140,10 +140,14 @@ Use RFC Editor URLs when verifying behavior and edge cases:
 - RFC 9535 (JSONPath): https://www.rfc-editor.org/rfc/rfc9535.html
 
 ## Adding/extending an RFC module
+If you are using OpenCode agent commands, prefer `@rfc-implement <spec-url-or-identifier>` for end-to-end execution.
+The command definition lives at `.opencode/agents/rfc-implement.md` and uses `.opencode/skills/rfc-implement.md`.
+Use this as the single RFC workflow command in this repo (planning/research/audit are consolidated into it).
+
 1. Declare scope (supported sections + explicit out-of-scope behavior).
 2. Keep parse/format API consistency and document any intentional deviations.
 3. Add RFC-cited tests for nominal and edge-case behavior.
-4. Update `README.md`, `docs/src/lib/rfc-map.ts`, and `AUDIT.md`.
+4. Update `README.md` and `docs/src/lib/rfc-map.ts`.
 5. Run quality gates before PR.
 
 ## Cursor and Copilot rules

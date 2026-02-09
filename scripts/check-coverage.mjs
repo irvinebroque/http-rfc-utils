@@ -1,19 +1,8 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 
-const COVERAGE_EXCLUDES = [
-    'src/types/*.ts',
-];
-
-const COVERAGE_ARGS = [
-    '--import',
-    'tsx',
-    '--experimental-test-coverage',
-    ...COVERAGE_EXCLUDES.map((pattern) => `--test-coverage-exclude=${pattern}`),
-    '--test',
-    'test/*.test.ts',
-];
+const DEFAULT_REPORT_PATH = 'temp/coverage/report.txt';
 
 const GLOBAL_THRESHOLDS = {
     line: 96,
@@ -147,48 +136,39 @@ function findEntry(entries, targetPath) {
     return null;
 }
 
-function runCoverageCommand() {
-    return new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, COVERAGE_ARGS, {
-            stdio: ['inherit', 'pipe', 'pipe'],
-            env: process.env,
-        });
+function parseReportPath(argv) {
+    for (let index = 0; index < argv.length; index += 1) {
+        const token = argv[index];
+        if (token === '--report') {
+            const value = argv[index + 1];
+            if (!value) {
+                throw new Error('Missing value for --report');
+            }
+            return value;
+        }
+    }
 
-        let output = '';
-
-        child.stdout.on('data', (chunk) => {
-            const text = chunk.toString();
-            output += text;
-            process.stdout.write(text);
-        });
-
-        child.stderr.on('data', (chunk) => {
-            const text = chunk.toString();
-            output += text;
-            process.stderr.write(text);
-        });
-
-        child.on('error', reject);
-
-        child.on('close', (code) => {
-            resolve({
-                code: code ?? 1,
-                output,
-            });
-        });
-    });
+    return DEFAULT_REPORT_PATH;
 }
 
 async function main() {
+    const reportPath = parseReportPath(process.argv.slice(2));
     const enforceHotspots = process.env.COVERAGE_ENFORCE_HOTSPOTS === '1'
         || process.env.COVERAGE_ENFORCE_HOTSPOTS === 'true';
 
-    const result = await runCoverageCommand();
-    if (result.code !== 0) {
-        process.exit(result.code);
+    let output;
+    try {
+        output = await readFile(reportPath, 'utf8');
+    } catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+            console.error(`Coverage check failed: report file not found at ${reportPath}.`);
+            console.error('Run `pnpm test:coverage` before `pnpm test:coverage:check`.');
+            process.exit(1);
+        }
+        throw error;
     }
 
-    const parsed = parseCoverageTable(result.output);
+    const parsed = parseCoverageTable(output);
     if (!parsed || !parsed.allFiles) {
         console.error('Coverage check failed: could not parse coverage summary from test output.');
         process.exit(1);

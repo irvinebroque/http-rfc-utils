@@ -23,6 +23,9 @@ importers:
       fast-check:
         specifier: ^4.5.3
         version: 4.5.3
+      tinybench:
+        specifier: ^6.0.0
+        version: 6.0.0
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -828,6 +831,10 @@ packages:
   term-size@2.2.1:
     resolution: {integrity: sha512-wK0Ri4fOGjv/XPy8SBHZChl8CM7uMc5VML7SqiQ0zG7+J5Vr+RMQDoHa2CNT6KHUnTGIXH34UDMkPzAUyapBZg==}
     engines: {node: '>=8'}
+
+  tinybench@6.0.0:
+    resolution: {integrity: sha512-BWlWpVbbZXaYjRV0twGLNQO00Zj4HA/sjLOQP2IvzQqGwRGp+2kh7UU3ijyJ3ywFRogYDRbiHDMrUOfaMnN56g==}
+    engines: {node: '>=20.0.0'}
 
   to-regex-range@5.0.1:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
@@ -1704,6 +1711,8 @@ snapshots:
   supports-preserve-symlinks-flag@1.0.0: {}
 
   term-size@2.2.1: {}
+
+  tinybench@6.0.0: {}
 
   to-regex-range@5.0.1:
     dependencies:
