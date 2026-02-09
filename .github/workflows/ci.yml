@@ -122,11 +122,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Security review
-        run: pnpm security:review
-
-      - name: Security fuzz (quick)
-        run: pnpm fuzz:quick
+      - name: Security checks
+        run: pnpm security:ci
 
   typecheck:
     name: Typecheck (${{ matrix.label }})
