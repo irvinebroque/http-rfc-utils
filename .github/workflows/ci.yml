@@ -43,7 +43,7 @@ jobs:
             exit 1
           fi
 
-  api-semver:
+  api_semver:
     name: API and SemVer
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -121,6 +121,9 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Security review
+        run: pnpm security:review
 
       - name: Security fuzz (quick)
         run: pnpm fuzz:quick
@@ -200,7 +203,7 @@ jobs:
     if: always()
     needs:
       - changeset
-      - api-semver
+      - api_semver
       - structure
       - security
       - typecheck
@@ -225,7 +228,7 @@ jobs:
           }
 
           check_result 'changeset' '${{ needs.changeset.result }}'
-          check_result 'api-semver' '${{ needs["api-semver"].result }}'
+          check_result 'api_semver' '${{ needs.api_semver.result }}'
           check_result 'structure' '${{ needs.structure.result }}'
           check_result 'security' '${{ needs.security.result }}'
           check_result 'typecheck' '${{ needs.typecheck.result }}'
