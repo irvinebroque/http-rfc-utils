@@ -1,4 +1,4 @@
-const github = require('@changesets/changelog-github');
+const { default: github } = require('@changesets/changelog-github');
 
 module.exports = {
     async getReleaseLine(changeset, type, options) {
