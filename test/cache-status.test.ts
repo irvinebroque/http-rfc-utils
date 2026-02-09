@@ -19,6 +19,14 @@ describe('Cache-Status (RFC 9211 Section 2)', () => {
         }]);
     });
 
+    it('parses fwd-status and boolean parameters (RFC 9211 Section 2.3, 2.5, 2.6)', () => {
+        const parsed = parseCacheStatus('"Edge"; fwd-status=504; stored; collapsed');
+        assert.deepEqual(parsed, [{
+            cache: 'Edge',
+            params: { fwdStatus: 504, stored: true, collapsed: true },
+        }]);
+    });
+
     it('preserves list member order (RFC 9211 Section 2)', () => {
         const parsed = parseCacheStatus('"Origin"; hit, "Edge"; fwd=stale');
         assert.equal(parsed?.[0]?.cache, 'Origin');
@@ -53,6 +61,22 @@ describe('Cache-Status (RFC 9211 Section 2)', () => {
             { cache: 'Edge', params: { fwd: 'stale' } },
         ]);
         assert.equal(formatted, 'ExampleCache;hit;ttl=120, Edge;fwd=stale');
+    });
+
+    it('formats fwd-status, stored, collapsed, key, and detail (RFC 9211 Section 2)', () => {
+        const formatted = formatCacheStatus([
+            {
+                cache: 'Edge',
+                params: {
+                    fwdStatus: 504,
+                    stored: true,
+                    collapsed: true,
+                    key: 'cache-key',
+                    detail: 'stale response reused',
+                },
+            },
+        ]);
+        assert.equal(formatted, 'Edge;fwd-status=504;stored;collapsed;key="cache-key";detail="stale response reused"');
     });
 
     it('round-trips token cache names (RFC 9211 Section 2)', () => {
