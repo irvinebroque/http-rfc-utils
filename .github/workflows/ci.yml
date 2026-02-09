@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 25
+          node-version: 22
           cache: pnpm
 
       - name: Ensure changeset exists
@@ -45,6 +45,7 @@ jobs:
           fi
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm check:structure
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build

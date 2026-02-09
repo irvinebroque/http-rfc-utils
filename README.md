@@ -110,6 +110,7 @@ Use the RFC map below for module-level coverage and exported API references.
 - Linking and pagination: `src/link.ts`, `src/linkset.ts`, `src/pagination.ts`
 - Auth, cookies, and transport: `src/auth.ts`, `src/cookie.ts`, `src/hsts.ts`, `src/cors.ts`
 - API response utilities: `src/response.ts`, `src/problem.ts`
+- Internal architecture notes: `docs/architecture.md`
 
 ## Find exact imports by task
 
@@ -285,6 +286,18 @@ const links = parseLinkHeader(response.headers.get('Link') ?? '');
 
 ```bash
 pnpm test
+```
+
+## Structure checks
+
+```bash
+pnpm check:structure
+```
+
+## API docs generation
+
+```bash
+pnpm docs
 ```
 
 ## Benchmarking

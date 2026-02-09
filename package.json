@@ -22,8 +22,11 @@
     "scripts": {
         "build": "tsc",
         "clean": "rm -rf dist",
+        "check:structure": "node scripts/check-structure.mjs",
         "test": "tsx --test test/*.test.ts",
         "test:watch": "tsx --test --watch test/*.test.ts",
+        "docs:api": "typedoc --options typedoc.json && node scripts/postprocess-typedoc.mjs",
+        "docs": "pnpm run docs:api",
         "bench": "tsx bench/perf.ts",
         "typecheck": "tsc --noEmit",
         "prepublishOnly": "pnpm run build",
@@ -63,6 +66,9 @@
         "@changesets/changelog-github": "^0.5.2",
         "@changesets/cli": "^2.29.8",
         "@types/node": "^22.10.2",
+        "typedoc": "^0.28.16",
+        "typedoc-plugin-frontmatter": "^1.3.1",
+        "typedoc-plugin-markdown": "^4.9.0",
         "tsx": "^4.21.0",
         "typescript": "^5.7.0"
     }

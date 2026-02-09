@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const apiRoot = path.resolve('docs/src/content/docs/api');
+const apiRoot = path.resolve('docs/api');
 
 const isMarkdown = (filePath) => filePath.endsWith('.md');
 
@@ -44,6 +44,16 @@ const addFrontmatter = async (filePath) => {
 };
 
 const main = async () => {
+    try {
+        const stat = await fs.stat(apiRoot);
+        if (!stat.isDirectory()) {
+            throw new Error(`${apiRoot} is not a directory`);
+        }
+    } catch {
+        console.warn(`No TypeDoc output directory found at ${apiRoot}; skipping post-processing.`);
+        return;
+    }
+
     const files = await walk(apiRoot);
     await Promise.all(files.map(addFrontmatter));
 };
