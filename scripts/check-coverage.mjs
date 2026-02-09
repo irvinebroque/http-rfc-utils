@@ -2,10 +2,15 @@
 
 import { spawn } from 'node:child_process';
 
+const COVERAGE_EXCLUDES = [
+    'src/types/*.ts',
+];
+
 const COVERAGE_ARGS = [
     '--import',
     'tsx',
     '--experimental-test-coverage',
+    ...COVERAGE_EXCLUDES.map((pattern) => `--test-coverage-exclude=${pattern}`),
     '--test',
     'test/*.test.ts',
 ];

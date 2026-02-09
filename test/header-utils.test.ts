@@ -8,12 +8,22 @@ import {
     isEmptyHeader,
     splitQuotedValue,
     splitListValue,
+    parseKeyValueSegment,
+    splitAndParseKeyValueSegments,
     unquote,
+    parseQuotedStringStrict,
     escapeQuotedString,
     quoteString,
     quoteIfNeeded,
     parseQValue,
     parseQParameter,
+    parseUnsignedInteger,
+    parseDeltaSeconds,
+    parseQSegments,
+    getHeaderValue,
+    parseTypeAndSubtype,
+    parseMediaType,
+    formatMediaType,
 } from '../src/header-utils.js';
 
 // RFC 9110 §5.6.2: token character set.
@@ -189,6 +199,34 @@ describe('splitListValue', () => {
     });
 });
 
+describe('parseKeyValueSegment', () => {
+    it('parses bare keys', () => {
+        assert.deepEqual(parseKeyValueSegment('max-age'), {
+            key: 'max-age',
+            value: undefined,
+            hasEquals: false,
+        });
+    });
+
+    it('parses key-value segments', () => {
+        assert.deepEqual(parseKeyValueSegment(' max-age = 60 '), {
+            key: 'max-age',
+            value: '60',
+            hasEquals: true,
+        });
+    });
+});
+
+describe('splitAndParseKeyValueSegments', () => {
+    it('splits and parses delimited segments', () => {
+        assert.deepEqual(splitAndParseKeyValueSegments('a=1; b; c=3', ';'), [
+            { key: 'a', value: '1', hasEquals: true },
+            { key: 'b', value: undefined, hasEquals: false },
+            { key: 'c', value: '3', hasEquals: true },
+        ]);
+    });
+});
+
 // RFC 9110 §5.6.4: quoted-string unescaping.
 describe('unquote', () => {
     it('unquotes a simple quoted string', () => {
@@ -235,6 +273,20 @@ describe('unquote', () => {
 
     it('handles whitespace around quoted string', () => {
         assert.equal(unquote('  "hello"  '), 'hello');
+    });
+});
+
+describe('parseQuotedStringStrict', () => {
+    it('parses valid quoted strings', () => {
+        assert.equal(parseQuotedStringStrict('"hello"'), 'hello');
+        assert.equal(parseQuotedStringStrict('"say \\"hello\\""'), 'say "hello"');
+    });
+
+    it('rejects malformed quoted strings', () => {
+        assert.equal(parseQuotedStringStrict('hello'), null);
+        assert.equal(parseQuotedStringStrict('"unterminated'), null);
+        assert.equal(parseQuotedStringStrict('"dangling\\"'), null);
+        assert.equal(parseQuotedStringStrict('"a"b"'), null);
     });
 });
 
@@ -335,5 +387,70 @@ describe('parseQParameter', () => {
     it('returns null for invalid q parameters', () => {
         assert.equal(parseQParameter('q=2'), null);
         assert.equal(parseQParameter('q=abc'), null);
+    });
+});
+
+describe('parseUnsignedInteger / parseDeltaSeconds', () => {
+    it('parses unsigned integers in reject mode', () => {
+        assert.equal(parseUnsignedInteger('42'), 42);
+        assert.equal(parseUnsignedInteger('-1'), null);
+    });
+
+    it('supports clamp mode', () => {
+        assert.equal(parseUnsignedInteger('9999', { mode: 'clamp', max: 100 }), 100);
+    });
+
+    it('parses delta-seconds with shared options', () => {
+        assert.equal(parseDeltaSeconds('60', { mode: 'reject' }), 60);
+        assert.equal(parseDeltaSeconds('abc', { mode: 'reject' }), null);
+    });
+});
+
+describe('parseQSegments', () => {
+    it('extracts q and first q index', () => {
+        assert.deepEqual(parseQSegments(['text/plain', 'level=1', 'q=0.7']), {
+            q: 0.7,
+            invalidQ: false,
+            firstQIndex: 2,
+        });
+    });
+
+    it('reports invalid q values', () => {
+        assert.deepEqual(parseQSegments(['text/plain', 'q=2']), {
+            q: 1,
+            invalidQ: true,
+            firstQIndex: null,
+        });
+    });
+});
+
+describe('getHeaderValue', () => {
+    it('resolves case-insensitive record lookups', () => {
+        const headers = { Accept: 'application/json' };
+        assert.equal(getHeaderValue(headers, 'accept'), 'application/json');
+    });
+});
+
+describe('media-type helpers', () => {
+    it('parses type/subtype with optional wildcard support', () => {
+        assert.deepEqual(parseTypeAndSubtype('text/plain'), { type: 'text', subtype: 'plain' });
+        assert.equal(parseTypeAndSubtype('*/json', { allowWildcard: true }), null);
+        assert.deepEqual(parseTypeAndSubtype('*/*', { allowWildcard: true }), { type: '*', subtype: '*' });
+    });
+
+    it('parses and formats media types with parameters', () => {
+        assert.deepEqual(parseMediaType('application/json; charset=utf-8; profile="a b"'), {
+            type: 'application',
+            subtype: 'json',
+            parameters: [
+                { name: 'charset', value: 'utf-8' },
+                { name: 'profile', value: 'a b' },
+            ],
+        });
+
+        assert.equal(
+            formatMediaType('Application', 'Json', [{ name: 'Charset', value: 'utf-8' }]),
+            'application/json;charset=utf-8'
+        );
     });
 });

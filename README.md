@@ -661,6 +661,7 @@ pnpm test:coverage:check
 
 - `pnpm test:coverage` runs the full suite with Node's experimental coverage reporter.
 - `pnpm test:coverage:check` enforces global CI thresholds (line >= 96, branch >= 81, funcs >= 95).
+- Coverage totals exclude `src/types/*.ts` compatibility/type facades to keep runtime thresholds focused on executable modules.
 - Hotspot module thresholds are reported as warnings by default; set `COVERAGE_ENFORCE_HOTSPOTS=true` to make them blocking.
 
 ## Structure checks

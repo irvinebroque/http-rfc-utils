@@ -29,7 +29,7 @@
         "fuzz:full": "FUZZ_PROFILE=full FUZZ_SEED=20260317 FUZZ_NUM_RUNS=320 pnpm exec tsx --test test/fuzz/security-fuzz.spec.ts",
         "security:ci": "pnpm security:review && pnpm fuzz:quick && pnpm check:structure && pnpm typecheck && pnpm test && pnpm build",
         "test": "tsx --test test/*.test.ts",
-        "test:coverage": "node --import tsx --experimental-test-coverage --test test/*.test.ts",
+        "test:coverage": "node --import tsx --experimental-test-coverage --test-coverage-exclude='src/types/*.ts' --test test/*.test.ts",
         "test:coverage:check": "node scripts/check-coverage.mjs",
         "test:watch": "tsx --test --watch test/*.test.ts",
         "semver:check": "tsx scripts/semver/check.ts",
