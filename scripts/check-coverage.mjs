@@ -60,11 +60,12 @@ function parseCoverageTable(output) {
 
     for (let index = startIndex + 1; index < endIndex; index += 1) {
         const line = stripAnsi(lines[index] ?? '');
-        if (!line.includes('|')) {
+        const withoutTapDiag = line.replace(/^\s*#\s?/u, '');
+        if (!withoutTapDiag.includes('|')) {
             continue;
         }
 
-        const withoutInfo = line.replace(/^\s*ℹ\s?/u, '');
+        const withoutInfo = withoutTapDiag.replace(/^\s*ℹ\s?/u, '');
         const columns = withoutInfo.split('|');
         if (columns.length < 4) {
             continue;
@@ -72,7 +73,8 @@ function parseCoverageTable(output) {
 
         const labelColumn = columns[0] ?? '';
         const label = labelColumn.trim();
-        if (!label || label === 'file' || /^-+$/u.test(label)) {
+        const normalizedLabel = label.toLowerCase();
+        if (!label || normalizedLabel === 'file' || /^-+$/u.test(label)) {
             continue;
         }
 
@@ -87,13 +89,13 @@ function parseCoverageTable(output) {
         }
 
         if (!hasMetrics) {
-            if (label !== 'all files') {
+            if (normalizedLabel !== 'all files') {
                 stack.push({ indent, name: label });
             }
             continue;
         }
 
-        if (label === 'all files') {
+        if (normalizedLabel === 'all files') {
             allFiles = {
                 line: linePct,
                 branch: branchPct,
