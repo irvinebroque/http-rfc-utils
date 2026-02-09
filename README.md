@@ -615,18 +615,17 @@ const parsed = parseWellKnownPath(path);
 pnpm test
 ```
 
-## Security review and fuzzing
+## Security fuzzing
 
 ```bash
-pnpm security:review
 pnpm fuzz:quick
 pnpm fuzz:full
 pnpm security:ci
 ```
 
-- `pnpm security:review` validates security-doc scaffolding, writes a baseline snapshot, validates the findings register, and runs `pnpm audit --audit-level=high`.
 - `pnpm fuzz:quick` runs deterministic fast-check campaigns for high-risk parser/formatter targets plus tier-2 modules (`cookie`, `response`, `cors`, `security-txt`, `host-meta`, `webfinger`).
 - `pnpm fuzz:full` runs the same campaign with 10x iterations for nightly stress.
+- `pnpm security:ci` runs the quick fuzz campaign without running typechecks/tests/build.
 - Fuzz failures emit replayable artifacts under `temp/fuzz-artifacts/`.
 
 ```bash
@@ -660,7 +659,8 @@ pnpm test:coverage:check
 ```
 
 - `pnpm test:coverage` runs the full suite with Node's experimental coverage reporter.
-- `pnpm test:coverage:check` enforces global CI thresholds (line >= 96, branch >= 81, funcs >= 95).
+- `pnpm test:coverage` writes the coverage report used by `pnpm test:coverage:check` to `temp/coverage/report.txt`.
+- `pnpm test:coverage:check` enforces global CI thresholds (line >= 96, branch >= 81, funcs >= 95) from that report without rerunning tests.
 - Coverage totals exclude `src/types/*.ts` compatibility/type facades to keep runtime thresholds focused on executable modules.
 - Hotspot module thresholds are reported as warnings by default; set `COVERAGE_ENFORCE_HOTSPOTS=true` to make them blocking.
 
