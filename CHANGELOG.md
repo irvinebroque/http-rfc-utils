@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+### Minor Changes
+
+- [#7](https://github.com/irvinebroque/http-rfc-utils/pull/7) [`69fddca`](https://github.com/irvinebroque/http-rfc-utils/commit/69fddca9f9d11595b9e1287b460f76ef497ba420) Thanks [@irvinebroque](https://github.com/irvinebroque)! - Add support for RFC 9309 (robots), RFC 9116 (security.txt), RFC 7033 (WebFinger), and RFC 6415 (host-meta) utilities.
+  Also remove the standalone `AUDIT.md` report and keep coverage guidance in README.
+
+### Patch Changes
+
+- [#9](https://github.com/irvinebroque/http-rfc-utils/pull/9) [`84c7f32`](https://github.com/irvinebroque/http-rfc-utils/commit/84c7f32e9eb2dd5e9f4824a50dbf217152cacfaf) Thanks [@irvinebroque](https://github.com/irvinebroque)! - Improve performance across core RFC utilities and add a benchmark suite (`pnpm bench`) to track hot-path regressions.
+  Expand RFC-focused test coverage around optimized paths to keep behavior stable while improving throughput.
+
 ## 0.2.0
 
 ### Minor Changes
