@@ -608,7 +608,8 @@ describe('Edge Cases', () => {
     });
 
     it('handles null value as undefined', () => {
-        assert.equal(expandUriTemplate('{var}', { var: null as unknown as undefined }), '');
+        const result = Reflect.apply(expandUriTemplate, undefined, ['{var}', { var: null }]);
+        assert.equal(result, '');
     });
 
     it('works with pre-parsed template', () => {

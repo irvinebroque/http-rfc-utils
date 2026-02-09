@@ -1,0 +1,7 @@
+# RFC 6415 host-meta.json corpus seeds
+{"links":[{"rel":"lrdd","template":"https://example.com/.well-known/webfinger?resource={uri}"}]}
+{"properties":{"http://example.com/ns/name":"Example"},"links":[]}
+{"properties":{"__proto__":"safe"},"links":[]}
+{"links":[{"rel":"alternate","href":"https://example.com/","type":"text/html"}]}
+{"invalid":true}
+{

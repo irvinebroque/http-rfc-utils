@@ -483,7 +483,7 @@ export async function computeA1(
     username: string,
     realm: string,
     password: string,
-    algorithm: DigestAuthAlgorithm = 'MD5',
+    algorithm: DigestAuthAlgorithm = 'SHA-256',
     nonce?: string,
     cnonce?: string
 ): Promise<string> {
@@ -551,7 +551,7 @@ export async function computeDigestResponse(options: DigestComputeOptions): Prom
         cnonce,
         nc,
         qop,
-        algorithm = 'MD5',
+        algorithm = 'SHA-256',
     } = options;
 
     const hashAlg = getHashAlgorithm(algorithm);

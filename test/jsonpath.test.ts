@@ -22,6 +22,18 @@ const bookstore = {
     },
 };
 
+interface JsonPathBookResult {
+    title: string;
+    price: number;
+}
+
+function assertBookResult(value: unknown): asserts value is JsonPathBookResult {
+    assert.ok(typeof value === 'object' && value !== null);
+    const record = value as Record<string, unknown>;
+    assert.equal(typeof record.title, 'string');
+    assert.equal(typeof record.price, 'number');
+}
+
 // RFC 9535 §2.1: JSONPath Syntax and Semantics
 describe('RFC 9535 JSONPath', () => {
     // RFC 9535 §2.1: Well-formedness and validity
@@ -212,7 +224,9 @@ describe('RFC 9535 JSONPath', () => {
             const result = queryJsonPath('$..book[2]', bookstore);
             assert.ok(result !== null);
             assert.equal(result.length, 1);
-            assert.equal((result[0] as any).title, 'Moby Dick');
+            const [book] = result;
+            assertBookResult(book);
+            assert.equal(book.title, 'Moby Dick');
         });
 
         // RFC 9535 Table 2: $..book[2].author
@@ -232,7 +246,9 @@ describe('RFC 9535 JSONPath', () => {
             const result = queryJsonPath('$..book[-1]', bookstore);
             assert.ok(result !== null);
             assert.equal(result.length, 1);
-            assert.equal((result[0] as any).title, 'The Lord of the Rings');
+            const [book] = result;
+            assertBookResult(book);
+            assert.equal(book.title, 'The Lord of the Rings');
         });
 
         // RFC 9535 Table 2: $..book[0,1]
@@ -240,8 +256,11 @@ describe('RFC 9535 JSONPath', () => {
             const result = queryJsonPath('$..book[0,1]', bookstore);
             assert.ok(result !== null);
             assert.equal(result.length, 2);
-            assert.equal((result[0] as any).title, 'Sayings of the Century');
-            assert.equal((result[1] as any).title, 'Sword of Honour');
+            const [first, second] = result;
+            assertBookResult(first);
+            assertBookResult(second);
+            assert.equal(first.title, 'Sayings of the Century');
+            assert.equal(second.title, 'Sword of Honour');
         });
 
         // RFC 9535 Table 2: $..book[:2]
@@ -249,8 +268,11 @@ describe('RFC 9535 JSONPath', () => {
             const result = queryJsonPath('$..book[:2]', bookstore);
             assert.ok(result !== null);
             assert.equal(result.length, 2);
-            assert.equal((result[0] as any).title, 'Sayings of the Century');
-            assert.equal((result[1] as any).title, 'Sword of Honour');
+            const [first, second] = result;
+            assertBookResult(first);
+            assertBookResult(second);
+            assert.equal(first.title, 'Sayings of the Century');
+            assert.equal(second.title, 'Sword of Honour');
         });
 
         // RFC 9535 Table 2: $..book[?@.isbn]
@@ -267,7 +289,8 @@ describe('RFC 9535 JSONPath', () => {
             assert.ok(result !== null);
             assert.equal(result.length, 2);
             result.forEach(book => {
-                assert.ok((book as any).price < 10);
+                assertBookResult(book);
+                assert.ok(book.price < 10);
             });
         });
 
@@ -761,6 +784,51 @@ describe('RFC 9535 JSONPath', () => {
             assert.throws(() => {
                 queryJsonPath('invalid', {}, { throwOnError: true });
             });
+        });
+
+        // RFC 9535 §2.5.2 + security hardening: descendant traversal must terminate on cyclic graphs.
+        it('terminates descendant traversal on cyclic object graphs', () => {
+            const cyclic: { name: string; self?: unknown } = { name: 'root' };
+            cyclic.self = cyclic;
+
+            const result = queryJsonPath('$..name', cyclic);
+            assert.deepEqual(result, ['root']);
+        });
+
+        // RFC 9535 §2.5.2 + implementation limits: bounded traversal depth.
+        it('returns null when maxDepth is exceeded', () => {
+            const doc = { a: { b: { c: 1 } } };
+            assert.equal(queryJsonPath('$..c', doc, { maxDepth: 1 }), null);
+        });
+
+        // RFC 9535 §2.4.7 + security hardening: regex safety policy for attacker-controlled patterns.
+        it('returns null for unsafe regex patterns under default policy', () => {
+            const data = [{ s: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }];
+            const result = queryJsonPath('$[?search(@.s, "(a+)+$")]', data);
+            assert.equal(result, null);
+        });
+
+        // RFC 9535 §2.4.6-§2.4.7 + implementation limits: regex input and pattern budgets.
+        it('returns null when regex pattern/input limits are exceeded', () => {
+            const data = [{ s: 'abcdef' }];
+            assert.equal(
+                queryJsonPath('$[?search(@.s, "abc")]', data, { maxRegexInputLength: 3 }),
+                null
+            );
+            assert.equal(
+                queryJsonPath('$[?search(@.s, "abcdef")]', data, { maxRegexPatternLength: 3 }),
+                null
+            );
+        });
+
+        it('throws on limit breaches when throwOnError is true', () => {
+            const doc = { a: [1, 2, 3, 4] };
+            assert.throws(() => {
+                queryJsonPath('$..*', doc, {
+                    maxNodesVisited: 1,
+                    throwOnError: true,
+                });
+            }, /maxNodesVisited/);
         });
     });
 });

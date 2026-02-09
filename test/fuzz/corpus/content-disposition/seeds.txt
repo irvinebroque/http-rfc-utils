@@ -1,0 +1,6 @@
+# RFC 6266 + RFC 8187 corpus seeds
+attachment; filename="report.csv"
+inline; filename*=UTF-8''%E2%82%AC%20rates
+attachment; filename="fallback.txt"; filename*=UTF-8''preferred.txt
+attachment; filename*=UTF-8''%ZZ
+attachment; __proto__="x"

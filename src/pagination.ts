@@ -20,7 +20,7 @@ export const MAX_LIMIT = 100;
 
 /**
  * Decode a cursor string to get the offset.
- * Cursor format: base64(JSON({ offset: number }))
+ * Cursor format: `base64(JSON({ offset: number }))`
  * 
  * @param cursor - The cursor string
  * @returns DecodedCursor or null if invalid

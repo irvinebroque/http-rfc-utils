@@ -4,7 +4,15 @@
  */
 
 import type { AcceptEntry, MediaType } from './types.js';
-import { isEmptyHeader, splitQuotedValue, unquote, parseQValue, TOKEN_CHARS } from './header-utils.js';
+import {
+    getHeaderValue,
+    isEmptyHeader,
+    parseKeyValueSegment,
+    parseQSegments,
+    parseTypeAndSubtype as parseHeaderTypeAndSubtype,
+    splitQuotedValue,
+    unquote,
+} from './header-utils.js';
 
 /**
  * Media type constants mapping format names to MIME types.
@@ -34,7 +42,7 @@ export const MIME_TO_FORMAT: Record<string, MediaType> = Object.fromEntries(
  *
  * Sorting rules:
  * 1. Higher q value first
- * 2. More specific type beats wildcard (text/html > text/star > star/star)
+ * 2. More specific type beats wildcard (for example: text/html, then text/star, then star/star)
  * 3. More parameters beats fewer
  *
  * Invalid q-values are rejected and the entry is skipped.
@@ -88,46 +96,35 @@ export function parseAccept(header: string): AcceptEntry[] {
  */
 function parseMediaRange(range: string): AcceptEntry | null {
     const parts = splitQuotedValue(range, ';').map(p => p.trim());
-    const mediaType = parts[0];
-
-    const parsed = parseTypeAndSubtype(mediaType);
+    const parsed = parseHeaderTypeAndSubtype(parts[0], { allowWildcard: true });
     if (!parsed) {
         return null;
     }
 
     const { type, subtype } = parsed;
-
-    let q = 1.0;
     const params = new Map<string, string>();
-    let seenQ = false;
 
-    for (let i = 1; i < parts.length; i++) {
-        const param = parts[i];
-        if (!param) continue;
-        const eqIndex = param.indexOf('=');
-        if (eqIndex === -1) continue;
+    const qParts = parseQSegments(parts);
+    if (qParts.invalidQ) {
+        return null;
+    }
 
-        const key = param.slice(0, eqIndex).trim().toLowerCase();
-        const value = unquote(param.slice(eqIndex + 1).trim());
-
-        if (key === 'q') {
-            const parsed = parseQValue(value);
-            if (parsed === null) {
-                return null;
-            }
-            q = parsed;
-            seenQ = true;
-        } else {
-            if (!seenQ) {
-                params.set(key, value);
-            }
+    const paramsEnd = qParts.firstQIndex ?? parts.length;
+    for (let i = 1; i < paramsEnd; i++) {
+        const param = parseKeyValueSegment(parts[i] ?? '');
+        if (!param || !param.hasEquals) {
+            continue;
         }
+
+        const key = param.key.trim().toLowerCase();
+        const value = unquote(param.value ?? '');
+        params.set(key, value);
     }
 
     return {
         type: type.toLowerCase(),
         subtype: subtype.toLowerCase(),
-        q,
+        q: qParts.q,
         params,
     };
 }
@@ -206,9 +203,7 @@ function matchesMimeType(entry: AcceptEntry, mimeType: string): number {
 
 function parseMimeTypeWithParams(mimeType: string): ParsedMimeType | null {
     const parts = splitQuotedValue(mimeType, ';').map(p => p.trim());
-    const mediaType = parts[0];
-
-    const parsed = parseTypeAndSubtype(mediaType);
+    const parsed = parseHeaderTypeAndSubtype(parts[0], { allowWildcard: true });
     if (!parsed) {
         return null;
     }
@@ -218,13 +213,13 @@ function parseMimeTypeWithParams(mimeType: string): ParsedMimeType | null {
     const params = new Map<string, string>();
 
     for (let i = 1; i < parts.length; i++) {
-        const param = parts[i];
-        if (!param) continue;
-        const eqIndex = param.indexOf('=');
-        if (eqIndex === -1) continue;
+        const param = parseKeyValueSegment(parts[i] ?? '');
+        if (!param || !param.hasEquals) {
+            continue;
+        }
 
-        const key = param.slice(0, eqIndex).trim().toLowerCase();
-        const value = unquote(param.slice(eqIndex + 1).trim());
+        const key = param.key.trim().toLowerCase();
+        const value = unquote(param.value ?? '');
 
         if (key) {
             params.set(key, value);
@@ -236,42 +231,6 @@ function parseMimeTypeWithParams(mimeType: string): ParsedMimeType | null {
         subtype,
         params,
     };
-}
-
-function parseTypeAndSubtype(mediaType: string | undefined): { type: string; subtype: string } | null {
-    if (!mediaType) {
-        return null;
-    }
-
-    const typeSubtype = mediaType.trim();
-    if (!typeSubtype) {
-        return null;
-    }
-
-    const slashIndex = typeSubtype.indexOf('/');
-    if (slashIndex === -1 || slashIndex !== typeSubtype.lastIndexOf('/')) {
-        return null;
-    }
-
-    const type = typeSubtype.slice(0, slashIndex).trim().toLowerCase();
-    const subtype = typeSubtype.slice(slashIndex + 1).trim().toLowerCase();
-
-    if (!type || !subtype) {
-        return null;
-    }
-
-    const validType = type === '*' || TOKEN_CHARS.test(type);
-    const validSubtype = subtype === '*' || TOKEN_CHARS.test(subtype);
-    if (!validType || !validSubtype) {
-        return null;
-    }
-
-    // RFC 7231 §5.3.2: wildcard media-range is only "*/*".
-    if (type === '*' && subtype !== '*') {
-        return null;
-    }
-
-    return { type, subtype };
 }
 
 function negotiateWithEntries(entries: AcceptEntry[], supported: string[]): string | null {
@@ -356,13 +315,7 @@ export function negotiate(input: Request | string | undefined | null, supported:
         return null;
     }
 
-    let acceptHeader: string | null;
-    
-    if (input instanceof Request) {
-        acceptHeader = input.headers.get('Accept');
-    } else {
-        acceptHeader = input ?? null;
-    }
+    const acceptHeader = input instanceof Request ? getHeaderValue(input, 'Accept') : (input ?? null);
 
     // Empty or missing Accept header means accept anything
     if (!acceptHeader || !acceptHeader.trim()) {
@@ -389,13 +342,7 @@ export function negotiate(input: Request | string | undefined | null, supported:
  */
 // RFC 7231 §5.3.2: Response format selection from Accept.
 export function getResponseFormat(input: Request | string | undefined | null): 'json' | 'csv' | null {
-    let acceptHeader: string | null;
-    
-    if (input instanceof Request) {
-        acceptHeader = input.headers.get('Accept');
-    } else {
-        acceptHeader = input ?? null;
-    }
+    const acceptHeader = input instanceof Request ? getHeaderValue(input, 'Accept') : (input ?? null);
 
     if (!acceptHeader) {
         return 'json';

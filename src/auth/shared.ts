@@ -8,7 +8,12 @@ import type {
     AuthCredentials,
     AuthParam,
 } from '../types/auth.js';
-import { TOKEN_CHARS } from '../header-utils.js';
+import {
+    assertHeaderToken,
+    assertNoCtl,
+    quoteString,
+    TOKEN_CHARS,
+} from '../header-utils.js';
 const TOKEN68_RE = /^[A-Za-z0-9\-._~+\/]+={0,}$/;
 const B64TOKEN_RE = /^[A-Za-z0-9\-._~+\/]+={0,}$/;
 
@@ -244,12 +249,16 @@ function parseChallenges(header: string): AuthChallenge[] | null {
 }
 
 export function quoteAuthParamValue(value: string): string {
-    const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    return `"${escaped}"`;
+    assertNoCtl(value, 'Authorization parameter value');
+    return quoteString(value);
 }
 
 export function formatAuthParams(params: AuthParam[]): string {
-    return params.map(param => `${param.name}=${quoteAuthParamValue(param.value)}`).join(', ');
+    return params.map((param) => {
+        assertHeaderToken(param.name, `Authorization parameter name "${param.name}"`);
+        assertNoCtl(param.value, `Authorization parameter "${param.name}" value`);
+        return `${param.name}=${quoteAuthParamValue(param.value)}`;
+    }).join(', ');
 }
 
 export function hasCtl(value: string): boolean {
@@ -301,7 +310,9 @@ export function parseAuthorization(header: string): AuthCredentials | null {
  */
 // RFC 7235 §2.1: Authorization credentials formatting.
 export function formatAuthorization(credentials: AuthCredentials): string {
+    assertHeaderToken(credentials.scheme, 'Authorization scheme');
     if (credentials.token68) {
+        assertNoCtl(credentials.token68, 'Authorization token68');
         return `${credentials.scheme} ${credentials.token68}`;
     }
     if (credentials.params && credentials.params.length > 0) {
@@ -329,7 +340,9 @@ export function parseWWWAuthenticate(header: string): AuthChallenge[] {
 // RFC 7235 §2.1: WWW-Authenticate challenge formatting.
 export function formatWWWAuthenticate(challenges: AuthChallenge[]): string {
     return challenges.map((challenge) => {
+        assertHeaderToken(challenge.scheme, 'WWW-Authenticate scheme');
         if (challenge.token68) {
+            assertNoCtl(challenge.token68, 'WWW-Authenticate token68');
             return `${challenge.scheme} ${challenge.token68}`;
         }
         if (challenge.params && challenge.params.length > 0) {

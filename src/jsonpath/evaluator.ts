@@ -34,6 +34,31 @@ interface EvalContext {
     current: unknown;
     currentPath: (string | number)[];
     regexCache: Map<string, RegExp | null>;
+    limits: EvalLimits;
+    nodesVisited: number;
+}
+
+interface EvalLimits {
+    maxNodesVisited: number;
+    maxDepth: number;
+    maxRegexPatternLength: number;
+    maxRegexInputLength: number;
+    rejectUnsafeRegex: boolean;
+}
+
+const DEFAULT_EVAL_LIMITS: EvalLimits = {
+    maxNodesVisited: 100000,
+    maxDepth: 64,
+    maxRegexPatternLength: 256,
+    maxRegexInputLength: 1024,
+    rejectUnsafeRegex: true,
+};
+
+class JsonPathExecutionLimitError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'JsonPathExecutionLimitError';
+    }
 }
 
 interface EvalNode {
@@ -51,9 +76,9 @@ interface EvalNode {
  * @returns Array of matching values, or null on invalid query
  *
  * @example
- * queryJsonPath('$.store.book[*].author', doc)  // ['Author1', 'Author2']
- * queryJsonPath('$..price', doc)                // [8.95, 12.99, 399]
- * queryJsonPath('$.store.book[?@.price<10]', doc)  // [{ title: 'Book1', ... }]
+ * `queryJsonPath('$.store.book[*].author', doc)`      // ['Author1', 'Author2']
+ * `queryJsonPath('$..price', doc)`                    // [8.95, 12.99, 399]
+ * `queryJsonPath('$.store.book[?@.price<10]', doc)`   // array of matching book objects
  *
  * @see https://www.rfc-editor.org/rfc/rfc9535.html#section-2.1.2
  */
@@ -70,8 +95,18 @@ export function queryJsonPath(
         return null;
     }
 
-    const nodes = evaluateQuery(ast, document);
-    return nodes.map(n => n.value);
+    try {
+        const nodes = evaluateQuery(ast, document, options);
+        return nodes.map(n => n.value);
+    } catch (error) {
+        if (options?.throwOnError) {
+            throw error;
+        }
+        if (error instanceof JsonPathExecutionLimitError) {
+            return null;
+        }
+        throw error;
+    }
 }
 
 /**
@@ -82,19 +117,30 @@ export function queryJsonPath(
  * @returns Array of nodes with values and paths, or null on invalid query
  *
  * @example
- * queryJsonPathNodes('$.store.book[0].title', doc)
- * // [{ value: 'Sayings of the Century', path: "$['store']['book'][0]['title']" }]
+ * `queryJsonPathNodes('$.store.book[0].title', doc)`
+ * // `[{ value: 'Sayings of the Century', path: "$['store']['book'][0]['title']" }]`
  *
  * @see https://www.rfc-editor.org/rfc/rfc9535.html#section-2.7
  */
 export function queryJsonPathNodes(
     query: string,
-    document: unknown
+    document: unknown,
+    options?: JsonPathOptions
 ): JsonPathNode[] | null {
     const ast = parseJsonPath(query);
     if (ast === null) return null;
 
-    return evaluateQuery(ast, document).map(materializeNodePath);
+    try {
+        return evaluateQuery(ast, document, options).map(materializeNodePath);
+    } catch (error) {
+        if (options?.throwOnError) {
+            throw error;
+        }
+        if (error instanceof JsonPathExecutionLimitError) {
+            return null;
+        }
+        throw error;
+    }
 }
 
 /**
@@ -161,14 +207,74 @@ export function compileJsonPath(
     };
 }
 
-function evaluateQuery(ast: JsonPathQuery, document: unknown): EvalNode[] {
+function resolveEvalLimits(options?: JsonPathOptions): EvalLimits {
+    const isFiniteNumber = (value: unknown): value is number => {
+        return typeof value === 'number' && Number.isFinite(value);
+    };
+
+    const requestedMaxNodesVisited = options?.maxNodesVisited;
+    const requestedMaxDepth = options?.maxDepth;
+    const requestedMaxRegexPatternLength = options?.maxRegexPatternLength;
+    const requestedMaxRegexInputLength = options?.maxRegexInputLength;
+
+    const maxNodesVisited = isFiniteNumber(requestedMaxNodesVisited)
+        && requestedMaxNodesVisited > 0
+        ? Math.floor(requestedMaxNodesVisited)
+        : DEFAULT_EVAL_LIMITS.maxNodesVisited;
+    const maxDepth = isFiniteNumber(requestedMaxDepth)
+        && requestedMaxDepth >= 0
+        ? Math.floor(requestedMaxDepth)
+        : DEFAULT_EVAL_LIMITS.maxDepth;
+    const maxRegexPatternLength = isFiniteNumber(requestedMaxRegexPatternLength)
+        && requestedMaxRegexPatternLength > 0
+        ? Math.floor(requestedMaxRegexPatternLength)
+        : DEFAULT_EVAL_LIMITS.maxRegexPatternLength;
+    const maxRegexInputLength = isFiniteNumber(requestedMaxRegexInputLength)
+        && requestedMaxRegexInputLength > 0
+        ? Math.floor(requestedMaxRegexInputLength)
+        : DEFAULT_EVAL_LIMITS.maxRegexInputLength;
+
+    return {
+        maxNodesVisited,
+        maxDepth,
+        maxRegexPatternLength,
+        maxRegexInputLength,
+        rejectUnsafeRegex: options?.rejectUnsafeRegex ?? DEFAULT_EVAL_LIMITS.rejectUnsafeRegex,
+    };
+}
+
+function trackNodeVisit(ctx: EvalContext, depth: number): void {
+    if (depth > ctx.limits.maxDepth) {
+        throw new JsonPathExecutionLimitError('JSONPath maxDepth limit exceeded');
+    }
+
+    ctx.nodesVisited += 1;
+    if (ctx.nodesVisited > ctx.limits.maxNodesVisited) {
+        throw new JsonPathExecutionLimitError('JSONPath maxNodesVisited limit exceeded');
+    }
+}
+
+function addResultNode(result: EvalNode[], node: EvalNode, ctx: EvalContext): void {
+    trackNodeVisit(ctx, node.segments.length);
+    result.push(node);
+}
+
+function evaluateQuery(
+    ast: JsonPathQuery,
+    document: unknown,
+    options?: JsonPathOptions
+): EvalNode[] {
     // RFC 9535 §2.1.2: Start with root node
     const ctx: EvalContext = {
         root: document,
         current: document,
         currentPath: [],
         regexCache: new Map(),
+        limits: resolveEvalLimits(options),
+        nodesVisited: 0,
     };
+
+    trackNodeVisit(ctx, 0);
 
     let nodes: EvalNode[] = [{
         value: document,
@@ -229,7 +335,7 @@ function evaluateDescendantSegment(
     const result: EvalNode[] = [];
 
     for (const node of nodes) {
-        forEachDescendant(node, (descNode) => {
+        forEachDescendant(node, ctx, (descNode) => {
             for (const selector of segment.selectors) {
                 const selected = evaluateSelector(selector, descNode, ctx);
                 result.push(...selected);
@@ -240,34 +346,80 @@ function evaluateDescendantSegment(
     return result;
 }
 
-function forEachDescendant(node: EvalNode, visit: (descendant: EvalNode) => void): void {
-    const stack: EvalNode[] = [node];
+interface DescendantStackFrame {
+    node: EvalNode;
+    depth: number;
+    exiting?: boolean;
+    objectRef?: object;
+}
+
+function forEachDescendant(
+    node: EvalNode,
+    ctx: EvalContext,
+    visit: (descendant: EvalNode) => void
+): void {
+    const stack: DescendantStackFrame[] = [{ node, depth: node.segments.length }];
+    const ancestorObjects = new WeakSet<object>();
 
     while (stack.length > 0) {
-        const current = stack.pop()!;
+        const frame = stack.pop()!;
+
+        if (frame.exiting) {
+            if (frame.objectRef) {
+                ancestorObjects.delete(frame.objectRef);
+            }
+            continue;
+        }
+
+        const current = frame.node;
+        const currentValue = current.value;
+        if (currentValue !== null && typeof currentValue === 'object') {
+            if (ancestorObjects.has(currentValue as object)) {
+                continue;
+            }
+        }
+
+        trackNodeVisit(ctx, frame.depth);
         visit(current);
 
-        const value = current.value;
+        const value = currentValue;
+        if (value === null || typeof value !== 'object') {
+            continue;
+        }
+
+        const objectRef = value as object;
+        ancestorObjects.add(objectRef);
+        stack.push({
+            node: current,
+            depth: frame.depth,
+            exiting: true,
+            objectRef,
+        });
+
         if (Array.isArray(value)) {
             for (let i = value.length - 1; i >= 0; i--) {
                 stack.push({
-                    value: value[i],
-                    segments: [...current.segments, i],
+                    node: {
+                        value: value[i],
+                        segments: [...current.segments, i],
+                    },
+                    depth: frame.depth + 1,
                 });
             }
             continue;
         }
 
-        if (value !== null && typeof value === 'object') {
-            const record = value as Record<string, unknown>;
-            const keys = Object.keys(record);
-            for (let i = keys.length - 1; i >= 0; i--) {
-                const key = keys[i]!;
-                stack.push({
+        const record = value as Record<string, unknown>;
+        const keys = Object.keys(record);
+        for (let i = keys.length - 1; i >= 0; i--) {
+            const key = keys[i]!;
+            stack.push({
+                node: {
                     value: record[key],
                     segments: [...current.segments, key],
-                });
-            }
+                },
+                depth: frame.depth + 1,
+            });
         }
     }
 }
@@ -279,13 +431,13 @@ function evaluateSelector(
 ): EvalNode[] {
     switch (selector.type) {
         case 'name':
-            return evaluateNameSelector(selector, node);
+            return evaluateNameSelector(selector, node, ctx);
         case 'wildcard':
-            return evaluateWildcardSelector(node);
+            return evaluateWildcardSelector(node, ctx);
         case 'index':
-            return evaluateIndexSelector(selector, node);
+            return evaluateIndexSelector(selector, node, ctx);
         case 'slice':
-            return evaluateSliceSelector(selector, node);
+            return evaluateSliceSelector(selector, node, ctx);
         case 'filter':
             return evaluateFilterSelector(selector, node, ctx);
     }
@@ -293,7 +445,8 @@ function evaluateSelector(
 
 function evaluateNameSelector(
     selector: JsonPathNameSelector,
-    node: EvalNode
+    node: EvalNode,
+    ctx: EvalContext
 ): EvalNode[] {
     // RFC 9535 §2.3.1.2: Select member value by name
     const value = node.value;
@@ -303,36 +456,37 @@ function evaluateNameSelector(
     }
 
     const obj = value as Record<string, unknown>;
-    if (!(selector.name in obj)) {
+    if (!Object.hasOwn(obj, selector.name)) {
         return [];
     }
 
-    const childSegments = [...node.segments, selector.name];
-
-    return [{
+    const result: EvalNode[] = [];
+    addResultNode(result, {
         value: obj[selector.name],
-        segments: childSegments,
-    }];
+        segments: [...node.segments, selector.name],
+    }, ctx);
+
+    return result;
 }
 
-function evaluateWildcardSelector(node: EvalNode): EvalNode[] {
+function evaluateWildcardSelector(node: EvalNode, ctx: EvalContext): EvalNode[] {
     // RFC 9535 §2.3.2.2: Select all children
     const value = node.value;
     const result: EvalNode[] = [];
 
     if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
-            result.push({
+            addResultNode(result, {
                 value: value[i],
                 segments: [...node.segments, i],
-            });
+            }, ctx);
         }
     } else if (value !== null && typeof value === 'object') {
         for (const key of Object.keys(value)) {
-            result.push({
+            addResultNode(result, {
                 value: (value as Record<string, unknown>)[key],
                 segments: [...node.segments, key],
-            });
+            }, ctx);
         }
     }
 
@@ -341,7 +495,8 @@ function evaluateWildcardSelector(node: EvalNode): EvalNode[] {
 
 function evaluateIndexSelector(
     selector: JsonPathIndexSelector,
-    node: EvalNode
+    node: EvalNode,
+    ctx: EvalContext
 ): EvalNode[] {
     // RFC 9535 §2.3.3.2: Select array element by index
     const value = node.value;
@@ -361,17 +516,19 @@ function evaluateIndexSelector(
         return [];
     }
 
-    const childSegments = [...node.segments, index];
-
-    return [{
+    const result: EvalNode[] = [];
+    addResultNode(result, {
         value: value[index],
-        segments: childSegments,
-    }];
+        segments: [...node.segments, index],
+    }, ctx);
+
+    return result;
 }
 
 function evaluateSliceSelector(
     selector: JsonPathSliceSelector,
-    node: EvalNode
+    node: EvalNode,
+    ctx: EvalContext
 ): EvalNode[] {
     // RFC 9535 §2.3.4.2: Array slice
     const value = node.value;
@@ -414,17 +571,17 @@ function evaluateSliceSelector(
 
     if (step > 0) {
         for (let i = lower; i < upper; i += step) {
-            result.push({
+            addResultNode(result, {
                 value: value[i],
                 segments: [...baseSegments, i],
-            });
+            }, ctx);
         }
     } else {
         for (let i = upper; i > lower; i += step) {
-            result.push({
+            addResultNode(result, {
                 value: value[i],
                 segments: [...baseSegments, i],
-            });
+            }, ctx);
         }
     }
 
@@ -452,6 +609,8 @@ function evaluateFilterSelector(
                 segments: childSegments,
             };
 
+            trackNodeVisit(ctx, childSegments.length);
+
             const childCtx: EvalContext = {
                 ...ctx,
                 current: value[i],
@@ -459,7 +618,7 @@ function evaluateFilterSelector(
             };
 
             if (evaluateLogicalExpr(selector.expression, childCtx)) {
-                result.push(childNode);
+                addResultNode(result, childNode, ctx);
             }
         }
     } else if (value !== null && typeof value === 'object') {
@@ -471,6 +630,8 @@ function evaluateFilterSelector(
                 segments: childSegments,
             };
 
+            trackNodeVisit(ctx, childSegments.length);
+
             const childCtx: EvalContext = {
                 ...ctx,
                 current: childValue,
@@ -478,7 +639,7 @@ function evaluateFilterSelector(
             };
 
             if (evaluateLogicalExpr(selector.expression, childCtx)) {
-                result.push(childNode);
+                addResultNode(result, childNode, ctx);
             }
         }
     }
@@ -562,6 +723,8 @@ function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): 
     const startValue = query.root === '$' ? ctx.root : ctx.current;
     const startPath = query.root === '$' ? [] : [...ctx.currentPath];
 
+    trackNodeVisit(ctx, startPath.length);
+
     let nodes: EvalNode[] = [{
         value: startValue,
         segments: startPath,
@@ -572,12 +735,19 @@ function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): 
     }
 
     // RFC 9535 §2.3.5.1: Singular query produces at most one node
-    return nodes.length === 1 ? nodes[0].value : undefined;
+    if (nodes.length !== 1) {
+        return undefined;
+    }
+
+    const [onlyNode] = nodes;
+    return onlyNode?.value;
 }
 
 function evaluateFilterQuery(query: JsonPathQuery, ctx: EvalContext): EvalNode[] {
     const startValue = query.root === '$' ? ctx.root : ctx.current;
     const startPath = query.root === '$' ? [] : [...ctx.currentPath];
+
+    trackNodeVisit(ctx, startPath.length);
 
     let nodes: EvalNode[] = [{
         value: startValue,
@@ -691,7 +861,12 @@ function evaluateFunction(expr: JsonPathFunctionExpr, ctx: EvalContext): unknown
 function fnLength(args: JsonPathFunctionArg[], ctx: EvalContext): number | null {
     if (args.length !== 1) return null;
 
-    const value = evaluateFunctionArg(args[0], ctx);
+    const [arg] = args;
+    if (!arg) {
+        return null;
+    }
+
+    const value = evaluateFunctionArg(arg, ctx);
 
     if (typeof value === 'string') {
         return value.length;
@@ -710,13 +885,45 @@ function fnLength(args: JsonPathFunctionArg[], ctx: EvalContext): number | null 
 function fnCount(args: JsonPathFunctionArg[], ctx: EvalContext): number {
     if (args.length !== 1) return 0;
 
-    const arg = args[0];
+    const [arg] = args;
+    if (!arg) {
+        return 0;
+    }
+
     if (arg.type === 'query') {
         const nodes = evaluateFilterQuery(arg, ctx);
         return nodes.length;
     }
 
     return 0;
+}
+
+function hasUnsafeRegexConstructs(pattern: string): boolean {
+    // Backreferences are frequently involved in catastrophic backtracking.
+    if (/\\[1-9]/.test(pattern)) {
+        return true;
+    }
+
+    // Heuristic nested quantifier detection, e.g. (a+)+, (a*){2,}.
+    if (/\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]/.test(pattern)) {
+        return true;
+    }
+
+    return false;
+}
+
+function enforceRegexPolicy(pattern: string, input: string, ctx: EvalContext): void {
+    if (pattern.length > ctx.limits.maxRegexPatternLength) {
+        throw new JsonPathExecutionLimitError('JSONPath maxRegexPatternLength limit exceeded');
+    }
+
+    if (input.length > ctx.limits.maxRegexInputLength) {
+        throw new JsonPathExecutionLimitError('JSONPath maxRegexInputLength limit exceeded');
+    }
+
+    if (ctx.limits.rejectUnsafeRegex && hasUnsafeRegexConstructs(pattern)) {
+        throw new JsonPathExecutionLimitError('JSONPath rejected unsafe regular expression pattern');
+    }
 }
 
 function getCachedRegex(ctx: EvalContext, cacheKey: string, pattern: string): RegExp | null {
@@ -738,12 +945,19 @@ function getCachedRegex(ctx: EvalContext, cacheKey: string, pattern: string): Re
 function fnMatch(args: JsonPathFunctionArg[], ctx: EvalContext): boolean {
     if (args.length !== 2) return false;
 
-    const value = evaluateFunctionArg(args[0], ctx);
-    const pattern = evaluateFunctionArg(args[1], ctx);
+    const [valueArg, patternArg] = args;
+    if (!valueArg || !patternArg) {
+        return false;
+    }
+
+    const value = evaluateFunctionArg(valueArg, ctx);
+    const pattern = evaluateFunctionArg(patternArg, ctx);
 
     if (typeof value !== 'string' || typeof pattern !== 'string') {
         return false;
     }
+
+    enforceRegexPolicy(pattern, value, ctx);
 
     // RFC 9535 §2.4.6: Full match (anchored)
     const re = getCachedRegex(ctx, `match:${pattern}`, `^(?:${pattern})$`);
@@ -758,12 +972,19 @@ function fnMatch(args: JsonPathFunctionArg[], ctx: EvalContext): boolean {
 function fnSearch(args: JsonPathFunctionArg[], ctx: EvalContext): boolean {
     if (args.length !== 2) return false;
 
-    const value = evaluateFunctionArg(args[0], ctx);
-    const pattern = evaluateFunctionArg(args[1], ctx);
+    const [valueArg, patternArg] = args;
+    if (!valueArg || !patternArg) {
+        return false;
+    }
+
+    const value = evaluateFunctionArg(valueArg, ctx);
+    const pattern = evaluateFunctionArg(patternArg, ctx);
 
     if (typeof value !== 'string' || typeof pattern !== 'string') {
         return false;
     }
+
+    enforceRegexPolicy(pattern, value, ctx);
 
     const re = getCachedRegex(ctx, `search:${pattern}`, pattern);
     if (!re) {
@@ -777,10 +998,19 @@ function fnSearch(args: JsonPathFunctionArg[], ctx: EvalContext): boolean {
 function fnValue(args: JsonPathFunctionArg[], ctx: EvalContext): unknown {
     if (args.length !== 1) return null;
 
-    const arg = args[0];
+    const [arg] = args;
+    if (!arg) {
+        return null;
+    }
+
     if (arg.type === 'query') {
         const nodes = evaluateFilterQuery(arg, ctx);
-        return nodes.length === 1 ? nodes[0].value : null;
+        if (nodes.length !== 1) {
+            return null;
+        }
+
+        const [onlyNode] = nodes;
+        return onlyNode?.value ?? null;
     }
 
     return null;
@@ -793,7 +1023,11 @@ function evaluateFunctionArg(arg: JsonPathFunctionArg, ctx: EvalContext): unknow
         case 'query':
             // For value-type arguments, get the singular value
             const nodes = evaluateFilterQuery(arg, ctx);
-            return nodes.length === 1 ? nodes[0].value : undefined;
+            if (nodes.length !== 1) {
+                return undefined;
+            }
+
+            return nodes[0]?.value;
         case 'function':
             return evaluateFunction(arg, ctx);
     }

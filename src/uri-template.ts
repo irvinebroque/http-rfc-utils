@@ -14,6 +14,12 @@ import type {
     UriTemplate,
     CompiledUriTemplate,
 } from './types.js';
+import {
+    isHexDigit,
+    isHexDigitByte,
+    pushPercentEncodedByte,
+    toUpperHexChar,
+} from './internal-percent-encoding.js';
 
 // Re-export types for convenience
 export type {
@@ -60,7 +66,6 @@ const RESERVED = ':/?#[]@!$&\'()*+,;=';
 const UNRESERVED_TABLE = createAsciiTable(UNRESERVED);
 const RESERVED_TABLE = createAsciiTable(RESERVED);
 const UTF8_ENCODER = new TextEncoder();
-const HEX_UPPER = '0123456789ABCDEF';
 
 function createAsciiTable(chars: string): boolean[] {
     const table = Array<boolean>(128).fill(false);
@@ -151,30 +156,10 @@ function encodeValue(str: string, allowReserved: boolean): string {
         }
 
         // Percent-encode the byte with uppercase hex
-        result.push('%', HEX_UPPER[(byte >> 4) & 0x0f]!, HEX_UPPER[byte & 0x0f]!);
+        pushPercentEncodedByte(result, byte);
     }
 
     return result.join('');
-}
-
-function isHexDigit(char: string): boolean {
-    if (char.length !== 1) {
-        return false;
-    }
-    return isHexDigitByte(char.charCodeAt(0));
-}
-
-function isHexDigitByte(byte: number): boolean {
-    return (byte >= 0x30 && byte <= 0x39)
-        || (byte >= 0x41 && byte <= 0x46)
-        || (byte >= 0x61 && byte <= 0x66);
-}
-
-function toUpperHexChar(byte: number): string {
-    if (byte >= 0x61 && byte <= 0x66) {
-        return String.fromCharCode(byte - 0x20);
-    }
-    return String.fromCharCode(byte);
 }
 
 // =============================================================================
@@ -227,7 +212,16 @@ function parseVarSpec(spec: string): UriTemplateVarSpec | null {
         return null;
     }
 
-    return { name, prefix, explode };
+    const varSpec: UriTemplateVarSpec = {
+        name,
+        explode,
+    };
+
+    if (prefix !== undefined) {
+        varSpec.prefix = prefix;
+    }
+
+    return varSpec;
 }
 
 /**

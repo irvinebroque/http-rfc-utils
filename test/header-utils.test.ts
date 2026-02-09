@@ -3,12 +3,17 @@ import assert from 'node:assert/strict';
 import {
     TOKEN_CHARS,
     QVALUE_REGEX,
+    assertNoCtl,
+    assertHeaderToken,
     isEmptyHeader,
     splitQuotedValue,
     splitListValue,
     unquote,
+    escapeQuotedString,
+    quoteString,
     quoteIfNeeded,
     parseQValue,
+    parseQParameter,
 } from '../src/header-utils.js';
 
 // RFC 9110 §5.6.2: token character set.
@@ -54,6 +59,33 @@ describe('QVALUE_REGEX', () => {
         assert.ok(!QVALUE_REGEX.test('-0.5'));
         assert.ok(!QVALUE_REGEX.test('abc'));
         assert.ok(!QVALUE_REGEX.test('1.001'));
+    });
+});
+
+// RFC 9110 §5.5: field-content excludes CR/LF and other CTLs in serialized values.
+describe('assertNoCtl', () => {
+    it('accepts visible ASCII and HTAB', () => {
+        assert.doesNotThrow(() => assertNoCtl('hello\tworld', 'test'));
+    });
+
+    it('rejects CR/LF, NUL, and DEL', () => {
+        assert.throws(() => assertNoCtl('a\rb', 'test'), /control characters/);
+        assert.throws(() => assertNoCtl('a\nb', 'test'), /control characters/);
+        assert.throws(() => assertNoCtl('a\u0000b', 'test'), /control characters/);
+        assert.throws(() => assertNoCtl('a\u007fb', 'test'), /control characters/);
+    });
+});
+
+// RFC 9110 §5.6.2: header parameter names are tokens.
+describe('assertHeaderToken', () => {
+    it('accepts valid token names', () => {
+        assert.doesNotThrow(() => assertHeaderToken('x-custom', 'token'));
+        assert.doesNotThrow(() => assertHeaderToken('error_description', 'token'));
+    });
+
+    it('rejects invalid token names', () => {
+        assert.throws(() => assertHeaderToken('bad key', 'token'), /valid header token/);
+        assert.throws(() => assertHeaderToken('bad=key', 'token'), /valid header token/);
     });
 });
 
@@ -206,6 +238,19 @@ describe('unquote', () => {
     });
 });
 
+// RFC 9110 §5.6.4: quoted-string escaping helpers.
+describe('quoted-string helpers', () => {
+    it('escapeQuotedString escapes backslashes and double quotes', () => {
+        assert.equal(escapeQuotedString('say "hello"'), 'say \\"hello\\"');
+        assert.equal(escapeQuotedString('path\\file'), 'path\\\\file');
+    });
+
+    it('quoteString wraps escaped values in double quotes', () => {
+        assert.equal(quoteString('hello'), '"hello"');
+        assert.equal(quoteString('a"b'), '"a\\"b"');
+    });
+});
+
 // RFC 9110 §5.6.2, §5.6.4: token vs quoted-string formatting.
 describe('quoteIfNeeded', () => {
     it('returns token values unquoted', () => {
@@ -239,6 +284,14 @@ describe('quoteIfNeeded', () => {
     it('handles values with both quotes and backslashes', () => {
         assert.equal(quoteIfNeeded('a\\"b'), '"a\\\\\\"b"');
     });
+
+    // RFC 9110 §5.5: reject CTLs to prevent header injection.
+    it('rejects CR/LF and control bytes', () => {
+        assert.throws(() => quoteIfNeeded('a\rb'), /control characters/);
+        assert.throws(() => quoteIfNeeded('a\nb'), /control characters/);
+        assert.throws(() => quoteIfNeeded('a\u0000b'), /control characters/);
+        assert.throws(() => quoteIfNeeded('a\u007fb'), /control characters/);
+    });
 });
 
 // RFC 9110 §12.4.2: qvalue parsing.
@@ -265,5 +318,22 @@ describe('parseQValue', () => {
         assert.equal(parseQValue('-0.5'), null);
         assert.equal(parseQValue('abc'), null);
         assert.equal(parseQValue('1.001'), null);
+    });
+});
+
+describe('parseQParameter', () => {
+    it('parses valid q parameters', () => {
+        assert.equal(parseQParameter('q=0.5'), 0.5);
+        assert.equal(parseQParameter('Q=1.0'), 1);
+    });
+
+    it('returns undefined for non-q parameters', () => {
+        assert.equal(parseQParameter('level=1'), undefined);
+        assert.equal(parseQParameter('token'), undefined);
+    });
+
+    it('returns null for invalid q parameters', () => {
+        assert.equal(parseQParameter('q=2'), null);
+        assert.equal(parseQParameter('q=abc'), null);
     });
 });

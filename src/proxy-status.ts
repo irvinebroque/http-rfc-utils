@@ -6,7 +6,15 @@
 
 import type { ProxyStatusEntry, ProxyStatusParams, ProxyErrorType, SfBareItem, SfItem, SfList } from './types.js';
 import { SfToken } from './types.js';
+import { isEmptyHeader } from './header-utils.js';
 import { parseSfList, serializeSfList } from './structured-fields.js';
+import { isSfInteger } from './structured-field-params.js';
+import {
+    buildSfParamsBySchema,
+    createSfParamSchemaEntry,
+    parseSfParamsBySchema,
+    type SfParamSchemaEntry,
+} from './structured-field-schema.js';
 
 const SF_TOKEN = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:\/]*$/;
 
@@ -58,139 +66,107 @@ export function isProxyErrorType(value: string): value is ProxyErrorType {
     return PROXY_ERROR_TYPE_SET.has(value);
 }
 
-function isInteger(value: number): boolean {
-    return Number.isInteger(value) && Number.isFinite(value);
-}
+const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[] = [
+    createSfParamSchemaEntry<ProxyStatusParams, 'error'>({
+        key: 'error',
+        property: 'error',
+        parse: (value) => value instanceof SfToken ? value.value : undefined,
+        format: (value) => new SfToken(value as string),
+    }),
+    createSfParamSchemaEntry<ProxyStatusParams, 'nextHop'>({
+        key: 'next-hop',
+        property: 'nextHop',
+        parse: (value) => {
+            if (typeof value === 'string') {
+                return value;
+            }
+            if (value instanceof SfToken) {
+                return value.value;
+            }
+            return undefined;
+        },
+        format: (value) => {
+            if (typeof value !== 'string') {
+                return value as SfBareItem;
+            }
+            return SF_TOKEN.test(value) ? new SfToken(value) : value;
+        },
+    }),
+    createSfParamSchemaEntry<ProxyStatusParams, 'nextProtocol'>({
+        key: 'next-protocol',
+        property: 'nextProtocol',
+        parse: (value) => value instanceof SfToken ? value.value : undefined,
+        format: (value) => new SfToken(value as string),
+    }),
+    createSfParamSchemaEntry<ProxyStatusParams, 'receivedStatus'>({
+        key: 'received-status',
+        property: 'receivedStatus',
+        parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
+        format: (value) => {
+            if (typeof value !== 'number' || !isSfInteger(value)) {
+                throw new Error('Invalid Proxy-Status received-status value');
+            }
+            return value;
+        },
+    }),
+    createSfParamSchemaEntry<ProxyStatusParams, 'details'>({
+        key: 'details',
+        property: 'details',
+        parse: (value) => typeof value === 'string' ? value : undefined,
+        format: (value) => value as SfBareItem,
+    }),
+    createSfParamSchemaEntry<ProxyStatusParams, 'rcode'>({
+        key: 'rcode',
+        property: 'rcode',
+        parse: (value) => value instanceof SfToken ? value.value : undefined,
+        format: (value) => new SfToken(value as string),
+    }),
+    createSfParamSchemaEntry<ProxyStatusParams, 'infoCode'>({
+        key: 'info-code',
+        property: 'infoCode',
+        parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
+        format: (value) => {
+            if (typeof value !== 'number' || !isSfInteger(value)) {
+                throw new Error('Invalid Proxy-Status info-code value');
+            }
+            return value;
+        },
+    }),
+    createSfParamSchemaEntry<ProxyStatusParams, 'alertId'>({
+        key: 'alert-id',
+        property: 'alertId',
+        parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
+        format: (value) => {
+            if (typeof value !== 'number' || !isSfInteger(value)) {
+                throw new Error('Invalid Proxy-Status alert-id value');
+            }
+            return value;
+        },
+    }),
+    createSfParamSchemaEntry<ProxyStatusParams, 'alertMessage'>({
+        key: 'alert-message',
+        property: 'alertMessage',
+        parse: (value) => {
+            if (typeof value === 'string') {
+                return value;
+            }
+            if (value instanceof SfToken) {
+                return value.value;
+            }
+            return undefined;
+        },
+        format: (value) => value as SfBareItem,
+    }),
+];
 
 // RFC 9209 §2.1: Parse parameters from SF item params.
 function parseProxyStatusParams(params?: Record<string, SfBareItem>): ProxyStatusParams {
-    const result: ProxyStatusParams = {};
-    if (!params) {
-        return result;
-    }
-
-    const extensions: Record<string, SfBareItem> = {};
-
-    for (const [key, value] of Object.entries(params)) {
-        switch (key) {
-            // RFC 9209 §2.1.1: error parameter is a Token.
-            case 'error':
-                if (value instanceof SfToken) {
-                    result.error = value.value;
-                }
-                break;
-            // RFC 9209 §2.1.2: next-hop is a String or Token.
-            case 'next-hop':
-                if (typeof value === 'string' || value instanceof SfToken) {
-                    result.nextHop = value instanceof SfToken ? value.value : value;
-                }
-                break;
-            // RFC 9209 §2.1.3: next-protocol is a Token or Byte Sequence.
-            case 'next-protocol':
-                if (value instanceof SfToken) {
-                    result.nextProtocol = value.value;
-                }
-                break;
-            // RFC 9209 §2.1.4: received-status is an Integer.
-            case 'received-status':
-                if (typeof value === 'number' && isInteger(value)) {
-                    result.receivedStatus = value;
-                }
-                break;
-            // RFC 9209 §2.1.5: details is a String.
-            case 'details':
-                if (typeof value === 'string') {
-                    result.details = value;
-                }
-                break;
-            // RFC 9209 §2.3.2: rcode extra parameter for dns_error.
-            case 'rcode':
-                if (value instanceof SfToken) {
-                    result.rcode = value.value;
-                }
-                break;
-            // RFC 9209 §2.3.2: info-code extra parameter for dns_error.
-            case 'info-code':
-                if (typeof value === 'number' && isInteger(value)) {
-                    result.infoCode = value;
-                }
-                break;
-            // RFC 9209 §2.3.15: alert-id extra parameter for tls_alert_received.
-            case 'alert-id':
-                if (typeof value === 'number' && isInteger(value)) {
-                    result.alertId = value;
-                }
-                break;
-            // RFC 9209 §2.3.15: alert-message extra parameter for tls_alert_received.
-            case 'alert-message':
-                if (typeof value === 'string' || value instanceof SfToken) {
-                    result.alertMessage = value instanceof SfToken ? value.value : value;
-                }
-                break;
-            default:
-                // RFC 9209 §2.1: Unrecognized parameters MUST be ignored, but preserve for extensibility.
-                extensions[key] = value;
-                break;
-        }
-    }
-
-    if (Object.keys(extensions).length > 0) {
-        result.extensions = extensions;
-    }
-
-    return result;
+    return parseSfParamsBySchema(params, PROXY_STATUS_PARAM_SCHEMA);
 }
 
 // RFC 9209 §2: Build SF item params from typed interface.
 function buildProxyStatusParams(params: ProxyStatusParams): Record<string, SfBareItem> | undefined {
-    const result: Record<string, SfBareItem> = {};
-
-    if (params.error !== undefined) {
-        result.error = new SfToken(params.error);
-    }
-    if (params.nextHop !== undefined) {
-        result['next-hop'] = SF_TOKEN.test(params.nextHop) ? new SfToken(params.nextHop) : params.nextHop;
-    }
-    if (params.nextProtocol !== undefined) {
-        result['next-protocol'] = new SfToken(params.nextProtocol);
-    }
-    if (params.receivedStatus !== undefined) {
-        if (!isInteger(params.receivedStatus)) {
-            throw new Error('Invalid Proxy-Status received-status value');
-        }
-        result['received-status'] = params.receivedStatus;
-    }
-    if (params.details !== undefined) {
-        result.details = params.details;
-    }
-    if (params.rcode !== undefined) {
-        result.rcode = new SfToken(params.rcode);
-    }
-    if (params.infoCode !== undefined) {
-        if (!isInteger(params.infoCode)) {
-            throw new Error('Invalid Proxy-Status info-code value');
-        }
-        result['info-code'] = params.infoCode;
-    }
-    if (params.alertId !== undefined) {
-        if (!isInteger(params.alertId)) {
-            throw new Error('Invalid Proxy-Status alert-id value');
-        }
-        result['alert-id'] = params.alertId;
-    }
-    if (params.alertMessage !== undefined) {
-        result['alert-message'] = params.alertMessage;
-    }
-
-    if (params.extensions) {
-        for (const [key, value] of Object.entries(params.extensions)) {
-            if (!(key in result)) {
-                result[key] = value as SfBareItem;
-            }
-        }
-    }
-
-    return Object.keys(result).length > 0 ? result : undefined;
+    return buildSfParamsBySchema(params, PROXY_STATUS_PARAM_SCHEMA, 'mapped-only');
 }
 
 /**
@@ -200,7 +176,7 @@ function buildProxyStatusParams(params: ProxyStatusParams): Record<string, SfBar
  * First member = closest to origin; last = closest to user agent.
  */
 export function parseProxyStatus(header: string): ProxyStatusEntry[] | null {
-    if (!header || !header.trim()) {
+    if (isEmptyHeader(header)) {
         return [];
     }
 

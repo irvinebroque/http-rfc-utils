@@ -5,6 +5,12 @@
  */
 
 import type { UriComponent } from './types.js';
+import {
+    isHexDigit,
+    isHexDigitByte,
+    pushPercentEncodedByte,
+    toUpperHexChar,
+} from './internal-percent-encoding.js';
 
 // RFC 3986 §2.3: Unreserved characters.
 // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
@@ -22,7 +28,6 @@ const RESERVED_CHARS = GEN_DELIMS + SUB_DELIMS;
 
 const UTF8_ENCODER = new TextEncoder();
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
-const HEX_UPPER = '0123456789ABCDEF';
 
 function createAsciiTable(chars: string): boolean[] {
     const table = Array<boolean>(128).fill(false);
@@ -80,7 +85,7 @@ export function isUnreserved(char: string): boolean {
         return false;
     }
     const code = char.charCodeAt(0);
-    return code < 128 && UNRESERVED_TABLE[code];
+    return code < 128 && UNRESERVED_TABLE[code] === true;
 }
 
 /**
@@ -125,18 +130,21 @@ export function percentEncode(str: string, component: UriComponent = 'path'): st
     let i = 0;
     while (i < bytes.length) {
         const byte = bytes[i];
+        if (byte === undefined) {
+            break;
+        }
 
         // Check if this is an ASCII character we can represent directly
         if (byte < 128) {
             // RFC 3986 §2.3: Do not encode unreserved characters
-            if (UNRESERVED_TABLE[byte]) {
+            if (UNRESERVED_TABLE[byte] === true) {
                 result.push(String.fromCharCode(byte));
                 i++;
                 continue;
             }
 
             // Check component-specific allowed characters
-            if (allowedExtra[byte]) {
+            if (allowedExtra[byte] === true) {
                 result.push(String.fromCharCode(byte));
                 i++;
                 continue;
@@ -157,7 +165,7 @@ export function percentEncode(str: string, component: UriComponent = 'path'): st
         }
 
         // Percent-encode the byte with uppercase hex
-        result.push('%', HEX_UPPER[(byte >> 4) & 0x0f]!, HEX_UPPER[byte & 0x0f]!);
+        pushPercentEncodedByte(result, byte);
         i++;
     }
 
@@ -187,7 +195,14 @@ export function percentDecode(str: string): string {
     while (i < str.length) {
         if (str[i] === '%' && i + 2 < str.length) {
             const hex = str.slice(i + 1, i + 3);
-            if (isHexDigit(hex[0]) && isHexDigit(hex[1])) {
+            const firstHex = hex[0];
+            const secondHex = hex[1];
+            if (
+                firstHex !== undefined
+                && secondHex !== undefined
+                && isHexDigit(firstHex)
+                && isHexDigit(secondHex)
+            ) {
                 bytes.push(parseInt(hex, 16));
                 i += 3;
                 continue;
@@ -199,7 +214,7 @@ export function percentDecode(str: string): string {
             bytes.push(charCode);
         } else {
             // Non-ASCII character that wasn't encoded - encode as UTF-8
-            const charBytes = encoder.encode(str[i]);
+            const charBytes = encoder.encode(str.charAt(i));
             bytes.push(...charBytes);
         }
         i++;
@@ -418,29 +433,6 @@ export function compareUris(a: string, b: string): boolean {
 // --- Internal helpers ---
 
 /**
- * Check if a character is a hex digit.
- */
-function isHexDigit(char: string): boolean {
-    if (char.length !== 1) {
-        return false;
-    }
-    return isHexDigitByte(char.charCodeAt(0));
-}
-
-function isHexDigitByte(byte: number): boolean {
-    return (byte >= 0x30 && byte <= 0x39)
-        || (byte >= 0x41 && byte <= 0x46)
-        || (byte >= 0x61 && byte <= 0x66);
-}
-
-function toUpperHexChar(byte: number): string {
-    if (byte >= 0x61 && byte <= 0x66) {
-        return String.fromCharCode(byte - 0x20);
-    }
-    return String.fromCharCode(byte);
-}
-
-/**
  * Remove the last path segment from the output buffer.
  * Used by removeDotSegments for ".." processing.
  *
@@ -474,12 +466,12 @@ function normalizePercentEncoding(str: string): string {
             const hex1 = str[i + 1];
             const hex2 = str[i + 2];
 
-            if (isHexDigit(hex1) && isHexDigit(hex2)) {
+            if (hex1 !== undefined && hex2 !== undefined && isHexDigit(hex1) && isHexDigit(hex2)) {
                 const byte = parseInt(hex1 + hex2, 16);
                 const char = String.fromCharCode(byte);
 
                 // RFC 3986 §6.2.2.2: Decode unreserved characters
-                if (UNRESERVED_TABLE[byte]) {
+                if (UNRESERVED_TABLE[byte] === true) {
                     result.push(char);
                 } else {
                     // Keep encoded but with uppercase hex
@@ -490,7 +482,7 @@ function normalizePercentEncoding(str: string): string {
             }
         }
 
-        result.push(str[i]);
+        result.push(str.charAt(i));
         i++;
     }
 

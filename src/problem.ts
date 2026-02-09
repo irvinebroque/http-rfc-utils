@@ -70,12 +70,16 @@ export function problemResponse(
 
     if (typeof optionsOrStatus === 'number') {
         // Backward-compatible signature: (status, title, detail, instance?)
-        problem = createProblem({
+        const legacyOptions: ProblemOptions = {
             status: optionsOrStatus,
             title: titleOrCorsHeaders as string,
             detail: detail!,
-            instance,
-        });
+        };
+        if (instance !== undefined) {
+            legacyOptions.instance = instance;
+        }
+
+        problem = createProblem(legacyOptions);
         cors = defaultCorsHeaders;
     } else {
         // Full options object: (options, corsHeaders?)
@@ -92,65 +96,88 @@ export function problemResponse(
     });
 }
 
+function createCommonProblemOptions(
+    status: number,
+    title: string,
+    detail: string,
+    instance?: string,
+    extensions?: Record<string, unknown>
+): ProblemOptions {
+    const options: ProblemOptions = {
+        status,
+        title,
+        detail,
+    };
+
+    if (instance !== undefined) {
+        options.instance = instance;
+    }
+    if (extensions !== undefined) {
+        options.extensions = extensions;
+    }
+
+    return options;
+}
+
 /**
  * Common HTTP error responses as Problem Details
  */
 // RFC 9457 §3.1: Problem Details members populated by helpers.
 export const Problems = {
     badRequest: (detail: string, instance?: string) =>
-        problemResponse({ status: 400, title: 'Bad Request', detail, instance }),
+        problemResponse(createCommonProblemOptions(400, 'Bad Request', detail, instance)),
 
     unauthorized: (detail: string, instance?: string) =>
-        problemResponse({ status: 401, title: 'Unauthorized', detail, instance }),
+        problemResponse(createCommonProblemOptions(401, 'Unauthorized', detail, instance)),
 
     forbidden: (detail: string, instance?: string) =>
-        problemResponse({ status: 403, title: 'Forbidden', detail, instance }),
+        problemResponse(createCommonProblemOptions(403, 'Forbidden', detail, instance)),
 
     notFound: (detail: string, instance?: string) =>
-        problemResponse({ status: 404, title: 'Not Found', detail, instance }),
+        problemResponse(createCommonProblemOptions(404, 'Not Found', detail, instance)),
 
     methodNotAllowed: (detail: string, allowed: string[], instance?: string) =>
-        problemResponse({
-            status: 405,
-            title: 'Method Not Allowed',
-            detail,
-            instance,
-            extensions: { allowed },
-        }),
+        problemResponse(createCommonProblemOptions(405, 'Method Not Allowed', detail, instance, { allowed })),
 
     conflict: (detail: string, instance?: string) =>
-        problemResponse({ status: 409, title: 'Conflict', detail, instance }),
+        problemResponse(createCommonProblemOptions(409, 'Conflict', detail, instance)),
 
     gone: (detail: string, instance?: string) =>
-        problemResponse({ status: 410, title: 'Gone', detail, instance }),
+        problemResponse(createCommonProblemOptions(410, 'Gone', detail, instance)),
 
     unprocessableEntity: (detail: string, errors?: unknown[], instance?: string) =>
-        problemResponse({
-            status: 422,
-            title: 'Unprocessable Entity',
-            detail,
-            instance,
-            extensions: errors ? { errors } : undefined,
-        }),
+        problemResponse(
+            createCommonProblemOptions(
+                422,
+                'Unprocessable Entity',
+                detail,
+                instance,
+                errors ? { errors } : undefined
+            )
+        ),
 
     tooManyRequests: (detail: string, retryAfter?: number, instance?: string) =>
-        problemResponse({
-            status: 429,
-            title: 'Too Many Requests',
-            detail,
-            instance,
-            extensions: retryAfter !== undefined ? { retryAfter } : undefined,
-        }),
+        problemResponse(
+            createCommonProblemOptions(
+                429,
+                'Too Many Requests',
+                detail,
+                instance,
+                retryAfter !== undefined ? { retryAfter } : undefined
+            )
+        ),
 
     internalServerError: (detail: string, instance?: string) =>
-        problemResponse({ status: 500, title: 'Internal Server Error', detail, instance }),
+        problemResponse(createCommonProblemOptions(500, 'Internal Server Error', detail, instance)),
 
     serviceUnavailable: (detail: string, retryAfter?: number, instance?: string) =>
-        problemResponse({
-            status: 503,
-            title: 'Service Unavailable',
-            detail,
-            instance,
-            extensions: retryAfter !== undefined ? { retryAfter } : undefined,
-        }),
+        problemResponse(
+            createCommonProblemOptions(
+                503,
+                'Service Unavailable',
+                detail,
+                instance,
+                retryAfter !== undefined ? { retryAfter } : undefined
+            )
+        ),
 } as const;

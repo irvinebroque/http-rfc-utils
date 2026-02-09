@@ -14,6 +14,7 @@ import {
     parseAuthorization,
     parseWWWAuthenticate,
 } from './shared.js';
+import { createObjectMap } from '../object-map.js';
 
 const BEARER_ERRORS: BearerError[] = ['invalid_request', 'invalid_token', 'insufficient_scope'];
 /**
@@ -54,7 +55,7 @@ export function parseBearerChallenge(header: string): BearerChallenge | null {
     }
 
     const seen = new Set<string>();
-    const extensions: Record<string, string> = {};
+    const extensions = createObjectMap<string>();
     const result: BearerChallenge = {};
 
     for (const param of challenge.params) {

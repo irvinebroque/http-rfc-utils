@@ -6,47 +6,15 @@
 
 import type { CacheOptions } from './types.js';
 import { formatHTTPDate } from './datetime.js';
-import { splitQuotedValue, unquote } from './header-utils.js';
+import { parseDeltaSeconds, parseKeyValueSegment, splitQuotedValue, unquote } from './header-utils.js';
 
 const MAX_DELTA_SECONDS = 2147483648;
-const MAX_DELTA_SECONDS_STRING = '2147483648';
 
 function parseFieldNameList(value: string): string[] {
     return splitQuotedValue(value, ',')
         .map(item => item.trim())
         .filter(Boolean)
         .map(item => item.toLowerCase());
-}
-
-// RFC 9111 §1.2.2: delta-seconds parsing and clamping.
-function parseDeltaSeconds(value: string | undefined): number | null {
-    if (value === undefined) {
-        return null;
-    }
-
-    const trimmed = value.trim();
-    if (!/^\d+$/.test(trimmed)) {
-        return null;
-    }
-
-    if (trimmed.length > MAX_DELTA_SECONDS_STRING.length) {
-        return MAX_DELTA_SECONDS;
-    }
-
-    if (trimmed.length === MAX_DELTA_SECONDS_STRING.length && trimmed > MAX_DELTA_SECONDS_STRING) {
-        return MAX_DELTA_SECONDS;
-    }
-
-    const parsed = Number(trimmed);
-    if (!Number.isFinite(parsed)) {
-        return null;
-    }
-
-    if (parsed > MAX_DELTA_SECONDS) {
-        return MAX_DELTA_SECONDS;
-    }
-
-    return parsed;
 }
 
 /**
@@ -66,11 +34,11 @@ function parseDeltaSeconds(value: string | undefined): number | null {
  * - stale-if-error=N: can serve stale for N seconds if origin errors
  * 
  * @example
- * cacheControl({ public: true, maxAge: 3600 })
+ * `cacheControl({ public: true, maxAge: 3600 })`
  * // Returns: "public, max-age=3600"
  * 
  * @example
- * cacheControl({ private: true, noCache: true, mustRevalidate: true })
+ * `cacheControl({ private: true, noCache: true, mustRevalidate: true })`
  * // Returns: "private, no-cache, must-revalidate"
  */
 // RFC 9111 §5.2: Cache-Control field-value construction.
@@ -181,9 +149,13 @@ export function parseCacheControl(header: string): CacheOptions {
 
     for (const directive of directives) {
         // Handle directives with values (e.g., "max-age=3600" or "max-age = 3600")
-        const eqIndex = directive.indexOf('=');
-        const name = (eqIndex === -1 ? directive : directive.slice(0, eqIndex)).trim().toLowerCase();
-        const rawValue = eqIndex === -1 ? undefined : directive.slice(eqIndex + 1).trim();
+        const parsedDirective = parseKeyValueSegment(directive);
+        if (!parsedDirective) {
+            continue;
+        }
+
+        const name = parsedDirective.key.trim().toLowerCase();
+        const rawValue = parsedDirective.hasEquals ? parsedDirective.value : undefined;
         const value = rawValue !== undefined ? unquote(rawValue) : undefined;
 
         switch (name) {
@@ -212,14 +184,14 @@ export function parseCacheControl(header: string): CacheOptions {
                 options.noStore = true;
                 break;
             case 'max-age': {
-                const parsed = parseDeltaSeconds(value);
+                const parsed = parseDeltaSeconds(value, { mode: 'clamp', max: MAX_DELTA_SECONDS });
                 if (parsed !== null) {
                     options.maxAge = parsed;
                 }
                 break;
             }
             case 's-maxage': {
-                const parsed = parseDeltaSeconds(value);
+                const parsed = parseDeltaSeconds(value, { mode: 'clamp', max: MAX_DELTA_SECONDS });
                 if (parsed !== null) {
                     options.sMaxAge = parsed;
                 }
@@ -235,14 +207,14 @@ export function parseCacheControl(header: string): CacheOptions {
                 options.immutable = true;
                 break;
             case 'stale-while-revalidate': {
-                const parsed = parseDeltaSeconds(value);
+                const parsed = parseDeltaSeconds(value, { mode: 'clamp', max: MAX_DELTA_SECONDS });
                 if (parsed !== null) {
                     options.staleWhileRevalidate = parsed;
                 }
                 break;
             }
             case 'stale-if-error': {
-                const parsed = parseDeltaSeconds(value);
+                const parsed = parseDeltaSeconds(value, { mode: 'clamp', max: MAX_DELTA_SECONDS });
                 if (parsed !== null) {
                     options.staleIfError = parsed;
                 }

@@ -4,7 +4,7 @@
  */
 
 import type { LanguageRange } from './types.js';
-import { isEmptyHeader, splitListValue, parseQValue } from './header-utils.js';
+import { isEmptyHeader, parseQSegments, splitListValue } from './header-utils.js';
 
 function languageSpecificity(tag: string): number {
     if (tag === '*') {
@@ -39,27 +39,12 @@ export function parseAcceptLanguage(header: string): LanguageRange[] {
         const tag = segments[0]?.toLowerCase();
         if (!tag) continue;
 
-        let q = 1.0;
-        let invalidQ = false;
-        for (let j = 1; j < segments.length; j++) {
-            const segment = segments[j]!;
-            const eqIndex = segment.indexOf('=');
-            if (eqIndex === -1) continue;
-            const key = segment.slice(0, eqIndex).trim().toLowerCase();
-            if (key !== 'q') continue;
-            const parsed = parseQValue(segment.slice(eqIndex + 1).trim());
-            if (parsed === null) {
-                invalidQ = true;
-                break;
-            }
-            q = parsed;
-        }
-
-        if (invalidQ) {
+        const qParts = parseQSegments(segments, 1);
+        if (qParts.invalidQ) {
             continue;
         }
 
-        ranges.push({ tag, q, specificity: languageSpecificity(tag) });
+        ranges.push({ tag, q: qParts.q, specificity: languageSpecificity(tag) });
     }
 
     ranges.sort((a, b) => {

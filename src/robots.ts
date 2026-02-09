@@ -154,8 +154,10 @@ export function parseRobotsTxt(text: string): RobotsConfig {
 export function formatRobotsTxt(config: RobotsConfig): string {
     const lines: string[] = [];
 
-    for (let i = 0; i < config.groups.length; i++) {
-        const group = config.groups[i];
+    for (const [i, group] of config.groups.entries()) {
+        if (!group) {
+            continue;
+        }
 
         if (i > 0) {
             lines.push('');
@@ -234,7 +236,7 @@ export function matchUserAgent(config: RobotsConfig, userAgent: string): RobotsG
 function pathPatternToRegex(pattern: string): RegExp {
     let regex = '';
     for (let i = 0; i < pattern.length; i++) {
-        const ch = pattern[i];
+        const ch = pattern.charAt(i);
         if (ch === '*') {
             regex += '.*';
         } else if (ch === '$' && i === pattern.length - 1) {

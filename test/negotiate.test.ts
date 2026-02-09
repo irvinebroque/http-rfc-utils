@@ -262,7 +262,7 @@ describe('negotiate', () => {
     });
 
     it('returns first supported when Accept is null', () => {
-        const result = negotiate(null as unknown as string, supported);
+        const result = negotiate(null, supported);
         assert.equal(result, 'application/json');
     });
 

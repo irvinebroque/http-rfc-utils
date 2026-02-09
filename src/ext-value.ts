@@ -5,6 +5,7 @@
  */
 
 import type { ExtValue, ExtValueOptions } from './types.js';
+import { formatPercentEncodedByte } from './internal-percent-encoding.js';
 
 /**
  * RFC 8187 §3.2.1: attr-char characters that don't need percent-encoding.
@@ -14,7 +15,6 @@ import type { ExtValue, ExtValueOptions } from './types.js';
  */
 const ATTR_CHAR = /^[A-Za-z0-9!#$&+\-.^_`|~]$/;
 const UTF8_ENCODER = new TextEncoder();
-const HEX_UPPER = '0123456789ABCDEF';
 
 /**
  * Check if a character is a valid attr-char per RFC 8187 §3.2.1.
@@ -95,11 +95,16 @@ export function decodeExtValue(encoded: string): ExtValue | null {
     }
 
     // RFC 8187 §3.2.1: charset is case-insensitive, normalize to lowercase
-    return {
+    const result: ExtValue = {
         charset: charset.toLowerCase(),
-        language: language || undefined,
         value: decoded,
     };
+
+    if (language) {
+        result.language = language;
+    }
+
+    return result;
 }
 
 /**
@@ -125,7 +130,7 @@ export function encodeExtValue(value: string, options: ExtValueOptions = {}): st
             encoded += char;
         } else {
             // Percent-encode with uppercase hex per RFC 3986 §2.1
-            encoded += '%' + HEX_UPPER[(byte >> 4) & 0x0f] + HEX_UPPER[byte & 0x0f];
+            encoded += formatPercentEncodedByte(byte);
         }
     }
 

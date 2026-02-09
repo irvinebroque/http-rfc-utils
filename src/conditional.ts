@@ -219,24 +219,24 @@ export function evaluateIfUnmodifiedSince(header: string, lastModified: Date | n
  * Implements the precedence algorithm from RFC 9110 Section 13.2.2:
  *
  * 1. If If-Match present:
- *    - If NONE match (strong comparison) -> 412 Precondition Failed
- *    - If any match -> continue
+ *    - If NONE match (strong comparison), return 412 Precondition Failed.
+ *    - If any match, continue.
  *
  * 2. If If-Match absent AND If-Unmodified-Since present:
- *    - If resource modified after date -> 412 Precondition Failed
- *    - If not modified -> continue
+ *    - If resource modified after date, return 412 Precondition Failed.
+ *    - If not modified, continue.
  *
  * 3. If If-None-Match present:
  *    - If ANY match (weak comparison):
- *      - GET/HEAD -> 304 Not Modified
- *      - Other methods -> 412 Precondition Failed
- *    - If none match -> continue
+ *      - GET/HEAD returns 304 Not Modified.
+ *      - Other methods return 412 Precondition Failed.
+ *    - If none match, continue.
  *
  * 4. If If-None-Match absent AND If-Modified-Since present (GET/HEAD only):
- *    - If resource NOT modified since date -> 304 Not Modified
- *    - If modified -> continue
+ *    - If resource is NOT modified since date, return 304 Not Modified.
+ *    - If modified, continue.
  *
- * 5. Otherwise -> proceed with request
+ * 5. Otherwise, proceed with the request.
  *
  * @param request - The incoming request
  * @param currentETag - Current resource ETag (null if resource doesn't exist)
@@ -354,8 +354,13 @@ export function handleConditionalRequest(
 
     // Cache-Control and Vary should be set by the caller as they know the caching policy
 
-    return new Response(null, {
-        status: result.status,
+    const responseInit: ResponseInit = {
         headers: responseHeaders,
-    });
+    };
+
+    if (result.status !== undefined) {
+        responseInit.status = result.status;
+    }
+
+    return new Response(null, responseInit);
 }

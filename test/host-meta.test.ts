@@ -4,6 +4,7 @@ import {
     parseHostMeta,
     formatHostMeta,
     parseHostMetaJson,
+    tryParseHostMetaJson,
     formatHostMetaJson,
 } from '../src/host-meta.js';
 import type { HostMeta } from '../src/types.js';
@@ -155,6 +156,23 @@ describe('RFC 6415 Host Metadata', () => {
             const json = JSON.stringify({ links: [] });
             const result = parseHostMetaJson(json);
             assert.equal(result.links.length, 0);
+        });
+
+        // RFC 6415 §3 + security hardening: non-throwing parse path for untrusted JSON.
+        it('provides tryParseHostMetaJson for malformed JSON input', () => {
+            assert.equal(tryParseHostMetaJson('{'), null);
+            assert.throws(() => parseHostMetaJson('{'));
+        });
+
+        // Prototype-key hardening for dynamic properties maps.
+        it('does not mutate prototypes when properties include __proto__', () => {
+            const baseline = ({} as { polluted?: string }).polluted;
+            const json = '{"properties":{"__proto__":"safe"},"links":[]}';
+
+            const result = parseHostMetaJson(json);
+
+            assert.equal(({} as { polluted?: string }).polluted, baseline);
+            assert.equal(result.properties?.['__proto__'], 'safe');
         });
     });
 

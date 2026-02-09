@@ -26,7 +26,7 @@ import type {
 
 /**
  * Derived component names per RFC 9421 §2.2.
- * These are special component identifiers that start with '@'.
+ * These are special component identifiers that start with `@`.
  */
 export const DERIVED_COMPONENTS: readonly DerivedComponentName[] = [
     '@method',
@@ -105,7 +105,12 @@ export function parseSignatureInput(value: string): SignatureInput[] | null {
             return null;
         }
 
-        results.push({ label, components, params });
+        const signatureInput: SignatureInput = { label, components };
+        if (params !== undefined) {
+            signatureInput.params = params;
+        }
+
+        results.push(signatureInput);
     }
 
     return results;

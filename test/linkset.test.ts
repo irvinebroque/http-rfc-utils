@@ -200,6 +200,19 @@ describe('parseLinksetJson', () => {
         assert.ok(result.linkset[0]['https://example.org/rel/custom']);
     });
 
+    // Prototype-key hardening for dynamic relation maps.
+    it('handles __proto__ relation keys without prototype mutation', () => {
+        const baseline = ({} as { polluted?: string }).polluted;
+        const json = JSON.parse('{"linkset":[{"__proto__":[{"href":"https://example.com/custom"}]}]}');
+
+        const result = parseLinksetJson(json);
+
+        assert.equal(({} as { polluted?: string }).polluted, baseline);
+        assert.ok(result !== null);
+        const context = result.linkset[0] as Record<string, unknown>;
+        assert.ok(Array.isArray(context['__proto__']));
+    });
+
     // RFC 9264 §4.2.3: href required
     it('rejects target objects without href', () => {
         const json = {

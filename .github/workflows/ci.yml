@@ -45,7 +45,35 @@ jobs:
           fi
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check:structure
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
+      - name: Generate API extraction artifact
+        if: github.event_name == 'pull_request'
+        run: pnpm api:extract
+
+      - name: Enforce SemVer public API policy
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p temp/semver
+          set +e
+          pnpm exec tsx scripts/semver/check.ts --base-ref "origin/${{ github.event.pull_request.base.ref }}" --json > temp/semver/report.json
+          semver_status=$?
+          set -e
+
+          if [ -f temp/semver/report.json ]; then
+            cat temp/semver/report.json
+          fi
+
+          exit "$semver_status"
+
+      - name: Upload SemVer report artifact
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semver-report
+          path: temp/semver/report.json
+          if-no-files-found: warn
+
+      - run: pnpm security:ci
+      - run: pnpm typecheck:all
+      - run: pnpm typecheck:strict
+      - run: pnpm typecheck:lib
+      - run: pnpm test:coverage:check

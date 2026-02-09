@@ -6,123 +6,99 @@
 
 import type { CacheStatusEntry, CacheStatusParams, SfBareItem, SfItem, SfList } from './types.js';
 import { SfToken } from './types.js';
+import { isEmptyHeader } from './header-utils.js';
 import { parseSfList, serializeSfList } from './structured-fields.js';
+import { isSfInteger } from './structured-field-params.js';
+import {
+    buildSfParamsBySchema,
+    createSfParamSchemaEntry,
+    parseSfParamsBySchema,
+    type SfParamSchemaEntry,
+} from './structured-field-schema.js';
 
 const SF_TOKEN = /^[a-z*][a-z0-9_\-\.\*]*$/;
 
-function isInteger(value: number): boolean {
-    return Number.isInteger(value) && Number.isFinite(value);
-}
+const CACHE_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<CacheStatusParams>[] = [
+    createSfParamSchemaEntry<CacheStatusParams, 'hit'>({
+        key: 'hit',
+        property: 'hit',
+        parse: (value) => typeof value === 'boolean' ? value : undefined,
+        format: (value) => value as SfBareItem,
+    }),
+    createSfParamSchemaEntry<CacheStatusParams, 'fwd'>({
+        key: 'fwd',
+        property: 'fwd',
+        parse: (value) => value instanceof SfToken ? value.value : undefined,
+        format: (value) => {
+            if (typeof value !== 'string') {
+                throw new Error('Invalid Cache-Status fwd token');
+            }
+            if (!SF_TOKEN.test(value)) {
+                throw new Error('Invalid Cache-Status fwd token');
+            }
+            return new SfToken(value);
+        },
+    }),
+    createSfParamSchemaEntry<CacheStatusParams, 'fwdStatus'>({
+        key: 'fwd-status',
+        property: 'fwdStatus',
+        parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
+        format: (value) => {
+            if (typeof value !== 'number') {
+                throw new Error('Invalid Cache-Status fwd-status value');
+            }
+            if (!isSfInteger(value)) {
+                throw new Error('Invalid Cache-Status fwd-status value');
+            }
+            return value;
+        },
+    }),
+    createSfParamSchemaEntry<CacheStatusParams, 'ttl'>({
+        key: 'ttl',
+        property: 'ttl',
+        parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
+        format: (value) => {
+            if (typeof value !== 'number') {
+                throw new Error('Invalid Cache-Status ttl value');
+            }
+            if (!isSfInteger(value)) {
+                throw new Error('Invalid Cache-Status ttl value');
+            }
+            return value;
+        },
+    }),
+    createSfParamSchemaEntry<CacheStatusParams, 'stored'>({
+        key: 'stored',
+        property: 'stored',
+        parse: (value) => typeof value === 'boolean' ? value : undefined,
+        format: (value) => value as SfBareItem,
+    }),
+    createSfParamSchemaEntry<CacheStatusParams, 'collapsed'>({
+        key: 'collapsed',
+        property: 'collapsed',
+        parse: (value) => typeof value === 'boolean' ? value : undefined,
+        format: (value) => value as SfBareItem,
+    }),
+    createSfParamSchemaEntry<CacheStatusParams, 'key'>({
+        key: 'key',
+        property: 'key',
+        parse: (value) => typeof value === 'string' ? value : undefined,
+        format: (value) => value as SfBareItem,
+    }),
+    createSfParamSchemaEntry<CacheStatusParams, 'detail'>({
+        key: 'detail',
+        property: 'detail',
+        parse: (value) => typeof value === 'string' ? value : undefined,
+        format: (value) => value as SfBareItem,
+    }),
+];
 
 function parseCacheStatusParams(params?: Record<string, SfBareItem>): CacheStatusParams {
-    const result: CacheStatusParams = {};
-    if (!params) {
-        return result;
-    }
-
-    const extensions: Record<string, SfBareItem> = {};
-
-    for (const [key, value] of Object.entries(params)) {
-        switch (key) {
-            case 'hit':
-                if (typeof value === 'boolean') {
-                    result.hit = value;
-                }
-                break;
-            case 'fwd':
-                if (value instanceof SfToken) {
-                    result.fwd = value.value;
-                }
-                break;
-            case 'fwd-status':
-                if (typeof value === 'number' && isInteger(value)) {
-                    result.fwdStatus = value;
-                }
-                break;
-            case 'ttl':
-                if (typeof value === 'number' && isInteger(value)) {
-                    result.ttl = value;
-                }
-                break;
-            case 'stored':
-                if (typeof value === 'boolean') {
-                    result.stored = value;
-                }
-                break;
-            case 'collapsed':
-                if (typeof value === 'boolean') {
-                    result.collapsed = value;
-                }
-                break;
-            case 'key':
-                if (typeof value === 'string') {
-                    result.key = value;
-                }
-                break;
-            case 'detail':
-                if (typeof value === 'string') {
-                    result.detail = value;
-                }
-                break;
-            default:
-                extensions[key] = value;
-                break;
-        }
-    }
-
-    if (Object.keys(extensions).length > 0) {
-        result.extensions = extensions;
-    }
-
-    return result;
+    return parseSfParamsBySchema(params, CACHE_STATUS_PARAM_SCHEMA);
 }
 
 function buildCacheStatusParams(params: CacheStatusParams): Record<string, SfBareItem> | undefined {
-    const result: Record<string, SfBareItem> = {};
-
-    if (params.hit !== undefined) {
-        result.hit = params.hit;
-    }
-    if (params.fwd !== undefined) {
-        if (!SF_TOKEN.test(params.fwd)) {
-            throw new Error('Invalid Cache-Status fwd token');
-        }
-        result.fwd = new SfToken(params.fwd);
-    }
-    if (params.fwdStatus !== undefined) {
-        if (!isInteger(params.fwdStatus)) {
-            throw new Error('Invalid Cache-Status fwd-status value');
-        }
-        result['fwd-status'] = params.fwdStatus;
-    }
-    if (params.ttl !== undefined) {
-        if (!isInteger(params.ttl)) {
-            throw new Error('Invalid Cache-Status ttl value');
-        }
-        result.ttl = params.ttl;
-    }
-    if (params.stored !== undefined) {
-        result.stored = params.stored;
-    }
-    if (params.collapsed !== undefined) {
-        result.collapsed = params.collapsed;
-    }
-    if (params.key !== undefined) {
-        result.key = params.key;
-    }
-    if (params.detail !== undefined) {
-        result.detail = params.detail;
-    }
-
-    if (params.extensions) {
-        for (const [key, value] of Object.entries(params.extensions)) {
-            if (!(key in result)) {
-                result[key] = value as SfBareItem;
-            }
-        }
-    }
-
-    return Object.keys(result).length > 0 ? result : undefined;
+    return buildSfParamsBySchema(params, CACHE_STATUS_PARAM_SCHEMA, 'mapped-and-unset');
 }
 
 /**
@@ -130,7 +106,7 @@ function buildCacheStatusParams(params: CacheStatusParams): Record<string, SfBar
  */
 // RFC 9211 §2: Cache-Status is a Structured Field List.
 export function parseCacheStatus(header: string): CacheStatusEntry[] | null {
-    if (!header || !header.trim()) {
+    if (isEmptyHeader(header)) {
         return [];
     }
 

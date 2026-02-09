@@ -30,8 +30,8 @@ import { Lexer } from './lexer.js';
  * @returns Parsed AST, or null on invalid syntax
  *
  * @example
- * parseJsonPath('$.store.book[*]')  // { type: 'query', root: '$', segments: [...] }
- * parseJsonPath('invalid')          // null
+ * `parseJsonPath('$.store.book[*]')`  // returns a query AST
+ * `parseJsonPath('invalid')`          // null
  *
  * @see https://www.rfc-editor.org/rfc/rfc9535.html#section-2.1
  */
@@ -73,7 +73,10 @@ function parseSegments(lexer: Lexer): JsonPathSegment[] {
 
     while (!lexer.isAtEnd()) {
         const segment = parseSegment(lexer);
-        if (segment === null) break;
+        if (segment === null) {
+            break;
+        }
+
         segments.push(segment);
     }
 
@@ -105,7 +108,10 @@ function parseDescendantSegment(lexer: Lexer): JsonPathDescendantSegment | null 
 
     if (lexer.check('LBRACKET')) {
         const selectors = parseBracketedSelection(lexer);
-        if (selectors === null) return null;
+        if (selectors === null) {
+            return null;
+        }
+
         return { type: 'descendant', selectors };
     }
 
@@ -113,9 +119,9 @@ function parseDescendantSegment(lexer: Lexer): JsonPathDescendantSegment | null 
         return { type: 'descendant', selectors: [{ type: 'wildcard' }] };
     }
 
-    if (lexer.check('NAME')) {
-        const name = lexer.advance().value as string;
-        return { type: 'descendant', selectors: [{ type: 'name', name }] };
+    const nameToken = lexer.matchToken('NAME');
+    if (nameToken) {
+        return { type: 'descendant', selectors: [{ type: 'name', name: nameToken.value }] };
     }
 
     return null;
@@ -123,7 +129,10 @@ function parseDescendantSegment(lexer: Lexer): JsonPathDescendantSegment | null 
 
 function parseChildBracketSegment(lexer: Lexer): JsonPathChildSegment | null {
     const selectors = parseBracketedSelection(lexer);
-    if (selectors === null) return null;
+    if (selectors === null) {
+        return null;
+    }
+
     return { type: 'child', selectors };
 }
 
@@ -134,9 +143,9 @@ function parseChildDotSegment(lexer: Lexer): JsonPathChildSegment | null {
         return { type: 'child', selectors: [{ type: 'wildcard' }] };
     }
 
-    if (lexer.check('NAME')) {
-        const name = lexer.advance().value as string;
-        return { type: 'child', selectors: [{ type: 'name', name }] };
+    const nameToken = lexer.matchToken('NAME');
+    if (nameToken) {
+        return { type: 'child', selectors: [{ type: 'name', name: nameToken.value }] };
     }
 
     return null;
@@ -145,21 +154,30 @@ function parseChildDotSegment(lexer: Lexer): JsonPathChildSegment | null {
 function parseBracketedSelection(lexer: Lexer): JsonPathSelector[] | null {
     // RFC 9535 §2.5.1.1: bracketed-selection = "[" S selector *( S "," S selector ) S "]"
 
-    if (!lexer.match('LBRACKET')) return null;
+    if (!lexer.match('LBRACKET')) {
+        return null;
+    }
 
     const selectors: JsonPathSelector[] = [];
 
     const first = parseSelector(lexer);
-    if (first === null) return null;
+    if (first === null) {
+        return null;
+    }
     selectors.push(first);
 
     while (lexer.match('COMMA')) {
         const next = parseSelector(lexer);
-        if (next === null) return null;
+        if (next === null) {
+            return null;
+        }
+
         selectors.push(next);
     }
 
-    if (!lexer.match('RBRACKET')) return null;
+    if (!lexer.match('RBRACKET')) {
+        return null;
+    }
 
     return selectors;
 }
@@ -170,7 +188,10 @@ function parseSelector(lexer: Lexer): JsonPathSelector | null {
     // Filter selector: "?" logical-expr
     if (lexer.match('QUESTION')) {
         const expr = parseLogicalExpr(lexer);
-        if (expr === null) return null;
+        if (expr === null) {
+            return null;
+        }
+
         return { type: 'filter', expression: expr };
     }
 
@@ -180,9 +201,9 @@ function parseSelector(lexer: Lexer): JsonPathSelector | null {
     }
 
     // Name selector (string literal)
-    if (lexer.check('STRING')) {
-        const name = lexer.advance().value as string;
-        return { type: 'name', name };
+    const stringToken = lexer.matchToken('STRING');
+    if (stringToken) {
+        return { type: 'name', name: stringToken.value };
     }
 
     // Index or slice selector
@@ -202,8 +223,9 @@ function parseIndexOrSlice(lexer: Lexer): JsonPathIndexSelector | JsonPathSliceS
     let isSlice = false;
 
     // Start value
-    if (lexer.check('NUMBER')) {
-        start = lexer.advance().value as number;
+    const startToken = lexer.matchToken('NUMBER');
+    if (startToken) {
+        start = startToken.value;
     }
 
     // First colon (makes it a slice)
@@ -211,20 +233,32 @@ function parseIndexOrSlice(lexer: Lexer): JsonPathIndexSelector | JsonPathSliceS
         isSlice = true;
 
         // End value
-        if (lexer.check('NUMBER')) {
-            end = lexer.advance().value as number;
+        const endToken = lexer.matchToken('NUMBER');
+        if (endToken) {
+            end = endToken.value;
         }
 
         // Second colon and step
         if (lexer.match('COLON')) {
-            if (lexer.check('NUMBER')) {
-                step = lexer.advance().value as number;
+            const stepToken = lexer.matchToken('NUMBER');
+            if (stepToken) {
+                step = stepToken.value;
             }
         }
     }
 
     if (isSlice) {
-        return { type: 'slice', start, end, step };
+        const slice: JsonPathSliceSelector = { type: 'slice' };
+        if (start !== undefined) {
+            slice.start = start;
+        }
+        if (end !== undefined) {
+            slice.end = end;
+        }
+        if (step !== undefined) {
+            slice.step = step;
+        }
+        return slice;
     }
 
     if (start !== undefined) {
@@ -245,19 +279,24 @@ function parseLogicalExpr(lexer: Lexer): JsonPathLogicalExpr | null {
 
 function parseLogicalOrExpr(lexer: Lexer): JsonPathLogicalExpr | null {
     // RFC 9535 §2.3.5.1: logical-or-expr = logical-and-expr *( "||" S logical-and-expr )
-    let left = parseLogicalAndExpr(lexer);
-    if (left === null) return null;
+    const first = parseLogicalAndExpr(lexer);
+    if (first === null) {
+        return null;
+    }
 
-    const operands: JsonPathLogicalExpr[] = [left];
+    const operands: JsonPathLogicalExpr[] = [first];
 
     while (lexer.match('OR')) {
         const right = parseLogicalAndExpr(lexer);
-        if (right === null) return null;
+        if (right === null) {
+            return null;
+        }
+
         operands.push(right);
     }
 
     if (operands.length === 1) {
-        return operands[0];
+        return first;
     }
 
     return { type: 'or', operands };
@@ -265,19 +304,24 @@ function parseLogicalOrExpr(lexer: Lexer): JsonPathLogicalExpr | null {
 
 function parseLogicalAndExpr(lexer: Lexer): JsonPathLogicalExpr | null {
     // RFC 9535 §2.3.5.1: logical-and-expr = basic-expr *( "&&" S basic-expr )
-    let left = parseBasicExpr(lexer);
-    if (left === null) return null;
+    const first = parseBasicExpr(lexer);
+    if (first === null) {
+        return null;
+    }
 
-    const operands: JsonPathLogicalExpr[] = [left];
+    const operands: JsonPathLogicalExpr[] = [first];
 
     while (lexer.match('AND')) {
         const right = parseBasicExpr(lexer);
-        if (right === null) return null;
+        if (right === null) {
+            return null;
+        }
+
         operands.push(right);
     }
 
     if (operands.length === 1) {
-        return operands[0];
+        return first;
     }
 
     return { type: 'and', operands };
@@ -289,15 +333,23 @@ function parseBasicExpr(lexer: Lexer): JsonPathLogicalExpr | null {
     // Parenthesized expression
     if (lexer.match('LPAREN')) {
         const expr = parseLogicalExpr(lexer);
-        if (expr === null) return null;
-        if (!lexer.match('RPAREN')) return null;
+        if (expr === null) {
+            return null;
+        }
+        if (!lexer.match('RPAREN')) {
+            return null;
+        }
+
         return expr;
     }
 
     // Negation
     if (lexer.match('NOT')) {
         const operand = parseBasicExpr(lexer);
-        if (operand === null) return null;
+        if (operand === null) {
+            return null;
+        }
+
         return { type: 'not', operand };
     }
 
@@ -312,13 +364,17 @@ function parseComparisonOrTest(lexer: Lexer): JsonPathLogicalExpr | null {
     // Check for filter query (existence test): @... or $...
     if (lexer.check('CURRENT') || lexer.check('ROOT')) {
         const query = parseFilterQuery(lexer);
-        if (query === null) return null;
+        if (query === null) {
+            return null;
+        }
 
         // Check if followed by comparison operator
         const op = tryParseComparisonOp(lexer);
         if (op !== null) {
             const right = parseComparable(lexer);
-            if (right === null) return null;
+            if (right === null) {
+                return null;
+            }
 
             // Convert query to singular-query comparable
             const left: JsonPathSingularQuery = {
@@ -337,13 +393,18 @@ function parseComparisonOrTest(lexer: Lexer): JsonPathLogicalExpr | null {
     // Check for function call
     if (lexer.check('NAME')) {
         const func = parseFunctionExpr(lexer);
-        if (func === null) return null;
+        if (func === null) {
+            return null;
+        }
 
         // Check if followed by comparison operator
         const op = tryParseComparisonOp(lexer);
         if (op !== null) {
             const right = parseComparable(lexer);
-            if (right === null) return null;
+            if (right === null) {
+                return null;
+            }
+
             return { type: 'comparison', operator: op, left: func, right };
         }
 
@@ -357,9 +418,13 @@ function parseComparisonOrTest(lexer: Lexer): JsonPathLogicalExpr | null {
         const op = tryParseComparisonOp(lexer);
         if (op !== null) {
             const right = parseComparable(lexer);
-            if (right === null) return null;
+            if (right === null) {
+                return null;
+            }
+
             return { type: 'comparison', operator: op, left: literal, right };
         }
+
         // Bare literal is not valid as a test expression
         return null;
     }
@@ -375,6 +440,7 @@ function parseFilterQuery(lexer: Lexer): JsonPathQuery | null {
     if (lexer.check('CURRENT')) {
         return parseQuery(lexer, '@');
     }
+
     return null;
 }
 
@@ -399,7 +465,10 @@ function parseComparable(lexer: Lexer): JsonPathComparable | null {
     // Singular query
     if (lexer.check('ROOT') || lexer.check('CURRENT')) {
         const query = parseFilterQuery(lexer);
-        if (query === null) return null;
+        if (query === null) {
+            return null;
+        }
+
         return {
             type: 'singular-query',
             root: query.root,
@@ -412,12 +481,16 @@ function parseComparable(lexer: Lexer): JsonPathComparable | null {
 }
 
 function parseLiteral(lexer: Lexer): JsonPathLiteral | null {
-    if (lexer.check('STRING')) {
-        return { type: 'literal', value: lexer.advance().value as string };
+    const stringToken = lexer.matchToken('STRING');
+    if (stringToken) {
+        return { type: 'literal', value: stringToken.value };
     }
-    if (lexer.check('NUMBER')) {
-        return { type: 'literal', value: lexer.advance().value as number };
+
+    const numberToken = lexer.matchToken('NUMBER');
+    if (numberToken) {
+        return { type: 'literal', value: numberToken.value };
     }
+
     if (lexer.match('TRUE')) {
         return { type: 'literal', value: true };
     }
@@ -427,36 +500,48 @@ function parseLiteral(lexer: Lexer): JsonPathLiteral | null {
     if (lexer.match('NULL')) {
         return { type: 'literal', value: null };
     }
+
     return null;
 }
 
 function parseFunctionExpr(lexer: Lexer): JsonPathFunctionExpr | null {
     // RFC 9535 §2.4: function-expr = function-name "(" [function-argument *( "," function-argument )] ")"
 
-    if (!lexer.check('NAME')) return null;
+    const nameToken = lexer.matchToken('NAME');
+    if (!nameToken) {
+        return null;
+    }
 
-    const name = lexer.advance().value as string;
+    const name = nameToken.value;
     if (!isBuiltinFunctionName(name)) {
         return null;
     }
 
-    if (!lexer.match('LPAREN')) return null;
+    if (!lexer.match('LPAREN')) {
+        return null;
+    }
 
     const args: JsonPathFunctionArg[] = [];
 
     if (!lexer.check('RPAREN')) {
         const first = parseFunctionArg(lexer);
-        if (first === null) return null;
+        if (first === null) {
+            return null;
+        }
         args.push(first);
 
         while (lexer.match('COMMA')) {
             const next = parseFunctionArg(lexer);
-            if (next === null) return null;
+            if (next === null) {
+                return null;
+            }
             args.push(next);
         }
     }
 
-    if (!lexer.match('RPAREN')) return null;
+    if (!lexer.match('RPAREN')) {
+        return null;
+    }
 
     return {
         type: 'function',

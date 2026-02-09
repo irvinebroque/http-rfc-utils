@@ -1,0 +1,6 @@
+# RFC 9421 Signature-Input seeds
+sig1=("@method" "@authority" "content-type");created=1618884473;keyid="test-key"
+sig1=("content-type";sf "cache-control")
+sig1=("example-dict";key="member")
+sig1=(content-type)
+sig1=("@method");created=1.5

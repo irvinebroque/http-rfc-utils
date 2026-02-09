@@ -9,3 +9,5 @@ export * from '../prefer.js';
 export * from '../forwarded.js';
 export * from '../content-disposition.js';
 export * from '../ext-value.js';
+export * from '../alt-svc.js';
+export * from '../compression-dictionary.js';

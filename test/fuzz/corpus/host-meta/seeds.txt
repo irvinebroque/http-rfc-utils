@@ -1,0 +1,6 @@
+# RFC 6415 host-meta XML corpus seeds
+<XRD xmlns="http://docs.oasis-open.org/ns/xri/xrd-1.0"><Link rel="lrdd" template="https://example.com/.well-known/webfinger?resource={uri}"/></XRD>
+<XRD xmlns="http://docs.oasis-open.org/ns/xri/xrd-1.0"><Property type="http://example.com/ns/name">Example</Property></XRD>
+<XRD><Link rel="alternate" href="https://example.com/" type="text/html"/></XRD>
+<Link rel="lrdd" template="https://example.com/wf?resource={uri}&amp;format=json"/>
+<XRD><Link template="missing-rel"/></XRD>

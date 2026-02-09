@@ -33,6 +33,35 @@ async function assertDirectoryLayout(dirPath, expectedFiles) {
     }
 }
 
+async function assertIndexExportsAllRootModules() {
+    const srcRootEntries = await fs.readdir(path.join(ROOT, 'src'), { withFileTypes: true });
+    const excludedRootModules = new Set([
+        'index',
+        'object-map',
+        'header-utils',
+        'structured-field-params',
+        'structured-field-helpers',
+        'structured-field-schema',
+    ]);
+
+    const rootModules = srcRootEntries
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+        .map((entry) => entry.name.slice(0, -3))
+        .filter((moduleName) => !excludedRootModules.has(moduleName))
+        .filter((moduleName) => !moduleName.startsWith('internal-'));
+
+    const indexContent = await readFile('src/index.ts');
+    const missingModules = rootModules
+        .filter((moduleName) => !indexContent.includes(`from './${moduleName}.js'`))
+        .sort();
+
+    if (missingModules.length > 0) {
+        throw new Error(
+            `src/index.ts is missing exports for root src modules: ${missingModules.join(', ')}`,
+        );
+    }
+}
+
 async function main() {
     await assertExists('src/index.ts');
     await assertExists('src/types.ts');
@@ -43,7 +72,17 @@ async function main() {
         'shared.ts',
         'auth.ts',
         'cache.ts',
+        'cookie.ts',
+        'pagination.ts',
+        'problem.ts',
+        'header.ts',
+        'negotiation.ts',
         'link.ts',
+        'uri.ts',
+        'digest.ts',
+        'discovery.ts',
+        'security.ts',
+        'structured-fields.ts',
         'jsonpath.ts',
         'signature.ts',
     ]);
@@ -94,6 +133,7 @@ async function main() {
     await assertFileContains('src/index.ts', "from './types.js';");
     await assertFileContains('src/index.ts', "from './auth.js';");
     await assertFileContains('src/index.ts', "from './jsonpath.js';");
+    await assertIndexExportsAllRootModules();
 
     console.log('Structure check passed.');
 }

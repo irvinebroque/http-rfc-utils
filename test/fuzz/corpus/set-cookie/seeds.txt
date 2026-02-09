@@ -1,0 +1,6 @@
+# RFC 6265 Set-Cookie seeds
+session=abc123; Path=/; HttpOnly; Secure
+prefs="dark mode"; Max-Age=3600; Path=/settings
+id=42; Domain=example.com; SameSite=Lax
+token=abc; __proto__=x
+bad-cookie

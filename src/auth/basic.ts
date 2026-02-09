@@ -109,7 +109,12 @@ export function parseBasicChallenge(header: string): BasicChallenge | null {
         return null;
     }
 
-    return { scheme: 'Basic', realm, charset };
+    const basicChallenge: BasicChallenge = { scheme: 'Basic', realm };
+    if (charset !== undefined) {
+        basicChallenge.charset = charset;
+    }
+
+    return basicChallenge;
 }
 
 /**

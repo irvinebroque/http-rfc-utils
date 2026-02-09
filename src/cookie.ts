@@ -6,6 +6,8 @@
 
 import type { CookieAttributes, CookieHeaderOptions, SetCookie, StoredCookie } from './types.js';
 import { formatHTTPDate } from './datetime.js';
+import { assertHeaderToken, assertNoCtl, quoteString } from './header-utils.js';
+import { createObjectMap } from './object-map.js';
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
@@ -33,11 +35,11 @@ function unquoteCookieValue(value: string): string {
 }
 
 function formatCookieValue(value: string): string {
+    assertNoCtl(value, 'Cookie value');
     if (!/[\s;,"]/.test(value) && !value.includes('\\')) {
         return value;
     }
-    const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    return `"${escaped}"`;
+    return quoteString(value);
 }
 
 function isDelimiter(char: string): boolean {
@@ -196,7 +198,10 @@ export function parseCookie(header: string): Map<string, string> {
 // RFC 6265 §4.2.1: Cookie header formatting.
 export function formatCookie(cookies: Map<string, string> | Record<string, string>): string {
     const entries = cookies instanceof Map ? Array.from(cookies.entries()) : Object.entries(cookies);
-    return entries.map(([name, value]) => `${name}=${formatCookieValue(value)}`).join('; ');
+    return entries.map(([name, value]) => {
+        assertHeaderToken(name, `Cookie name "${name}"`);
+        return `${name}=${formatCookieValue(value)}`;
+    }).join('; ');
 }
 
 /**
@@ -287,7 +292,7 @@ export function parseSetCookie(header: string): SetCookie | null {
                 break;
             default: {
                 if (!attributes.extensions) {
-                    attributes.extensions = {};
+                    attributes.extensions = createObjectMap<string | undefined>();
                 }
                 attributes.extensions[nameLower] = rawValue;
                 break;
@@ -303,6 +308,7 @@ export function parseSetCookie(header: string): SetCookie | null {
  */
 // RFC 6265 §4.1.1: Set-Cookie formatting.
 export function formatSetCookie(value: SetCookie): string {
+    assertHeaderToken(value.name, `Set-Cookie name "${value.name}"`);
     const parts: string[] = [`${value.name}=${formatCookieValue(value.value)}`];
     const attributes = value.attributes ?? {};
 
@@ -313,9 +319,11 @@ export function formatSetCookie(value: SetCookie): string {
         parts.push(`Max-Age=${Math.floor(attributes.maxAge)}`);
     }
     if (attributes.domain) {
+        assertNoCtl(attributes.domain, 'Set-Cookie Domain attribute');
         parts.push(`Domain=${attributes.domain}`);
     }
     if (attributes.path) {
+        assertNoCtl(attributes.path, 'Set-Cookie Path attribute');
         parts.push(`Path=${attributes.path}`);
     }
     if (attributes.secure) {
@@ -326,9 +334,11 @@ export function formatSetCookie(value: SetCookie): string {
     }
     if (attributes.extensions) {
         for (const [key, extValue] of Object.entries(attributes.extensions)) {
+            assertHeaderToken(key, `Set-Cookie extension attribute name "${key}"`);
             if (extValue === undefined || extValue === '') {
                 parts.push(key);
             } else {
+                assertNoCtl(extValue, `Set-Cookie extension attribute "${key}" value`);
                 parts.push(`${key}=${extValue}`);
             }
         }
@@ -542,6 +552,9 @@ export function buildCookieHeader(
     });
 
     return filtered
-        .map(cookie => `${cookie.name}=${formatCookieValue(cookie.value)}`)
+        .map((cookie) => {
+            assertHeaderToken(cookie.name, `Cookie name "${cookie.name}"`);
+            return `${cookie.name}=${formatCookieValue(cookie.value)}`;
+        })
         .join('; ');
 }

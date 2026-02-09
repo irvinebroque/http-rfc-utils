@@ -1,122 +1,151 @@
-# http-rfc-utils agent notes
+# http-rfc-utils agent guide
 
-## Commands
+Use this file as the primary instructions for coding agents working in this repo.
+The package is RFC-focused TypeScript utilities with strict public API expectations.
 
+## Project baseline
+- Runtime: Node.js >= 22.
+- Package manager: `pnpm`.
+- Language/toolchain: TypeScript (`strict: true`, ESM/NodeNext).
+- Canonical package entrypoint: `src/index.ts`.
+
+## Build, lint, and test commands
+### Install
+```bash
+pnpm install --frozen-lockfile
+```
+### Build
+```bash
+pnpm build
+```
+- Compiles `src/**/*.ts` to `dist/`.
+- Use `pnpm clean` to remove build artifacts.
+### Lint-equivalent checks
+There is no dedicated ESLint/Prettier script in this repository.
+Use this quality gate instead:
+```bash
+pnpm check:structure
+pnpm typecheck:all
+pnpm typecheck:strict
+pnpm typecheck:lib
+```
+### Tests
+Canonical full-suite entrypoint:
 ```bash
 pnpm test
 ```
+Run one test file:
+```bash
+pnpm exec tsx --test test/etag.test.ts
+```
+Run a specific test by name pattern:
+```bash
+pnpm exec tsx --test --test-name-pattern "strong ETag" test/etag.test.ts
+```
+Other useful test commands:
+```bash
+pnpm test:watch
+pnpm test:coverage
+pnpm test:coverage:check
+```
+### API/release safety checks
+Run these when changes can affect public API shape or semver behavior:
+```bash
+pnpm api:extract
+pnpm semver:check
+```
+### Changesets and release helpers
+```bash
+pnpm changeset
+pnpm version
+pnpm release
+```
+CI expects PRs to include a real changeset file under `.changeset/`.
 
-Preferred: keep `pnpm test` as the single canonical test entrypoint. If it does not run the RFC-aligned test runner yet, wire it to `pnpm exec tsx --test test/*.test.ts` and document only `pnpm test` here.
+### Pre-PR command checklist
+Before opening/updating a PR, run:
+```bash
+pnpm check:structure
+pnpm typecheck
+pnpm test
+pnpm build
+```
+CI additionally runs stricter typecheck variants and enforces changesets on PRs.
 
-## Code style
-
-- TypeScript uses 4-space indentation.
-- Single quotes, semicolons required.
+## Code style guidelines
+### Formatting and syntax
+- Use 4-space indentation.
+- Use single quotes and semicolons.
+- Keep files ASCII unless a file already requires Unicode.
+- Keep functions small and focused on one parsing/formatting concern.
+### Imports and exports
 - Prefer `import type` for type-only imports.
+- Use local ESM imports with `.js` suffix (for example `./cache.js`).
+- Prefer named exports; avoid `export default`.
+- Keep public exports organized through facades/barrels, not deep consumer imports.
+### Types
+- Avoid `any`; use `unknown` for untrusted input and narrow explicitly.
+- Prefer interfaces for object contracts and type aliases for unions/literals.
+- Reuse shared/public types from `src/types.ts` and `src/types/*`.
+- Use `as const` and literal unions for protocol tokens/constants.
+- Keep strict-mode compatibility (`noImplicitReturns`, `noFallthroughCasesInSwitch`).
+### Naming conventions
+- Files: kebab-case (`cache-status.ts`, `link-template.ts`).
+- Types/interfaces/classes: PascalCase.
+- Functions/variables: camelCase.
+- Constants: UPPER_SNAKE_CASE.
+- Boolean helpers: `isX`, `hasX`, `canX`, `supportsX`.
+- Prefer paired API names like `parseX` and `formatX` for headers/fields.
+### Error handling and parser behavior
+- Default parser behavior: return `null`/empty results for invalid syntax-level input.
+- Formatter/constructor/validator behavior: throw `Error` for invalid semantic input.
+- Error messages should be precise and include the invalid field/value context.
+- Keep non-throwing parser variants (`tryParseX`) for untrusted JSON text when available.
+- Do not use exceptions for ordinary branch control in tolerant parsers.
+### Comments and RFC annotations
+- Add module headers documenting relevant RFC sections and a canonical RFC URL.
+- Add inline RFC section comments only for non-obvious precedence/ABNF logic.
+- Avoid comments that only restate obvious code.
 
-## RFC Sources of Truth
+## Testing conventions
+- Framework: `node:test` with `node:assert/strict`.
+- Test files live under `test/*.test.ts`.
+- Every new test should cite the governing spec section (`RFC ...`, `W3C ...`, `SemVer ...`).
+- Prefer normative RFC examples and include MUST/SHOULD edge cases.
+- Keep tests deterministic and offline.
 
-Use these URLs as the source of truth and go to them when verifying behavior or edge cases:
+## Public API and structure contracts
+- Treat `src/index.ts` as the canonical package entrypoint.
+- Treat `src/types.ts`, `src/auth.ts`, and `src/jsonpath.ts` as compatibility facades.
+- Keep decomposition in `src/types/*`, `src/auth/*`, and `src/jsonpath/*`.
+- Keep discoverability barrels in `src/headers/index.ts`, `src/linking/index.ts`, `src/security/index.ts`, and `src/negotiation/index.ts`.
+- If exports or module ownership change, also update docs and audit artifacts.
 
-- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html) - HTTP Semantics
-- [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html) - HTTP Caching
-- [RFC 5861](https://www.rfc-editor.org/rfc/rfc5861.html) - Cache-Control extensions (stale content)
-- [RFC 8246](https://www.rfc-editor.org/rfc/rfc8246.html) - Immutable Cache-Control extension
-- [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240.html) - Prefer
-- [RFC 7239](https://www.rfc-editor.org/rfc/rfc7239.html) - Forwarded
-- [RFC 6266](https://www.rfc-editor.org/rfc/rfc6266.html) - Content-Disposition
-- [RFC 8187](https://www.rfc-editor.org/rfc/rfc8187.html) - Header Parameter Encoding
-- [RFC 4647](https://www.rfc-editor.org/rfc/rfc4647.html) - Language Tag Matching
-- [RFC 8941](https://www.rfc-editor.org/rfc/rfc8941.html) - Structured Field Values
-- [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html) - Web Linking
-- [RFC 7231](https://www.rfc-editor.org/rfc/rfc7231.html) - HTTP/1.1 Semantics and Content (Accept)
-- [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html) - Problem Details for HTTP APIs
-- [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) - Date and Time on the Internet: Timestamps
-- [RFC 850](https://www.rfc-editor.org/rfc/rfc850.html) - Standard for interchange of USENET messages (legacy HTTP-date format)
-- [RFC 9535](https://www.rfc-editor.org/rfc/rfc9535.html) - JSONPath: Query Expressions for JSON
+## RFC sources of truth
+Use RFC Editor URLs when verifying behavior and edge cases:
+- RFC 9110 (HTTP Semantics): https://www.rfc-editor.org/rfc/rfc9110.html
+- RFC 9111 (HTTP Caching): https://www.rfc-editor.org/rfc/rfc9111.html
+- RFC 5861 (stale-while-revalidate/stale-if-error): https://www.rfc-editor.org/rfc/rfc5861.html
+- RFC 8246 (immutable cache directive): https://www.rfc-editor.org/rfc/rfc8246.html
+- RFC 7240 (Prefer): https://www.rfc-editor.org/rfc/rfc7240.html
+- RFC 7239 (Forwarded): https://www.rfc-editor.org/rfc/rfc7239.html
+- RFC 6266 (Content-Disposition): https://www.rfc-editor.org/rfc/rfc6266.html
+- RFC 8187 (extended header params): https://www.rfc-editor.org/rfc/rfc8187.html
+- RFC 4647 (language tag matching): https://www.rfc-editor.org/rfc/rfc4647.html
+- RFC 8941 (Structured Fields): https://www.rfc-editor.org/rfc/rfc8941.html
+- RFC 8288 (Web Linking): https://www.rfc-editor.org/rfc/rfc8288.html
+- RFC 9457 (Problem Details): https://www.rfc-editor.org/rfc/rfc9457.html
+- RFC 3339 (timestamps): https://www.rfc-editor.org/rfc/rfc3339.html
+- RFC 850 (obsolete HTTP-date): https://www.rfc-editor.org/rfc/rfc850.html
+- RFC 9535 (JSONPath): https://www.rfc-editor.org/rfc/rfc9535.html
 
-## RFC planning command
+## Adding/extending an RFC module
+1. Declare scope (supported sections + explicit out-of-scope behavior).
+2. Keep parse/format API consistency and document any intentional deviations.
+3. Add RFC-cited tests for nominal and edge-case behavior.
+4. Update `README.md`, `docs/src/lib/rfc-map.ts`, and `AUDIT.md`.
+5. Run quality gates before PR.
 
-Use `plans/` and `PLAN.md` to capture RFC planning notes and implementation overlap. When adding a new RFC plan, follow the existing files in `plans/` for structure and scope callouts.
-
-## Adding a New RFC
-
-### Scope + Sources
-
-- List the RFC number, supported sections, and any ABNF snippets you are implementing; call out explicit out-of-scope behaviors.
-- Use RFC editor URLs with section anchors as the canonical citations in scope notes and docs (see sources above).
-- Align scope language with `AUDIT.md` (supported sections, partials, gaps).
-
-### Implementation pattern
-
-- Decide whether to add a new `src/*.ts` module or extend an existing one; keep exports aligned with the README RFC Map.
-- Add a module header that lists RFC sections and a canonical `@see` link to the RFC Editor URL.
-- Add inline RFC section comments near non-obvious logic (parsing, precedence, and edge-case rules).
-
-Module header template:
-
-```ts
-/**
- * <Topic> per RFC XXXX.
- * RFC XXXX §x.y, §x.y.z.
- * @see https://www.rfc-editor.org/rfc/rfcXXXX.html#section-x.y
- */
-```
-
-Inline comment template:
-
-```ts
-// RFC XXXX §x.y: <rule being implemented>.
-```
-
-### Tests
-
-- Every new test must cite the relevant RFC section in the test name or a preceding comment.
-- Prefer examples from the RFC text; include edge-case tests for ABNF limits and MUST/SHOULD requirements.
-- Follow the `test/conditional.test.ts` pattern: RFC section comments for describes and targeted RFC comments for edge cases.
-
-Example pattern:
-
-```ts
-// RFC XXXX §x.y: <behavior>.
-describe('<feature>', () => {
-    it('handles <case>', () => {
-        // ...
-    });
-});
-```
-
-### Docs + Audit updates
-
-- Update `README.md` Supported RFCs, RFC References, and RFC Map for new exports.
-- Update `docs/src/lib/rfc-map.ts` to match supported sections and module coverage (the RFCs page renders from `RFC_MAP`).
-- Update `AUDIT.md` with coverage matrix, checklist status, and any known gaps/out-of-scope notes.
-
-### Quality gates
-
-- Run `pnpm exec tsx --test test/*.test.ts` after adding or changing tests.
-- Verify README examples match exports and signatures.
-- If you choose permissive parsing, document the compliance vs permissiveness decision in the module docblock and in `AUDIT.md`.
-
-## Review checklist
-
-- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html): strong vs weak ETag comparisons; conditional precedence order.
-- [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html): directive order and numeric handling for Cache-Control.
-- [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html): Link header formatting and parsing (quoted commas, escapes, boolean params).
-- [RFC 7231](https://www.rfc-editor.org/rfc/rfc7231.html): Accept parsing and q-value sorting rules.
-- [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240.html): Prefer/Preference-Applied parsing and formatting.
-- [RFC 7239](https://www.rfc-editor.org/rfc/rfc7239.html): Forwarded field parsing/quoting rules.
-- [RFC 6266](https://www.rfc-editor.org/rfc/rfc6266.html): Content-Disposition parameter rules.
-- [RFC 8187](https://www.rfc-editor.org/rfc/rfc8187.html): Extended parameter encoding (UTF-8'lang'value).
-- [RFC 4647](https://www.rfc-editor.org/rfc/rfc4647.html): Basic filtering for language negotiation.
-- [RFC 8941](https://www.rfc-editor.org/rfc/rfc8941.html): Structured field parsing/serialization.
-- [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html): Problem Details fields and content type.
-- [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html): timestamp parsing and formatting.
-- [RFC 850](https://www.rfc-editor.org/rfc/rfc850.html): legacy HTTP-date parsing (obsolete format).
-- CORS: single origin in `Access-Control-Allow-Origin`; `Vary: Origin` when echoing.
-- Docs: README examples match exports and signatures.
-
-## Test requirements
-
-- Every new test case must cite the relevant RFC and section in the test name or a preceding comment.
-- Prefer using examples from the RFC text when practical, and note the section that defines the behavior being asserted.
+## Cursor and Copilot rules
+- No `.cursor/rules/`, `.cursorrules`, or `.github/copilot-instructions.md` files were found.
+- This `AGENTS.md` file is the authoritative agent rule set for this repository.

@@ -132,7 +132,7 @@ export function compareValues(a: unknown, b: unknown, direction: SortDirection):
  * - Strings are compared case-insensitively
  * - Numbers compared numerically
  * - Dates compared by timestamp
- * - Booleans: false < true
+ * - Booleans: false sorts before true
  * - Multiple sort fields applied in order
  */
 export function applySorting<T extends Record<string, unknown>>(

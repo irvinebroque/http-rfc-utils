@@ -7,10 +7,14 @@
 import type { LinkDefinition, PaginationLinks } from './types.js';
 import { decodeExtValue } from './ext-value.js';
 import {
+    assertHeaderToken,
+    assertNoCtl,
     isEmptyHeader,
+    quoteString,
     quoteIfNeeded as quoteIfNeededImpl,
     unquote as unquoteImpl,
 } from './header-utils.js';
+import { createObjectMap } from './object-map.js';
 
 /**
  * Standard link relation types (RFC 8288 Section 6.2.2 + common extensions)
@@ -56,6 +60,19 @@ const FORMAT_LINK_SKIP_KEYS = new Set<string>([
     ...ORDERED_LINK_PARAM_KEYS,
 ]);
 const SINGLE_USE_LINK_PARAMS = new Set(['rel', 'type', 'media', 'anchor']);
+
+function assertLinkParamName(name: string): void {
+    if (name.endsWith('*')) {
+        const baseName = name.slice(0, -1);
+        assertHeaderToken(baseName, `Link parameter name "${name}"`);
+        return;
+    }
+    assertHeaderToken(name, `Link parameter name "${name}"`);
+}
+
+function createLinkAccumulator(): Partial<LinkDefinition> {
+    return createObjectMap<string | string[] | undefined>() as Partial<LinkDefinition>;
+}
 
 function splitRelationTokens(value: string): string[] {
     const rels: string[] = [];
@@ -113,10 +130,12 @@ export function unquote(value: string): string {
  */
 // RFC 8288 §3.1, §3.2, §3.3, §3.4: Link-value formatting and parameters.
 export function formatLink(link: LinkDefinition): string {
+    assertNoCtl(link.href, 'Link href');
     const parts: string[] = [`<${link.href}>`];
 
     // rel is always first and always quoted per convention
     if (link.rel) {
+        assertNoCtl(link.rel, 'Link rel');
         parts.push(`rel="${link.rel}"`);
     }
 
@@ -126,9 +145,8 @@ export function formatLink(link: LinkDefinition): string {
         if (key in link && link[key] !== undefined) {
             const value = link[key];
             if (typeof value === 'string') {
-                // Always quote values - escape any quotes in the value
-                const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-                parts.push(`${key}="${escaped}"`);
+                assertNoCtl(value, `Link parameter "${key}" value`);
+                parts.push(`${key}=${quoteString(value)}`);
             }
         }
     }
@@ -137,8 +155,8 @@ export function formatLink(link: LinkDefinition): string {
     if (link.hreflang !== undefined) {
         const hreflangs = Array.isArray(link.hreflang) ? link.hreflang : [link.hreflang];
         for (const lang of hreflangs) {
-            const escaped = lang.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-            parts.push(`hreflang="${escaped}"`);
+            assertNoCtl(lang, 'Link hreflang value');
+            parts.push(`hreflang=${quoteString(lang)}`);
         }
     }
 
@@ -147,12 +165,15 @@ export function formatLink(link: LinkDefinition): string {
         if (FORMAT_LINK_SKIP_KEYS.has(key)) {
             continue;
         }
+        assertLinkParamName(key);
         if (value !== undefined) {
             if (typeof value === 'string') {
+                assertNoCtl(value, `Link extension parameter "${key}" value`);
                 parts.push(`${key}=${quoteIfNeeded(value)}`);
             } else if (Array.isArray(value)) {
                 // Multiple values for extension attribute
                 for (const v of value) {
+                    assertNoCtl(v, `Link extension parameter "${key}" value`);
                     parts.push(`${key}=${quoteIfNeeded(v)}`);
                 }
             }
@@ -222,8 +243,8 @@ const enum State {
  *    This is TWO links, not three.
  * 
  * 2. Escaped characters in quoted values:
- *    `title="Say \"Hello\""`  -> title = Say "Hello"
- *    `title="Back\\slash"`    -> title = Back\slash
+ *    `title="Say \"Hello\""` becomes `title = Say "Hello"`
+ *    `title="Back\\slash"` becomes `title = Back\slash`
  * 
  * 3. Multiple values for same attribute (e.g., hreflang):
  *    `<url>; rel="alternate"; hreflang="en"; hreflang="de"`
@@ -247,7 +268,7 @@ export function parseLinkHeader(header: string): LinkDefinition[] {
 
     const results: LinkDefinition[] = [];
     let state: State = State.BETWEEN_LINKS;
-    let currentLink: Partial<LinkDefinition> = {};
+    let currentLink: Partial<LinkDefinition> = createLinkAccumulator();
     let currentParamName = '';
     let currentParamValue = '';
     let currentUri = '';
@@ -285,7 +306,9 @@ export function parseLinkHeader(header: string): LinkDefinition[] {
             const decoded = decodeExtValue(value);
             if (decoded) {
                 currentLink.title = decoded.value;
-                currentLink.titleLang = decoded.language;
+                if (decoded.language !== undefined) {
+                    currentLink.titleLang = decoded.language;
+                }
                 currentLink['title*'] = value; // Store raw for round-trip
             } else {
                 // Decoding failed, store raw value
@@ -371,7 +394,7 @@ export function parseLinkHeader(header: string): LinkDefinition[] {
     const saveLink = () => {
         if (currentLink.href) {
             if (!currentLink.rel) {
-                currentLink = {};
+                currentLink = createLinkAccumulator();
                 currentUri = '';
                 return;
             }
@@ -385,7 +408,7 @@ export function parseLinkHeader(header: string): LinkDefinition[] {
                 });
             }
         }
-        currentLink = {};
+        currentLink = createLinkAccumulator();
         currentUri = '';
     };
 
