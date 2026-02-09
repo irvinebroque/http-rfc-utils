@@ -10,17 +10,34 @@ import type {
     DispositionParams,
     ParamOptions,
 } from './types.js';
-import { isEmptyHeader, splitQuotedValue, unquote, quoteIfNeeded } from './header-utils.js';
+import {
+    assertHeaderToken,
+    assertNoCtl,
+    isEmptyHeader,
+    parseKeyValueSegment,
+    splitQuotedValue,
+    unquote,
+    quoteIfNeeded,
+} from './header-utils.js';
 import {
     decodeExtValue,
     encodeExtValue,
     needsExtendedEncoding,
 } from './ext-value.js';
+import { createObjectMap } from './object-map.js';
 
 // Re-export ext-value functions for backward compatibility.
 // These were previously defined locally but are duplicates of ext-value.ts.
 // parseExtValue is an alias for decodeExtValue (same behavior).
 export { decodeExtValue as parseExtValue, encodeExtValue } from './ext-value.js';
+
+function assertDispositionParamName(name: string): void {
+    if (name.endsWith('*')) {
+        assertHeaderToken(name.slice(0, -1), `Content-Disposition parameter name "${name}"`);
+        return;
+    }
+    assertHeaderToken(name, `Content-Disposition parameter name "${name}"`);
+}
 
 /**
  * Parse Content-Disposition header.
@@ -37,17 +54,21 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
         return null;
     }
 
-    const params: Record<string, string> = {};
+    const params = createObjectMap<string>();
     let hasValidFilenameStar = false;
 
     for (let i = 1; i < parts.length; i++) {
-        const part = parts[i]!.trim();
-        if (!part) continue;
-        const eqIndex = part.indexOf('=');
-        if (eqIndex === -1) continue;
+        const item = parseKeyValueSegment(parts[i] ?? '');
+        if (!item) {
+            continue;
+        }
 
-        const key = part.slice(0, eqIndex).trim().toLowerCase();
-        const rawValue = part.slice(eqIndex + 1).trim();
+        if (!item.hasEquals) {
+            continue;
+        }
+
+        const key = item.key.trim().toLowerCase();
+        const rawValue = item.value ?? '';
         let value = unquote(rawValue);
         if (!key) {
             continue;
@@ -98,9 +119,14 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
  * @see https://www.rfc-editor.org/rfc/rfc8187.html#section-3.2
  */
 export function formatHeaderParam(value: string, options: ParamOptions = {}): string {
+    assertNoCtl(value, 'Content-Disposition parameter value');
     const shouldExtend = options.extended || needsExtendedEncoding(value);
     if (!shouldExtend) {
         return quoteIfNeeded(value);
+    }
+
+    if (options.language === undefined) {
+        return encodeExtValue(value);
     }
 
     return encodeExtValue(value, { language: options.language });
@@ -114,19 +140,22 @@ export function formatContentDisposition(
     type: string,
     params: DispositionParams = {}
 ): string {
+    assertHeaderToken(type, 'Content-Disposition type');
     const parts: string[] = [type];
 
     const filename = params.filename;
     const filenameStar = params.filenameStar;
 
     if (filename) {
+        assertNoCtl(filename, 'Content-Disposition filename');
         parts.push(`filename=${quoteIfNeeded(filename)}`);
     }
 
     if (filenameStar) {
+        assertNoCtl(filenameStar.value, 'Content-Disposition filename* value');
         const encoded = formatHeaderParam(filenameStar.value, {
             extended: true,
-            language: filenameStar.language,
+            ...(filenameStar.language !== undefined ? { language: filenameStar.language } : {}),
         });
         parts.push(`filename*=${encoded}`);
     }
@@ -139,15 +168,19 @@ export function formatContentDisposition(
             continue;
         }
 
+        assertDispositionParamName(key);
+
         if (typeof rawValue === 'string') {
+            assertNoCtl(rawValue, `Content-Disposition parameter "${key}" value`);
             parts.push(`${key}=${quoteIfNeeded(rawValue)}`);
             continue;
         }
 
         const keyWithStar = key.endsWith('*') ? key : `${key}*`;
+        assertNoCtl(rawValue.value, `Content-Disposition parameter "${keyWithStar}" value`);
         const encoded = formatHeaderParam(rawValue.value, {
             extended: true,
-            language: rawValue.language,
+            ...(rawValue.language !== undefined ? { language: rawValue.language } : {}),
         });
         parts.push(`${keyWithStar}=${encoded}`);
     }

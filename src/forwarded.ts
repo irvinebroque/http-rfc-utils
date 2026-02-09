@@ -4,7 +4,16 @@
  */
 
 import type { ForwardedElement } from './types.js';
-import { isEmptyHeader, splitQuotedValue, unquote, quoteIfNeeded } from './header-utils.js';
+import {
+    assertHeaderToken,
+    assertNoCtl,
+    isEmptyHeader,
+    splitAndParseKeyValueSegments,
+    splitQuotedValue,
+    unquote,
+    quoteIfNeeded,
+} from './header-utils.js';
+import { createObjectMap, hasOwnKey } from './object-map.js';
 
 /**
  * Parse Forwarded header into elements.
@@ -22,19 +31,19 @@ export function parseForwarded(header: string): ForwardedElement[] {
         const trimmed = part.trim();
         if (!trimmed) continue;
 
-        const pairs = splitQuotedValue(trimmed, ';');
+        const pairs = splitAndParseKeyValueSegments(trimmed, ';');
         const element: ForwardedElement = {};
-        const extensions: Record<string, string> = {};
+        const extensions = createObjectMap<string>();
 
         for (const pair of pairs) {
-            const segment = pair.trim();
-            if (!segment) continue;
+            if (!pair.hasEquals) continue;
 
-            const eqIndex = segment.indexOf('=');
-            if (eqIndex === -1) continue;
+            const key = pair.key.trim().toLowerCase();
+            if (!key) {
+                continue;
+            }
 
-            const key = segment.slice(0, eqIndex).trim().toLowerCase();
-            const rawValue = segment.slice(eqIndex + 1).trim();
+            const rawValue = pair.value ?? '';
             const value = unquote(rawValue);
 
             if (key === 'for') {
@@ -54,7 +63,7 @@ export function parseForwarded(header: string): ForwardedElement[] {
                     element.proto = value;
                 }
             } else if (key) {
-                if (!(key in extensions)) {
+                if (!hasOwnKey(extensions, key)) {
                     extensions[key] = value;
                 }
             }
@@ -79,20 +88,26 @@ export function formatForwarded(elements: ForwardedElement[]): string {
         const parts: string[] = [];
 
         if (element.for !== undefined) {
+            assertNoCtl(element.for, 'Forwarded for value');
             parts.push(`for=${quoteIfNeeded(element.for)}`);
         }
         if (element.by !== undefined) {
+            assertNoCtl(element.by, 'Forwarded by value');
             parts.push(`by=${quoteIfNeeded(element.by)}`);
         }
         if (element.host !== undefined) {
+            assertNoCtl(element.host, 'Forwarded host value');
             parts.push(`host=${quoteIfNeeded(element.host)}`);
         }
         if (element.proto !== undefined) {
+            assertNoCtl(element.proto, 'Forwarded proto value');
             parts.push(`proto=${quoteIfNeeded(element.proto)}`);
         }
 
         if (element.extensions) {
             for (const [key, value] of Object.entries(element.extensions)) {
+                assertHeaderToken(key, `Forwarded extension parameter name "${key}"`);
+                assertNoCtl(value, `Forwarded extension parameter "${key}" value`);
                 parts.push(`${key}=${quoteIfNeeded(value)}`);
             }
         }

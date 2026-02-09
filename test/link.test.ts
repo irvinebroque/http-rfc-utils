@@ -216,6 +216,28 @@ describe('formatLink', () => {
         });
         assert.equal(result, '<https://example.com?page=2&limit=10>; rel="next"');
     });
+
+    // RFC 9110 §5.5: serialized field values must reject CR/LF and CTLs.
+    it('rejects control bytes in href and parameter values', () => {
+        assert.throws(() => {
+            formatLink({ href: 'https://example.com\r\nInjected: 1', rel: 'next' });
+        }, /control characters/);
+
+        assert.throws(() => {
+            formatLink({ href: 'https://example.com', rel: 'next', title: 'ok\u0000bad' });
+        }, /control characters/);
+    });
+
+    // RFC 9110 §5.6.2: parameter names are tokens.
+    it('rejects invalid extension parameter names', () => {
+        assert.throws(() => {
+            formatLink({
+                href: 'https://example.com',
+                rel: 'next',
+                'bad key': 'value',
+            });
+        }, /valid header token/);
+    });
 });
 
 // RFC 8288 §3: Link header field-value formatting.

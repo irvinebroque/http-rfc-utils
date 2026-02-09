@@ -1,0 +1,7 @@
+# RFC 7033 JRD corpus seeds
+{"subject":"acct:bob@example.com"}
+{"subject":"acct:bob@example.com","aliases":["https://example.com/@bob"]}
+{"subject":"acct:bob@example.com","links":[{"rel":"self","href":"https://example.com/@bob"}]}
+{"subject":"acct:bob@example.com","properties":{"__proto__":"safe"}}
+{"links":[{"rel":"self"}]}
+{

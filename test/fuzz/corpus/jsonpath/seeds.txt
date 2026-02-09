@@ -1,0 +1,7 @@
+# RFC 9535 corpus seeds
+$
+$.store.book[*].author
+$..author
+$[?@.price < 10]
+$[?search(@.name, "(a+)+$")]
+$[01]

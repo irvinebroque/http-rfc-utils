@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     parseJrd,
+    tryParseJrd,
     formatJrd,
     validateJrd,
     matchResource,
@@ -64,6 +65,13 @@ describe('RFC 7033 WebFinger', () => {
             assert.throws(() => parseJrd('{}'), /subject/);
         });
 
+        // RFC 7033 §4.4 + security hardening: non-throwing parse path for untrusted input.
+        it('provides tryParseJrd for malformed or invalid JRD input', () => {
+            assert.equal(tryParseJrd('{'), null);
+            assert.equal(tryParseJrd('{}'), null);
+            assert.throws(() => parseJrd('{'));
+        });
+
         it('parses links with titles and properties', () => {
             const json = JSON.stringify({
                 subject: 'acct:test@example.com',
@@ -76,6 +84,17 @@ describe('RFC 7033 WebFinger', () => {
             const result = parseJrd(json);
             assert.equal(result.links?.[0].titles?.['en'], 'My Profile');
             assert.equal(result.links?.[0].properties?.['http://example.com/ns/verified'], 'true');
+        });
+
+        // Prototype-key hardening for dynamic property maps.
+        it('does not mutate prototypes when properties include __proto__', () => {
+            const baseline = ({} as { polluted?: string }).polluted;
+            const json = '{"subject":"acct:test@example.com","properties":{"__proto__":"safe"}}';
+
+            const result = parseJrd(json);
+
+            assert.equal(({} as { polluted?: string }).polluted, baseline);
+            assert.equal(result.properties?.['__proto__'], 'safe');
         });
     });
 

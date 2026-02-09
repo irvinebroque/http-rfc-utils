@@ -3,12 +3,27 @@ import assert from 'node:assert/strict';
 import {
     TOKEN_CHARS,
     QVALUE_REGEX,
+    assertNoCtl,
+    assertHeaderToken,
     isEmptyHeader,
     splitQuotedValue,
     splitListValue,
+    parseKeyValueSegment,
+    splitAndParseKeyValueSegments,
     unquote,
+    parseQuotedStringStrict,
+    escapeQuotedString,
+    quoteString,
     quoteIfNeeded,
     parseQValue,
+    parseQParameter,
+    parseUnsignedInteger,
+    parseDeltaSeconds,
+    parseQSegments,
+    getHeaderValue,
+    parseTypeAndSubtype,
+    parseMediaType,
+    formatMediaType,
 } from '../src/header-utils.js';
 
 // RFC 9110 §5.6.2: token character set.
@@ -54,6 +69,33 @@ describe('QVALUE_REGEX', () => {
         assert.ok(!QVALUE_REGEX.test('-0.5'));
         assert.ok(!QVALUE_REGEX.test('abc'));
         assert.ok(!QVALUE_REGEX.test('1.001'));
+    });
+});
+
+// RFC 9110 §5.5: field-content excludes CR/LF and other CTLs in serialized values.
+describe('assertNoCtl', () => {
+    it('accepts visible ASCII and HTAB', () => {
+        assert.doesNotThrow(() => assertNoCtl('hello\tworld', 'test'));
+    });
+
+    it('rejects CR/LF, NUL, and DEL', () => {
+        assert.throws(() => assertNoCtl('a\rb', 'test'), /control characters/);
+        assert.throws(() => assertNoCtl('a\nb', 'test'), /control characters/);
+        assert.throws(() => assertNoCtl('a\u0000b', 'test'), /control characters/);
+        assert.throws(() => assertNoCtl('a\u007fb', 'test'), /control characters/);
+    });
+});
+
+// RFC 9110 §5.6.2: header parameter names are tokens.
+describe('assertHeaderToken', () => {
+    it('accepts valid token names', () => {
+        assert.doesNotThrow(() => assertHeaderToken('x-custom', 'token'));
+        assert.doesNotThrow(() => assertHeaderToken('error_description', 'token'));
+    });
+
+    it('rejects invalid token names', () => {
+        assert.throws(() => assertHeaderToken('bad key', 'token'), /valid header token/);
+        assert.throws(() => assertHeaderToken('bad=key', 'token'), /valid header token/);
     });
 });
 
@@ -157,6 +199,34 @@ describe('splitListValue', () => {
     });
 });
 
+describe('parseKeyValueSegment', () => {
+    it('parses bare keys', () => {
+        assert.deepEqual(parseKeyValueSegment('max-age'), {
+            key: 'max-age',
+            value: undefined,
+            hasEquals: false,
+        });
+    });
+
+    it('parses key-value segments', () => {
+        assert.deepEqual(parseKeyValueSegment(' max-age = 60 '), {
+            key: 'max-age',
+            value: '60',
+            hasEquals: true,
+        });
+    });
+});
+
+describe('splitAndParseKeyValueSegments', () => {
+    it('splits and parses delimited segments', () => {
+        assert.deepEqual(splitAndParseKeyValueSegments('a=1; b; c=3', ';'), [
+            { key: 'a', value: '1', hasEquals: true },
+            { key: 'b', value: undefined, hasEquals: false },
+            { key: 'c', value: '3', hasEquals: true },
+        ]);
+    });
+});
+
 // RFC 9110 §5.6.4: quoted-string unescaping.
 describe('unquote', () => {
     it('unquotes a simple quoted string', () => {
@@ -206,6 +276,33 @@ describe('unquote', () => {
     });
 });
 
+describe('parseQuotedStringStrict', () => {
+    it('parses valid quoted strings', () => {
+        assert.equal(parseQuotedStringStrict('"hello"'), 'hello');
+        assert.equal(parseQuotedStringStrict('"say \\"hello\\""'), 'say "hello"');
+    });
+
+    it('rejects malformed quoted strings', () => {
+        assert.equal(parseQuotedStringStrict('hello'), null);
+        assert.equal(parseQuotedStringStrict('"unterminated'), null);
+        assert.equal(parseQuotedStringStrict('"dangling\\"'), null);
+        assert.equal(parseQuotedStringStrict('"a"b"'), null);
+    });
+});
+
+// RFC 9110 §5.6.4: quoted-string escaping helpers.
+describe('quoted-string helpers', () => {
+    it('escapeQuotedString escapes backslashes and double quotes', () => {
+        assert.equal(escapeQuotedString('say "hello"'), 'say \\"hello\\"');
+        assert.equal(escapeQuotedString('path\\file'), 'path\\\\file');
+    });
+
+    it('quoteString wraps escaped values in double quotes', () => {
+        assert.equal(quoteString('hello'), '"hello"');
+        assert.equal(quoteString('a"b'), '"a\\"b"');
+    });
+});
+
 // RFC 9110 §5.6.2, §5.6.4: token vs quoted-string formatting.
 describe('quoteIfNeeded', () => {
     it('returns token values unquoted', () => {
@@ -239,6 +336,14 @@ describe('quoteIfNeeded', () => {
     it('handles values with both quotes and backslashes', () => {
         assert.equal(quoteIfNeeded('a\\"b'), '"a\\\\\\"b"');
     });
+
+    // RFC 9110 §5.5: reject CTLs to prevent header injection.
+    it('rejects CR/LF and control bytes', () => {
+        assert.throws(() => quoteIfNeeded('a\rb'), /control characters/);
+        assert.throws(() => quoteIfNeeded('a\nb'), /control characters/);
+        assert.throws(() => quoteIfNeeded('a\u0000b'), /control characters/);
+        assert.throws(() => quoteIfNeeded('a\u007fb'), /control characters/);
+    });
 });
 
 // RFC 9110 §12.4.2: qvalue parsing.
@@ -265,5 +370,87 @@ describe('parseQValue', () => {
         assert.equal(parseQValue('-0.5'), null);
         assert.equal(parseQValue('abc'), null);
         assert.equal(parseQValue('1.001'), null);
+    });
+});
+
+describe('parseQParameter', () => {
+    it('parses valid q parameters', () => {
+        assert.equal(parseQParameter('q=0.5'), 0.5);
+        assert.equal(parseQParameter('Q=1.0'), 1);
+    });
+
+    it('returns undefined for non-q parameters', () => {
+        assert.equal(parseQParameter('level=1'), undefined);
+        assert.equal(parseQParameter('token'), undefined);
+    });
+
+    it('returns null for invalid q parameters', () => {
+        assert.equal(parseQParameter('q=2'), null);
+        assert.equal(parseQParameter('q=abc'), null);
+    });
+});
+
+describe('parseUnsignedInteger / parseDeltaSeconds', () => {
+    it('parses unsigned integers in reject mode', () => {
+        assert.equal(parseUnsignedInteger('42'), 42);
+        assert.equal(parseUnsignedInteger('-1'), null);
+    });
+
+    it('supports clamp mode', () => {
+        assert.equal(parseUnsignedInteger('9999', { mode: 'clamp', max: 100 }), 100);
+    });
+
+    it('parses delta-seconds with shared options', () => {
+        assert.equal(parseDeltaSeconds('60', { mode: 'reject' }), 60);
+        assert.equal(parseDeltaSeconds('abc', { mode: 'reject' }), null);
+    });
+});
+
+describe('parseQSegments', () => {
+    it('extracts q and first q index', () => {
+        assert.deepEqual(parseQSegments(['text/plain', 'level=1', 'q=0.7']), {
+            q: 0.7,
+            invalidQ: false,
+            firstQIndex: 2,
+        });
+    });
+
+    it('reports invalid q values', () => {
+        assert.deepEqual(parseQSegments(['text/plain', 'q=2']), {
+            q: 1,
+            invalidQ: true,
+            firstQIndex: null,
+        });
+    });
+});
+
+describe('getHeaderValue', () => {
+    it('resolves case-insensitive record lookups', () => {
+        const headers = { Accept: 'application/json' };
+        assert.equal(getHeaderValue(headers, 'accept'), 'application/json');
+    });
+});
+
+describe('media-type helpers', () => {
+    it('parses type/subtype with optional wildcard support', () => {
+        assert.deepEqual(parseTypeAndSubtype('text/plain'), { type: 'text', subtype: 'plain' });
+        assert.equal(parseTypeAndSubtype('*/json', { allowWildcard: true }), null);
+        assert.deepEqual(parseTypeAndSubtype('*/*', { allowWildcard: true }), { type: '*', subtype: '*' });
+    });
+
+    it('parses and formats media types with parameters', () => {
+        assert.deepEqual(parseMediaType('application/json; charset=utf-8; profile="a b"'), {
+            type: 'application',
+            subtype: 'json',
+            parameters: [
+                { name: 'charset', value: 'utf-8' },
+                { name: 'profile', value: 'a b' },
+            ],
+        });
+
+        assert.equal(
+            formatMediaType('Application', 'Json', [{ name: 'Charset', value: 'utf-8' }]),
+            'application/json;charset=utf-8'
+        );
     });
 });

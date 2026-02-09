@@ -3,10 +3,15 @@
  */
 
 import type { CorsOptions } from './types.js';
+import { assertHeaderToken, assertNoCtl } from './header-utils.js';
+import { mergeVary } from './headers.js';
 
 /**
  * Default CORS headers for permissive API access.
  * Used when no specific options are provided.
+ *
+ * WARNING: These defaults are intentionally permissive for local/dev use.
+ * Prefer `buildStrictCorsHeadersForOrigin` for production APIs.
  */
 export const defaultCorsHeaders: Record<string, string> = {
     'Access-Control-Allow-Origin': '*',
@@ -15,6 +20,20 @@ export const defaultCorsHeaders: Record<string, string> = {
     'Access-Control-Expose-Headers': 'ETag, Last-Modified, Link, X-Total-Count',
     'Access-Control-Max-Age': '86400',
 };
+
+const STRICT_CORS_DEFAULT_METHODS = ['GET', 'HEAD', 'OPTIONS'];
+const STRICT_CORS_DEFAULT_ALLOW_HEADERS = ['Content-Type', 'Accept'];
+const STRICT_CORS_DEFAULT_MAX_AGE = 600;
+
+function validateTokenList(values: string[], context: string): void {
+    for (const value of values) {
+        assertHeaderToken(value, `${context} "${value}"`);
+    }
+}
+
+function validateOriginValue(origin: string, context: string): void {
+    assertNoCtl(origin, context);
+}
 
 /**
  * Validate CORS options and throw if invalid.
@@ -26,6 +45,33 @@ function validateCorsOptions(options: CorsOptions): void {
             'CORS error: Cannot use wildcard or undefined origin with credentials. ' +
             'Specify explicit origin(s) when credentials is true.'
         );
+    }
+
+    if (typeof options.origin === 'string') {
+        validateOriginValue(options.origin, 'CORS origin');
+    }
+
+    if (Array.isArray(options.origin)) {
+        for (const origin of options.origin) {
+            if (origin === '*') {
+                throw new Error(
+                    'CORS error: Wildcard origin "*" is not allowed inside origin allowlists.'
+                );
+            }
+            validateOriginValue(origin, 'CORS origin');
+        }
+    }
+
+    if (options.methods !== undefined) {
+        validateTokenList(options.methods, 'CORS method');
+    }
+
+    if (options.allowHeaders !== undefined) {
+        validateTokenList(options.allowHeaders, 'CORS allow-header');
+    }
+
+    if (options.exposeHeaders !== undefined) {
+        validateTokenList(options.exposeHeaders, 'CORS expose-header');
     }
 }
 
@@ -92,6 +138,11 @@ export function buildCorsHeaders(options?: CorsOptions): Record<string, string> 
         headers['Access-Control-Expose-Headers'] = 'ETag, Last-Modified, Link, X-Total-Count';
     }
 
+    // Preserve caller-provided Vary values when provided.
+    if (options.vary !== undefined) {
+        headers['Vary'] = options.vary;
+    }
+
     // Handle credentials
     if (options.credentials) {
         headers['Access-Control-Allow-Credentials'] = 'true';
@@ -155,18 +206,7 @@ export function buildCorsHeadersForOrigin(
         origin: requestOrigin,
     });
 
-    if (headers['Vary']) {
-        const existing = headers['Vary']
-            .split(',')
-            .map(value => value.trim())
-            .filter(Boolean);
-        if (!existing.includes('Origin')) {
-            existing.push('Origin');
-        }
-        headers['Vary'] = existing.join(', ');
-    } else {
-        headers['Vary'] = 'Origin';
-    }
+    headers['Vary'] = mergeVary(headers['Vary'] ?? null, 'Origin');
 
     return headers;
 }
@@ -180,6 +220,8 @@ export function buildCorsHeadersForOrigin(
  * @returns true if origin is allowed
  */
 export function isOriginAllowed(requestOrigin: string, options?: CorsOptions): boolean {
+    assertNoCtl(requestOrigin, 'CORS request origin');
+
     if (!options || options.origin === undefined || options.origin === '*') {
         return true;
     }
@@ -197,4 +239,48 @@ export function isOriginAllowed(requestOrigin: string, options?: CorsOptions): b
  */
 export function corsHeaders(): Record<string, string> {
     return { ...defaultCorsHeaders };
+}
+
+/**
+ * Build strict CORS headers for production-facing APIs.
+ *
+ * - Requires an explicit allowlist.
+ * - Uses restrictive defaults unless overridden.
+ * - Echoes the request origin and adds `Vary: Origin`.
+ */
+export function buildStrictCorsHeadersForOrigin(
+    requestOrigin: string | null,
+    allowedOrigins: string[],
+    options: Omit<CorsOptions, 'origin'> = {}
+): Record<string, string> {
+    if (allowedOrigins.length === 0) {
+        throw new Error('CORS error: Strict CORS requires at least one allowed origin.');
+    }
+
+    for (const origin of allowedOrigins) {
+        if (origin === '*') {
+            throw new Error('CORS error: Strict CORS does not allow wildcard origins.');
+        }
+        validateOriginValue(origin, 'CORS allowlist origin');
+    }
+
+    if (requestOrigin !== null) {
+        validateOriginValue(requestOrigin, 'CORS request origin');
+    }
+
+    const strictOptions: CorsOptions = {
+        origin: allowedOrigins,
+        methods: options.methods ?? STRICT_CORS_DEFAULT_METHODS,
+        allowHeaders: options.allowHeaders ?? STRICT_CORS_DEFAULT_ALLOW_HEADERS,
+        exposeHeaders: options.exposeHeaders ?? [],
+        credentials: options.credentials ?? false,
+        maxAge: options.maxAge ?? STRICT_CORS_DEFAULT_MAX_AGE,
+    };
+
+    const headers = buildCorsHeadersForOrigin(requestOrigin, strictOptions);
+    if (headers['Access-Control-Expose-Headers'] === '') {
+        delete headers['Access-Control-Expose-Headers'];
+    }
+
+    return headers;
 }

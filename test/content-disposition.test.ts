@@ -56,6 +56,24 @@ describe('Content-Disposition (RFC 6266 Section 4, RFC 8187 Section 3.2)', () =>
         const value = formatHeaderParam('\u20ac rates');
         assert.equal(value, "UTF-8''%E2%82%AC%20rates");
     });
+
+    // RFC 9110 §5.5: reject CR/LF and CTLs in serialized header values.
+    it('rejects control bytes when formatting', () => {
+        assert.throws(() => {
+            formatContentDisposition('attachment', { filename: 'evil\r\nname.txt' });
+        }, /control characters/);
+    });
+
+    // RFC 9110 §5.6.2: disposition type and parameter names are tokens.
+    it('rejects invalid token names when formatting', () => {
+        assert.throws(() => {
+            formatContentDisposition('bad type', { filename: 'ok.txt' });
+        }, /valid header token/);
+
+        assert.throws(() => {
+            formatContentDisposition('attachment', { 'bad key': 'value' });
+        }, /valid header token/);
+    });
 });
 
 // RFC 8187 Section 3.2.1: ext-value parsing
@@ -68,7 +86,7 @@ describe('parseExtValue (RFC 8187 Section 3.2.1)', () => {
     // RFC 8187 Section 3.2.3: Example without language
     it('parses without language (RFC 8187 Section 3.2.3 example)', () => {
         const result = parseExtValue("UTF-8''%c2%a3%20and%20%e2%82%ac%20rates");
-        assert.deepEqual(result, { charset: 'utf-8', language: undefined, value: '£ and € rates' });
+        assert.deepEqual(result, { charset: 'utf-8', value: '£ and € rates' });
     });
 
     // RFC 8187 Section 3.2.1: charset and language are case-insensitive
@@ -134,7 +152,7 @@ describe('parseExtValue (RFC 8187 Section 3.2.1)', () => {
 
     it('handles empty value', () => {
         const result = parseExtValue("utf-8''");
-        assert.deepEqual(result, { charset: 'utf-8', language: undefined, value: '' });
+        assert.deepEqual(result, { charset: 'utf-8', value: '' });
     });
 
     it('handles plain ASCII without encoding', () => {

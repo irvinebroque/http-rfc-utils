@@ -8,7 +8,7 @@ import {
 describe('Strict-Transport-Security (RFC 6797 Section 6.1)', () => {
     it('parses max-age (RFC 6797 Section 6.1.1)', () => {
         const parsed = parseStrictTransportSecurity('max-age=31536000');
-        assert.deepEqual(parsed, { maxAge: 31536000, includeSubDomains: undefined });
+        assert.deepEqual(parsed, { maxAge: 31536000 });
     });
 
     it('rejects quoted max-age (RFC 6797 Section 6.1.1)', () => {
@@ -38,7 +38,7 @@ describe('Strict-Transport-Security (RFC 6797 Section 6.1)', () => {
 
     it('ignores unknown directives when otherwise valid (RFC 6797 Section 6.1)', () => {
         const parsed = parseStrictTransportSecurity('max-age=60; preload');
-        assert.deepEqual(parsed, { maxAge: 60, includeSubDomains: undefined });
+        assert.deepEqual(parsed, { maxAge: 60 });
     });
 
     it('accepts case-insensitive directive names (RFC 6797 Section 6.1)', () => {

@@ -8,7 +8,7 @@ import {
     serializeSfList,
     serializeSfDict,
 } from '../src/structured-fields.js';
-import { SfDate, SfToken } from '../src/types.js';
+import { SfDate, SfDisplayString, SfToken } from '../src/types.js';
 
 describe('Structured Fields (RFC 8941 Section 3)', () => {
     it('parses bare item types (RFC 8941 Section 3.3)', () => {
@@ -268,6 +268,54 @@ describe('Structured Fields Date type (RFC 9651 Section 3.3.7)', () => {
         assert.strictEqual(parsed.length, 2);
         assert.ok((parsed[0] as { value: unknown }).value instanceof SfDate);
         assert.ok((parsed[1] as { value: unknown }).value instanceof SfDate);
+    });
+});
+
+describe('Structured Fields Display String (RFC 9651 Section 3.3.8)', () => {
+    // RFC 9651 §4.2.10: Display String parses from %"..." and UTF-8 percent triplets.
+    it('parses and round-trips non-ASCII Display String', () => {
+        const parsed = parseSfItem('%"f%c3%bc"');
+        assert.ok(parsed);
+        assert.ok(parsed.value instanceof SfDisplayString);
+        assert.equal(parsed.value.value, 'fü');
+
+        const serialized = serializeSfItem(parsed);
+        assert.equal(serialized, '%"f%c3%bc"');
+    });
+
+    // RFC 9651 §4.1.11: Serializer percent-encodes DQUOTE and percent octets.
+    it('serializes Display String with ASCII escapes using lowercase hex', () => {
+        const serialized = serializeSfItem({ value: new SfDisplayString('foo "bar" %') });
+        assert.equal(serialized, '%"foo %22bar%22 %25"');
+    });
+
+    // RFC 9651 §4.2.10: pct-encoded requires lowercase hex digits.
+    it('rejects Display String with uppercase pct-encoded hex', () => {
+        assert.equal(parseSfItem('%"%C3%BC"'), null);
+    });
+
+    // RFC 9651 §4.2.10: Invalid UTF-8 decode fails parsing.
+    it('rejects Display String with invalid UTF-8 sequence', () => {
+        assert.equal(parseSfItem('%"%c3%28"'), null);
+    });
+
+    // RFC 9651 §4.2 + §4.2.10: Parse failure in one list member fails whole field.
+    it('fails whole list when one member has invalid Display String', () => {
+        assert.equal(parseSfList('1, %"%C3%BC", 2'), null);
+    });
+
+    // RFC 9651 §4.2 + §4.2.10: Parse failure in one dictionary member fails whole field.
+    it('fails whole dictionary when one member has invalid Display String', () => {
+        assert.equal(parseSfDict('a=1, b=%"%C3%BC"'), null);
+    });
+
+    // RFC 9652 §2 + RFC 9651 §3.3.8: Link-Template target attributes can use Display String.
+    it('parses Display String parameter values in list members', () => {
+        const parsed = parseSfList('"/author";title=%"Bj%c3%b6rn J%c3%a4rnsida"');
+        assert.ok(parsed);
+        const first = parsed[0] as { params?: Record<string, unknown> };
+        assert.ok(first.params?.title instanceof SfDisplayString);
+        assert.equal((first.params?.title as SfDisplayString).value, 'Björn Järnsida');
     });
 });
 

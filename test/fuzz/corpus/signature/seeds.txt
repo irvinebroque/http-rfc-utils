@@ -1,0 +1,5 @@
+# RFC 9421 Signature seeds
+sig1=:YmFzZTY0ZW5jb2RlZA==:
+sig1=:YWJj:, sig2=:ZGVm:
+sig1="not-bytes"
+sig1=("a" "b")

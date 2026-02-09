@@ -60,4 +60,18 @@ describe('Prefer Headers (RFC 7240 Sections 2-3)', () => {
         const param = parsed.get('foo')?.params.find(p => p.key === 'bar');
         assert.equal(param?.value, undefined);
     });
+
+    // RFC 9110 §5.5: reject CR/LF and CTLs in serialized field values.
+    it('rejects control bytes in formatter values', () => {
+        assert.throws(() => {
+            formatPrefer([{ token: 'wait', value: '1\n2', params: [] }]);
+        }, /control characters/);
+    });
+
+    // RFC 9110 §5.6.2: preference tokens and parameter keys are tokens.
+    it('rejects invalid token names in formatter output', () => {
+        assert.throws(() => {
+            formatPrefer([{ token: 'bad token', params: [] }]);
+        }, /valid header token/);
+    });
 });

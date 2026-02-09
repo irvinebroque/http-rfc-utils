@@ -5,6 +5,7 @@
  */
 
 import type { SecurityTxt, SecurityTxtIssue } from './types.js';
+import { createObjectMap, pushObjectMapArrayValue } from './object-map.js';
 
 export type { SecurityTxt, SecurityTxtIssue } from './types.js';
 
@@ -39,7 +40,7 @@ export function parseSecurityTxt(text: string): SecurityTxt {
     const canonical: string[] = [];
     const policy: string[] = [];
     const hiring: string[] = [];
-    const extensions: Record<string, string[]> = {};
+    const extensions = createObjectMap<string[]>();
 
     for (const rawLine of lines) {
         // RFC 9116 §3: Strip comments.
@@ -91,10 +92,7 @@ export function parseSecurityTxt(text: string): SecurityTxt {
                 break;
             default:
                 if (!KNOWN_FIELDS.has(field)) {
-                    if (!extensions[field]) {
-                        extensions[field] = [];
-                    }
-                    extensions[field].push(value);
+                    pushObjectMapArrayValue(extensions, field, value);
                 }
                 break;
         }

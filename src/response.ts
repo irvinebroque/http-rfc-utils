@@ -1,30 +1,64 @@
 /**
  * Response builders for common HTTP patterns.
- * RFC 9110 §8.8.2/§8.8.3, RFC 9111 §5.2.2, RFC 8288 §3, RFC 6266 §4.
+ * RFC 9110 §8.8.2/§8.8.3, RFC 9111 §5.2.2, RFC 8288 §3, RFC 6266 §4, RFC 5789 §3.1.
  */
 
-import type { PaginatedMeta, PaginationLinks, CacheOptions } from './types.js';
-import { toRFC3339, formatHTTPDate } from './datetime.js';
+import type { PaginatedMeta, PaginationLinks, CacheOptions, OptionsResponseOptions } from './types.js';
+import { formatHTTPDate } from './datetime.js';
 import { defaultCorsHeaders } from './cors.js';
 import { cacheControl, CachePresets } from './cache.js';
 import { buildLinkHeader } from './link.js';
 import { toCSV } from './negotiate.js';
+import { formatAcceptPatch } from './patch.js';
+import { assertHeaderToken, assertNoCtl } from './header-utils.js';
+
+function sanitizeHeaderRecord(headers: Record<string, string>, context: string): Record<string, string> {
+    const sanitized: Record<string, string> = {};
+    for (const [name, value] of Object.entries(headers)) {
+        assertHeaderToken(name, `${context} header name "${name}"`);
+        assertNoCtl(value, `${context} header "${name}" value`);
+        sanitized[name] = value;
+    }
+    return sanitized;
+}
 
 /**
  * Create an OPTIONS response for preflight requests.
  * 
  * @param allowedMethods - Array of allowed HTTP methods (default: ['GET', 'HEAD', 'OPTIONS'])
+ * @param options - Optional OPTIONS metadata headers
  * @returns Response with 204 No Content and appropriate headers
  */
-export function optionsResponse(allowedMethods: string[] = ['GET', 'HEAD', 'OPTIONS']): Response {
-    const methods = allowedMethods.join(', ');
+// RFC 5789 §3.1: when provided, Accept-Patch advertises PATCH document formats.
+export function optionsResponse(
+    allowedMethods: string[] = ['GET', 'HEAD', 'OPTIONS'],
+    options: OptionsResponseOptions = {}
+): Response {
+    const methodSet = new Set(allowedMethods);
+    if (options.acceptPatch && options.acceptPatch.length > 0) {
+        methodSet.add('PATCH');
+    }
+
+    for (const method of methodSet) {
+        assertHeaderToken(method, `Allow method "${method}"`);
+    }
+
+    const methods = Array.from(methodSet).join(', ');
+    const headers: Record<string, string> = {
+        ...defaultCorsHeaders,
+        'Allow': methods,
+        'Access-Control-Allow-Methods': methods,
+    };
+
+    if (options.acceptPatch && options.acceptPatch.length > 0) {
+        headers['Accept-Patch'] = formatAcceptPatch(options.acceptPatch);
+    }
+
+    const sanitizedHeaders = sanitizeHeaderRecord(headers, 'optionsResponse');
+
     return new Response(null, {
         status: 204,
-        headers: {
-            ...defaultCorsHeaders,
-            'Allow': methods,
-            'Access-Control-Allow-Methods': methods,
-        },
+        headers: sanitizedHeaders,
     });
 }
 
@@ -35,12 +69,14 @@ export function optionsResponse(allowedMethods: string[] = ['GET', 'HEAD', 'OPTI
  * @returns Response with 200 OK and headers, empty body
  */
 export function headResponse(headers: Record<string, string>): Response {
+    const sanitizedHeaders = sanitizeHeaderRecord({
+        ...defaultCorsHeaders,
+        ...headers,
+    }, 'headResponse');
+
     return new Response(null, {
         status: 200,
-        headers: {
-            ...defaultCorsHeaders,
-            ...headers,
-        },
+        headers: sanitizedHeaders,
     });
 }
 
@@ -66,7 +102,7 @@ export function headResponse(headers: Record<string, string>): Response {
  * - All CORS headers
  *
  * Response body shape:
- * { data, meta }
+ * `{ data, meta }`
 */
 // RFC 9110 §8.8.2/§8.8.3, RFC 9111 §5.2.2, RFC 8288 §3: Validators, Cache-Control, Link.
 export function jsonResponse<T>(
@@ -92,9 +128,11 @@ export function jsonResponse<T>(
         headers['Link'] = linkHeader;
     }
 
+    const sanitizedHeaders = sanitizeHeaderRecord(headers, 'jsonResponse');
+
     return new Response(JSON.stringify({ data, meta }), {
         status: 200,
-        headers,
+        headers: sanitizedHeaders,
     });
 }
 
@@ -143,9 +181,11 @@ export function csvResponse<T extends Record<string, unknown>>(
         headers['Link'] = linkHeader;
     }
 
+    const sanitizedHeaders = sanitizeHeaderRecord(headers, 'csvResponse');
+
     return new Response(toCSV(data), {
         status: 200,
-        headers,
+        headers: sanitizedHeaders,
     });
 }
 
@@ -157,12 +197,16 @@ export function csvResponse<T extends Record<string, unknown>>(
  * @returns Redirect response
  */
 export function redirectResponse(url: string, status: 301 | 302 | 303 | 307 | 308 = 302): Response {
+    assertNoCtl(url, 'Location header value');
+
+    const headers = sanitizeHeaderRecord({
+        ...defaultCorsHeaders,
+        'Location': url,
+    }, 'redirectResponse');
+
     return new Response(null, {
         status,
-        headers: {
-            ...defaultCorsHeaders,
-            'Location': url,
-        },
+        headers,
     });
 }
 
@@ -197,9 +241,11 @@ export function simpleJsonResponse<T>(
         headers['Last-Modified'] = formatHTTPDate(lastModified);
     }
 
+    const sanitizedHeaders = sanitizeHeaderRecord(headers, 'simpleJsonResponse');
+
     return new Response(JSON.stringify(data), {
         status: 200,
-        headers,
+        headers: sanitizedHeaders,
     });
 }
 
@@ -210,11 +256,13 @@ export function simpleJsonResponse<T>(
  * @returns Response with no body
  */
 export function noContentResponse(status: 200 | 201 | 204 = 204): Response {
+    const headers = sanitizeHeaderRecord({
+        ...defaultCorsHeaders,
+    }, 'noContentResponse');
+
     return new Response(null, {
         status,
-        headers: {
-            ...defaultCorsHeaders,
-        },
+        headers,
     });
 }
 
@@ -226,11 +274,13 @@ export function noContentResponse(status: 200 | 201 | 204 = 204): Response {
  * @returns Response with text body
  */
 export function textResponse(text: string, contentType: string = 'text/plain; charset=utf-8'): Response {
+    const headers = sanitizeHeaderRecord({
+        ...defaultCorsHeaders,
+        'Content-Type': contentType,
+    }, 'textResponse');
+
     return new Response(text, {
         status: 200,
-        headers: {
-            ...defaultCorsHeaders,
-            'Content-Type': contentType,
-        },
+        headers,
     });
 }

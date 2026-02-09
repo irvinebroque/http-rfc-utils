@@ -5,19 +5,14 @@
  */
 
 import type { StrictTransportSecurityOptions } from './types.js';
-import { TOKEN_CHARS, isEmptyHeader, splitQuotedValue, unquote } from './header-utils.js';
-
-/**
- * Unquote strictly - returns null if not a valid quoted string.
- * Used for HSTS directive values where unquoted values are expected.
- */
-function unquoteStrict(value: string): string | null {
-    const trimmed = value.trim();
-    if (!trimmed.startsWith('"') || !trimmed.endsWith('"') || trimmed.length < 2) {
-        return null;
-    }
-    return unquote(trimmed);
-}
+import {
+    TOKEN_CHARS,
+    isEmptyHeader,
+    parseDeltaSeconds,
+    parseKeyValueSegment,
+    parseQuotedStringStrict,
+    splitQuotedValue,
+} from './header-utils.js';
 
 function parseDirectiveValue(value: string): string | null {
     const trimmed = value.trim();
@@ -26,7 +21,7 @@ function parseDirectiveValue(value: string): string | null {
     }
 
     if (trimmed.startsWith('"')) {
-        return unquoteStrict(trimmed);
+        return parseQuotedStringStrict(trimmed);
     }
 
     if (!TOKEN_CHARS.test(trimmed)) {
@@ -51,13 +46,12 @@ export function parseStrictTransportSecurity(header: string): StrictTransportSec
     let includeSubDomains = false;
 
     for (const directive of directives) {
-        const trimmed = directive.trim();
-        if (!trimmed) {
+        const parsedDirective = parseKeyValueSegment(directive);
+        if (!parsedDirective) {
             continue;
         }
 
-        const eqIndex = trimmed.indexOf('=');
-        const name = (eqIndex === -1 ? trimmed : trimmed.slice(0, eqIndex)).trim();
+        const name = parsedDirective.key.trim();
         if (!name || !TOKEN_CHARS.test(name)) {
             return null;
         }
@@ -68,7 +62,7 @@ export function parseStrictTransportSecurity(header: string): StrictTransportSec
         }
         seen.add(lowerName);
 
-        if (eqIndex === -1) {
+        if (!parsedDirective.hasEquals) {
             if (lowerName === 'includesubdomains') {
                 includeSubDomains = true;
             } else if (lowerName === 'max-age') {
@@ -77,7 +71,7 @@ export function parseStrictTransportSecurity(header: string): StrictTransportSec
             continue;
         }
 
-        const rawValue = trimmed.slice(eqIndex + 1).trim();
+        const rawValue = (parsedDirective.value ?? '').trim();
         // RFC 6797 §6.1.1: max-age-value is delta-seconds (1*DIGIT), not a quoted-string.
         if (lowerName === 'max-age' && rawValue.startsWith('"')) {
             return null;
@@ -88,11 +82,8 @@ export function parseStrictTransportSecurity(header: string): StrictTransportSec
         }
 
         if (lowerName === 'max-age') {
-            if (!/^\d+$/.test(value)) {
-                return null;
-            }
-            const parsed = Number(value);
-            if (!Number.isFinite(parsed)) {
+            const parsed = parseDeltaSeconds(value, { mode: 'reject', requireSafeInteger: false });
+            if (parsed === null) {
                 return null;
             }
             maxAge = parsed;
@@ -105,10 +96,12 @@ export function parseStrictTransportSecurity(header: string): StrictTransportSec
         return null;
     }
 
-    return {
-        maxAge,
-        includeSubDomains: includeSubDomains ? true : undefined,
-    };
+    const parsed: StrictTransportSecurityOptions = { maxAge };
+    if (includeSubDomains) {
+        parsed.includeSubDomains = true;
+    }
+
+    return parsed;
 }
 
 /**

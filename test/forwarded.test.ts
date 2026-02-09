@@ -30,4 +30,18 @@ describe('Forwarded Header (RFC 7239 Section 4)', () => {
         ]);
         assert.equal(formatted, 'for="[2001:db8:cafe::17]:4711";proto=https');
     });
+
+    // RFC 9110 §5.5: reject CR/LF and CTLs in serialized field values.
+    it('rejects control bytes when formatting', () => {
+        assert.throws(() => {
+            formatForwarded([{ for: '192.0.2.43\r\nInjected: true' }]);
+        }, /control characters/);
+    });
+
+    // RFC 9110 §5.6.2: extension parameter names are tokens.
+    it('rejects invalid extension parameter names when formatting', () => {
+        assert.throws(() => {
+            formatForwarded([{ extensions: { 'bad key': 'value' } }]);
+        }, /valid header token/);
+    });
 });

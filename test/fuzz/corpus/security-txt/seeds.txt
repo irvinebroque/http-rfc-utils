@@ -1,0 +1,9 @@
+# RFC 9116 security.txt corpus seeds
+Contact: mailto:security@example.com
+Expires: 2027-01-31T23:59:59.000Z
+Preferred-Languages: en, fr
+Canonical: https://example.com/.well-known/security.txt
+Contact: mailto:security@example.com # inline comment
+Contact: https://example.com/security
+__proto__: polluted
+Expires: invalid-date

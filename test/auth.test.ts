@@ -83,6 +83,23 @@ describe('Bearer Authentication (RFC 6750 Section 2.1)', () => {
             'Bearer realm="example", error="invalid_token", error_description="expired"'
         );
     });
+
+    // RFC 9110 §5.5: reject CR/LF and CTLs in serialized auth parameters.
+    it('rejects control bytes in Bearer challenge formatting', () => {
+        assert.throws(() => {
+            formatBearerChallenge({ realm: 'example\r\nInjected: true' });
+        }, /control characters/);
+    });
+
+    // RFC 9110 §5.6.2: auth parameter names are tokens.
+    it('rejects invalid extension parameter names in Bearer challenge formatting', () => {
+        assert.throws(() => {
+            formatBearerChallenge({
+                realm: 'example',
+                params: { 'bad key': 'value' },
+            });
+        }, /valid header token/);
+    });
 });
 
 describe('WWW-Authenticate parsing (RFC 7235 Section 2.1)', () => {
@@ -464,6 +481,29 @@ describe('Digest Authentication (RFC 7616)', () => {
 
     // RFC 7616 §3.4.1: Response computation
     describe('Response computation (RFC 7616 §3.4.1)', () => {
+        it('uses SHA-256 by default when algorithm is omitted', async () => {
+            const input = {
+                username: 'Mufasa',
+                password: 'Circle of Life',
+                realm: 'http-auth@example.org',
+                method: 'GET',
+                uri: '/dir/index.html',
+                nonce: '7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v',
+                cnonce: 'f2/wE4q74E6zIJEtWaHKaf5wv/H5QzzpXusqGemxURZJ',
+                nc: '00000001',
+                qop: 'auth' as const,
+            };
+
+            const withDefault = await computeDigestResponse(input);
+            const explicitSha256 = await computeDigestResponse({
+                ...input,
+                algorithm: 'SHA-256',
+            });
+
+            assert.equal(withDefault, explicitSha256);
+            assert.equal(withDefault.length, 64);
+        });
+
         it('computes response with qop=auth using MD5', async () => {
             // Example from RFC 7616 §3.9.1 (adapted)
             const response = await computeDigestResponse({

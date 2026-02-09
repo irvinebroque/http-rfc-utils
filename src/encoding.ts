@@ -4,7 +4,7 @@
  */
 
 import type { EncodingRange } from './types.js';
-import { isEmptyHeader, splitListValue, parseQValue } from './header-utils.js';
+import { isEmptyHeader, parseQSegments, splitListValue } from './header-utils.js';
 
 /**
  * Parse an Accept-Encoding header into ranges.
@@ -23,27 +23,12 @@ export function parseAcceptEncoding(header: string): EncodingRange[] {
         const encoding = segments[0]?.toLowerCase();
         if (!encoding) continue;
 
-        let q = 1.0;
-        let invalidQ = false;
-        for (let i = 1; i < segments.length; i++) {
-            const segment = segments[i]!;
-            const eqIndex = segment.indexOf('=');
-            if (eqIndex === -1) continue;
-            const key = segment.slice(0, eqIndex).trim().toLowerCase();
-            if (key !== 'q') continue;
-            const parsed = parseQValue(segment.slice(eqIndex + 1).trim());
-            if (parsed === null) {
-                invalidQ = true;
-                break;
-            }
-            q = parsed;
-        }
-
-        if (invalidQ) {
+        const qParts = parseQSegments(segments, 1);
+        if (qParts.invalidQ) {
             continue;
         }
 
-        ranges.push({ encoding, q });
+        ranges.push({ encoding, q: qParts.q });
     }
 
     ranges.sort((a, b) => b.q - a.q);

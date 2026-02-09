@@ -9,8 +9,9 @@
  * RFC 6901 §4: Decode ~1 to / first, then ~0 to ~.
  * Order matters to avoid ~01 becoming / instead of ~1.
  */
+import { pushPercentEncodedByte } from './internal-percent-encoding.js';
+
 const URI_FRAGMENT_ENCODER = new TextEncoder();
-const HEX_UPPER = '0123456789ABCDEF';
 
 function decodeToken(token: string): string {
     // RFC 6901 §4: first ~1 → /, then ~0 → ~
@@ -131,9 +132,9 @@ export function formatJsonPointer(tokens: string[]): string {
  * @returns Referenced value, or undefined if not found
  *
  * @example
- * evaluateJsonPointer('/foo/0', { foo: ['bar'] })  // 'bar'
- * evaluateJsonPointer('/missing', { foo: 1 })      // undefined
- * evaluateJsonPointer('', { foo: 1 })              // { foo: 1 }
+ * `evaluateJsonPointer('/foo/0', { foo: ['bar'] })`  // 'bar'
+ * `evaluateJsonPointer('/missing', { foo: 1 })`      // undefined
+ * `evaluateJsonPointer('', { foo: 1 })`              // returns the input document
  *
  * @see https://www.rfc-editor.org/rfc/rfc6901.html#section-4
  */
@@ -234,7 +235,7 @@ export function toUriFragment(pointer: string): string {
             // Percent-encode everything else
             const bytes = URI_FRAGMENT_ENCODER.encode(char);
             for (const byte of bytes) {
-                parts.push('%', HEX_UPPER[(byte >> 4) & 0x0f]!, HEX_UPPER[byte & 0x0f]!);
+                pushPercentEncodedByte(parts, byte);
             }
         }
     }

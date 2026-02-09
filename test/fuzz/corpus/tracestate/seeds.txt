@@ -1,0 +1,6 @@
+# W3C Trace Context tracestate seeds
+rojo=00f067aa0ba902b7
+rojo=1,congo=t61rcWkgMzE
+tenant@sys=value
+rojo=1,rojo=2
+rojo=1,,congo=2

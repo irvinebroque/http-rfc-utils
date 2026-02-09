@@ -1,0 +1,12 @@
+# RFC 8941 + RFC 9651 corpus seeds
+token
+?1
+?0
+"hello"
+"escaped \\\"quote\\\""
+foo=1
+foo="bar",baz=?0
+foo=("a" "b")
+@1618884473
+%"hello%20world"
+invalid, trailing,

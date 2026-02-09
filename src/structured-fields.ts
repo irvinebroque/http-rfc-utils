@@ -1,18 +1,22 @@
 /**
  * Structured Field Values per RFC 8941 + RFC 9651.
  * RFC 8941 §3, §4.
- * RFC 9651 §3.3.7, §4.1.10 (Date type).
+ * RFC 9651 §3.3.7, §3.3.8, §4.1.10, §4.1.11, §4.2.10.
  * @see https://www.rfc-editor.org/rfc/rfc9651.html
  */
 
 import { Buffer } from 'node:buffer';
-import { SfDate, SfToken } from './types.js';
+import { SfDate, SfDisplayString, SfToken } from './types.js';
 import type { SfBareItem, SfItem, SfInnerList, SfList, SfDictionary } from './types.js';
 
 // RFC 8941 §3.3.4: sf-token allows ALPHA (case-insensitive), digits, and tchar plus : and /
 const TOKEN_RE = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:\/]*$/;
 const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const KEY_RE = /^[a-z*][a-z0-9_\-\.\*]*$/;
+const LOWER_HEX_RE = /^[0-9a-f]{2}$/;
+
+const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
+const UTF8_ENCODER = new TextEncoder();
 
 function isKeyChar(char: string): boolean {
     const code = char.charCodeAt(0);
@@ -268,6 +272,10 @@ class Parser {
         if (char === '@') {
             return this.parseDate();
         }
+        // RFC 9651 §4.2.3.1: Display String bare item starts with '%'.
+        if (char === '%') {
+            return this.parseDisplayString();
+        }
         if (char === '-' || (char >= '0' && char <= '9')) {
             return this.parseNumber();
         }
@@ -286,6 +294,45 @@ class Parser {
             return null;
         }
         return new SfDate(intValue);
+    }
+
+    // RFC 9651 §4.2.10: Display String bare item.
+    private parseDisplayString(): SfDisplayString | null {
+        if (this.consume() !== '%' || this.consume() !== '"') {
+            return null;
+        }
+
+        const bytes: number[] = [];
+        while (!this.eof()) {
+            const char = this.consume();
+            const code = char.charCodeAt(0);
+
+            if (code < 0x20 || code > 0x7E) {
+                return null;
+            }
+
+            if (char === '%') {
+                const octetHex = this.input.slice(this.index, this.index + 2);
+                if (octetHex.length < 2 || !LOWER_HEX_RE.test(octetHex)) {
+                    return null;
+                }
+                this.index += 2;
+                bytes.push(Number.parseInt(octetHex, 16));
+                continue;
+            }
+
+            if (char === '"') {
+                try {
+                    return new SfDisplayString(UTF8_DECODER.decode(new Uint8Array(bytes)));
+                } catch {
+                    return null;
+                }
+            }
+
+            bytes.push(code);
+        }
+
+        return null;
     }
 
     private parseInteger(): number | null {
@@ -560,6 +607,24 @@ function serializeBareItem(value: SfBareItem): string {
         return value.value;
     }
 
+    // RFC 9651 §4.1.11: Display String serialization.
+    if (value instanceof SfDisplayString) {
+        if (hasLoneSurrogate(value.value)) {
+            throw new Error('Invalid display string value for structured field');
+        }
+
+        const bytes = UTF8_ENCODER.encode(value.value);
+        let encoded = '%"';
+        for (const byte of bytes) {
+            if (byte === 0x25 || byte === 0x22 || byte < 0x20 || byte > 0x7E) {
+                encoded += `%${byte.toString(16).padStart(2, '0')}`;
+            } else {
+                encoded += String.fromCharCode(byte);
+            }
+        }
+        return `${encoded}"`;
+    }
+
     for (let i = 0; i < value.length; i++) {
         const code = value.charCodeAt(i);
         if (code < 0x20 || code > 0x7E) {
@@ -569,6 +634,26 @@ function serializeBareItem(value: SfBareItem): string {
 
     const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     return `"${escaped}"`;
+}
+
+function hasLoneSurrogate(value: string): boolean {
+    for (let i = 0; i < value.length; i++) {
+        const code = value.charCodeAt(i);
+        if (code >= 0xD800 && code <= 0xDBFF) {
+            const next = value.charCodeAt(i + 1);
+            if (next < 0xDC00 || next > 0xDFFF) {
+                return true;
+            }
+            i++;
+            continue;
+        }
+
+        if (code >= 0xDC00 && code <= 0xDFFF) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function serializeParams(params?: Record<string, SfBareItem>): string {

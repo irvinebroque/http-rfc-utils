@@ -20,6 +20,7 @@ import type {
     ApiCatalogApi,
 } from './types.js';
 import { parseLinkHeader, formatLink } from './link.js';
+import { createObjectMap } from './object-map.js';
 
 // RFC 9264 §4.2: Linkset JSON media type.
 export const LINKSET_MEDIA_TYPE = 'application/linkset+json';
@@ -207,7 +208,7 @@ export function formatLinksetJson(
         // Each link gets its own context object
         const contexts: LinksetContext[] = links.map((link) => {
             const target = linkDefinitionToTarget(link);
-            const context: LinksetContext = {};
+            const context = createObjectMap<LinksetTarget[] | string | undefined>() as LinksetContext;
 
             if (link.anchor) {
                 context.anchor = link.anchor;
@@ -240,7 +241,7 @@ export function formatLinksetJson(
     const contexts: LinksetContext[] = [];
 
     for (const [anchor, relMap] of byAnchor) {
-        const context: LinksetContext = {};
+        const context = createObjectMap<LinksetTarget[] | string | undefined>() as LinksetContext;
 
         if (anchor) {
             context.anchor = anchor;
@@ -260,7 +261,8 @@ export function formatLinksetJson(
  * Convert a LinkDefinition to a LinksetTarget.
  */
 function linkDefinitionToTarget(link: LinkDefinition): LinksetTarget {
-    const target: LinksetTarget = { href: link.href };
+    const target = createObjectMap<string | string[] | InternationalizedValue[] | undefined>() as LinksetTarget;
+    target.href = link.href;
 
     if (link.type) {
         target.type = link.type;
@@ -346,10 +348,9 @@ function linksetJsonToDefinitions(linkset: Linkset): LinkDefinition[] {
 
             const targets = value as LinksetTarget[];
             for (const target of targets) {
-                const link: LinkDefinition = {
-                    href: target.href,
-                    rel: key,
-                };
+                const link = createObjectMap<string | string[] | undefined>() as LinkDefinition;
+                link.href = target.href;
+                link.rel = key;
 
                 if (anchor) {
                     link.anchor = anchor;
@@ -366,15 +367,24 @@ function linksetJsonToDefinitions(linkset: Linkset): LinkDefinition[] {
                 // RFC 9264 §4.2.4.2: title* with language
                 if (target['title*'] && target['title*'].length > 0) {
                     const titleStar = target['title*'][0];
-                    link.title = titleStar.value;
-                    if (titleStar.language) {
-                        link.titleLang = titleStar.language;
+                    if (titleStar) {
+                        link.title = titleStar.value;
+                        if (titleStar.language) {
+                            link.titleLang = titleStar.language;
+                        }
                     }
                 }
 
                 if (target.hreflang) {
                     // Flatten to single value if only one, otherwise keep array
-                    link.hreflang = target.hreflang.length === 1 ? target.hreflang[0] : target.hreflang;
+                    if (target.hreflang.length === 1) {
+                        const single = target.hreflang[0];
+                        if (single !== undefined) {
+                            link.hreflang = single;
+                        }
+                    } else {
+                        link.hreflang = target.hreflang;
+                    }
                 }
 
                 if (target.media) {
@@ -625,10 +635,18 @@ export function linksetToLinks(linkset: Linkset): LinkDefinition[] {
 // RFC 9264 §4: Convert between link definitions and linkset.
 export function linksToLinkset(links: LinkDefinition[], anchor?: string): Linkset {
     // Set anchor on links that don't have one
-    const linksWithAnchor = links.map((link) => ({
-        ...link,
-        anchor: link.anchor ?? anchor,
-    }));
+    const linksWithAnchor: LinkDefinition[] = links.map((link) => {
+        const resolvedAnchor = link.anchor ?? anchor;
+        if (resolvedAnchor === undefined) {
+            const { anchor: _anchor, ...rest } = link;
+            return rest;
+        }
+
+        return {
+            ...link,
+            anchor: resolvedAnchor,
+        };
+    });
 
     return formatLinksetJson(linksWithAnchor);
 }

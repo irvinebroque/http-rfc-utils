@@ -5,6 +5,8 @@
  */
 
 import type { HostMeta, HostMetaLink } from './types.js';
+import { createObjectMap } from './object-map.js';
+import { toRecordOrEmpty, toStringOrNullMap } from './internal-json-shape.js';
 
 export type { HostMeta, HostMetaLink } from './types.js';
 
@@ -27,7 +29,7 @@ const ATTR_REGEX_CACHE = new Map<string, RegExp>();
  */
 export function parseHostMeta(xml: string): HostMeta {
     const links: HostMetaLink[] = [];
-    const properties: Record<string, string | null> = {};
+    const properties = createObjectMap<string | null>();
 
     // Parse <Link> elements.
     const linkRegex = /<Link\s([^>]*?)\/?>(?:<\/Link>)?/gi;
@@ -35,6 +37,10 @@ export function parseHostMeta(xml: string): HostMeta {
 
     while ((match = linkRegex.exec(xml)) !== null) {
         const attrs = match[1];
+        if (attrs === undefined) {
+            continue;
+        }
+
         const link = parseLinkAttributes(attrs);
         if (link) {
             links.push(link);
@@ -45,6 +51,10 @@ export function parseHostMeta(xml: string): HostMeta {
     const propRegex = /<Property\s+type="([^"]*)"(?:\s*\/>|>(.*?)<\/Property>)/gi;
     while ((match = propRegex.exec(xml)) !== null) {
         const type = match[1];
+        if (type === undefined || type === '') {
+            continue;
+        }
+
         const value = match[2] !== undefined ? decodeXmlEntities(match[2]) : null;
         properties[type] = value;
     }
@@ -87,7 +97,11 @@ function extractAttr(attrs: string, name: string): string | null {
         ATTR_REGEX_CACHE.set(name, regex);
     }
     const match = regex.exec(attrs);
-    return match ? decodeXmlEntities(match[1]) : null;
+    if (!match || match[1] === undefined) {
+        return null;
+    }
+
+    return decodeXmlEntities(match[1]);
 }
 
 /**
@@ -161,33 +175,56 @@ export function parseHostMetaJson(json: string): HostMeta {
 }
 
 /**
+ * Parse a host-meta.json document without throwing.
+ * Returns null for malformed JSON input.
+ */
+export function tryParseHostMetaJson(json: string): HostMeta | null {
+    try {
+        return parseHostMetaObject(JSON.parse(json));
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Parse a host-meta object (already parsed from JSON).
  */
-function parseHostMetaObject(obj: Record<string, unknown>): HostMeta {
+function parseHostMetaObject(obj: unknown): HostMeta {
+    const record = toRecordOrEmpty(obj);
+
     const links: HostMetaLink[] = [];
 
-    if (Array.isArray(obj.links)) {
-        for (const linkObj of obj.links) {
-            if (typeof linkObj === 'object' && linkObj !== null && typeof (linkObj as Record<string, unknown>).rel === 'string') {
-                const link: HostMetaLink = { rel: (linkObj as Record<string, string>).rel };
-                if (typeof (linkObj as Record<string, unknown>).type === 'string') {
-                    link.type = (linkObj as Record<string, string>).type;
-                }
-                if (typeof (linkObj as Record<string, unknown>).href === 'string') {
-                    link.href = (linkObj as Record<string, string>).href;
-                }
-                if (typeof (linkObj as Record<string, unknown>).template === 'string') {
-                    link.template = (linkObj as Record<string, string>).template;
-                }
-                links.push(link);
+    if (Array.isArray(record.links)) {
+        for (const linkObj of record.links) {
+            if (typeof linkObj !== 'object' || linkObj === null) {
+                continue;
             }
+
+            const linkRecord = linkObj as Record<string, unknown>;
+            if (typeof linkRecord.rel !== 'string') {
+                continue;
+            }
+
+            const link: HostMetaLink = { rel: linkRecord.rel };
+            if (typeof linkRecord.type === 'string') {
+                link.type = linkRecord.type;
+            }
+            if (typeof linkRecord.href === 'string') {
+                link.href = linkRecord.href;
+            }
+            if (typeof linkRecord.template === 'string') {
+                link.template = linkRecord.template;
+            }
+
+            links.push(link);
         }
     }
 
     const result: HostMeta = { links };
 
-    if (obj.properties !== null && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
-        result.properties = obj.properties as Record<string, string | null>;
+    const properties = toStringOrNullMap(record.properties);
+    if (properties) {
+        result.properties = properties;
     }
 
     return result;

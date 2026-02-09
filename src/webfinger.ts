@@ -5,6 +5,11 @@
  */
 
 import type { WebFingerResponse, WebFingerLink } from './types.js';
+import {
+    toRecordOrEmpty,
+    toStringMap,
+    toStringOrNullMap,
+} from './internal-json-shape.js';
 
 export type { WebFingerResponse, WebFingerLink } from './types.js';
 
@@ -24,27 +29,44 @@ export function parseJrd(json: string): WebFingerResponse {
 }
 
 /**
+ * Parse a JRD JSON string without throwing.
+ * Returns null for malformed JSON or invalid JRD shapes.
+ */
+export function tryParseJrd(json: string): WebFingerResponse | null {
+    try {
+        return parseJrdObject(JSON.parse(json));
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Parse a JRD object (already parsed from JSON) into a WebFingerResponse.
  */
-function parseJrdObject(obj: Record<string, unknown>): WebFingerResponse {
-    if (typeof obj.subject !== 'string') {
+function parseJrdObject(obj: unknown): WebFingerResponse {
+    const record = toRecordOrEmpty(obj);
+
+    if (typeof record.subject !== 'string') {
         throw new Error('JRD document must have a "subject" string property');
     }
 
     const result: WebFingerResponse = {
-        subject: obj.subject,
+        subject: record.subject,
     };
 
-    if (Array.isArray(obj.aliases)) {
-        result.aliases = obj.aliases.filter((a: unknown) => typeof a === 'string');
+    if (Array.isArray(record.aliases)) {
+        result.aliases = record.aliases.filter((a: unknown) => typeof a === 'string');
     }
 
-    if (obj.properties !== null && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
-        result.properties = obj.properties as Record<string, string | null>;
+    const properties = toStringOrNullMap(record.properties);
+    if (properties) {
+        result.properties = properties;
     }
 
-    if (Array.isArray(obj.links)) {
-        result.links = (obj.links as Record<string, unknown>[]).map(parseJrdLink);
+    if (Array.isArray(record.links)) {
+        result.links = (record.links as unknown[])
+            .filter((linkObj) => linkObj !== null && typeof linkObj === 'object')
+            .map(linkObj => parseJrdLink(linkObj as Record<string, unknown>));
     }
 
     return result;
@@ -61,12 +83,14 @@ function parseJrdLink(obj: Record<string, unknown>): WebFingerLink {
     if (typeof obj.type === 'string') link.type = obj.type;
     if (typeof obj.href === 'string') link.href = obj.href;
 
-    if (obj.titles !== null && typeof obj.titles === 'object' && !Array.isArray(obj.titles)) {
-        link.titles = obj.titles as Record<string, string>;
+    const titles = toStringMap(obj.titles);
+    if (titles) {
+        link.titles = titles;
     }
 
-    if (obj.properties !== null && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
-        link.properties = obj.properties as Record<string, string | null>;
+    const properties = toStringOrNullMap(obj.properties);
+    if (properties) {
+        link.properties = properties;
     }
 
     return link;
@@ -126,6 +150,10 @@ export function validateJrd(response: WebFingerResponse): string[] {
     if (response.links) {
         for (let i = 0; i < response.links.length; i++) {
             const link = response.links[i];
+            if (!link) {
+                continue;
+            }
+
             if (!link.rel || typeof link.rel !== 'string') {
                 issues.push(`Link at index ${i} must have a "rel" string (RFC 7033 §4.4.4)`);
             }
@@ -139,7 +167,7 @@ export function validateJrd(response: WebFingerResponse): string[] {
  * Match a resource query against a set of WebFinger resources.
  * RFC 7033 §4.3: resource parameter matching.
  *
- * @param query - The resource query string (e.g. "acct:user@example.com")
+ * @param query - The resource query string (e.g. "acct:user\@example.com")
  * @param resources - Map of resource identifiers to their JRD responses
  * @returns The matching WebFingerResponse or null
  */

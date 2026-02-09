@@ -1,0 +1,6 @@
+# RFC 7239 corpus seeds
+for=192.0.2.43
+for=192.0.2.43;proto=https;host=example.com
+for="[2001:db8:cafe::17]:4711";proto=https
+for=192.0.2.43, for=198.51.100.17
+for=192.0.2.43;proto=https;__proto__=polluted

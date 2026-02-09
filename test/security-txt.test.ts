@@ -65,6 +65,22 @@ describe('RFC 9116 security.txt', () => {
             assert.deepEqual(config.extensions['custom-field'], ['some value']);
         });
 
+        // RFC 9116 §3 + implementation hardening: extension maps must not mutate prototypes.
+        it('handles __proto__ extension keys without prototype mutation', () => {
+            const baseline = ({} as { polluted?: string }).polluted;
+            const text = [
+                'Contact: mailto:test@example.com',
+                'Expires: 2027-01-01T00:00:00.000Z',
+                '__proto__: polluted',
+            ].join('\n');
+
+            const config = parseSecurityTxt(text);
+
+            assert.equal(({} as { polluted?: string }).polluted, baseline);
+            assert.ok(config.extensions);
+            assert.deepEqual(config.extensions['__proto__'], ['polluted']);
+        });
+
         it('handles missing Expires gracefully', () => {
             const text = 'Contact: mailto:test@example.com\n';
             const config = parseSecurityTxt(text);

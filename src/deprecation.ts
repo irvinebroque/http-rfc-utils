@@ -14,7 +14,7 @@ import { formatHTTPDate } from './datetime.js';
  * The Deprecation field is an Item Structured Header Field whose value
  * MUST be a Date per RFC 9651 §3.3.7, expressed as `@<unix-seconds>`.
  *
- * @param value - The Deprecation header value (e.g., "@1688169599")
+ * @param value - The Deprecation header value (e.g., "\@1688169599")
  * @returns The deprecation date, or null if invalid
  *
  * @example

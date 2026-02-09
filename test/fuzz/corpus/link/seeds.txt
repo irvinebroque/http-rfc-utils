@@ -1,0 +1,6 @@
+# RFC 8288 corpus seeds
+<https://example.com>; rel="self"
+<https://example.com?page=2>; rel="next"; title="Page, two"
+<https://example.com>; rel="alternate"; hreflang="en"; hreflang="de"
+<https://example.com>; rel="self"; title*=UTF-8''%E2%82%AC%20rates
+<https://example.com>; rel="self"; __proto__="x"

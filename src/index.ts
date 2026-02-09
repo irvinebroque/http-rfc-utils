@@ -11,10 +11,17 @@ export type {
     ProblemDetails,
     ProblemOptions,
     LinkDefinition,
+    LinkTemplate,
+    ExpandedLinkTemplate,
     ETag,
     CacheOptions,
+    TargetedCacheControl,
+    TargetedSelection,
     AcceptEntry,
+    AcceptPatchParameter,
+    AcceptPatchMediaType,
     MediaType,
+    OptionsResponseOptions,
     CorsOptions,
     ConditionalResult,
     ByteRange,
@@ -32,7 +39,22 @@ export type {
     ExtValueOptions,
     LanguageRange,
     EncodingRange,
+    UseAsDictionary,
+    StoredDictionary,
+    DictionaryMatchOptions,
     RetryAfterValue,
+    AltSvcAlternative,
+    AltSvcRecord,
+    AltUsed,
+    EarlyDataValue,
+    EarlyData425Options,
+    FetchMetadata,
+    FetchMetadataPolicy,
+    FetchMetadataPolicyDecision,
+    Traceparent,
+    TracestateEntry,
+    ParsedTraceContext,
+    TraceContextValidationResult,
     SfBareItem,
     SfItem,
     SfInnerList,
@@ -50,6 +72,8 @@ export type {
     ProxyErrorType,
     ProxyStatusParams,
     ProxyStatusEntry,
+    PriorityField,
+    RequiredPriority,
     AuthParam,
     AuthChallenge,
     AuthCredentials,
@@ -68,9 +92,14 @@ export type {
     DigestAlgorithmAny,
     Digest,
     DigestPreference,
+    NiHashAlgorithm,
+    NiQueryParams,
+    NiUri,
+    NiComparisonResult,
+    WellKnownPathParts,
 } from './types.js';
 
-export { isPaginationError, isPaginationParams, SfDate, SfToken } from './types.js';
+export { isPaginationError, isPaginationParams, SfDate, SfDisplayString, SfToken } from './types.js';
 
 // =============================================================================
 // ETag (RFC 9110)
@@ -103,6 +132,7 @@ export {
     defaultCorsHeaders,
     buildCorsHeaders,
     buildCorsHeadersForOrigin,
+    buildStrictCorsHeadersForOrigin,
     buildPreflightHeaders,
     isOriginAllowed,
     corsHeaders,
@@ -117,6 +147,28 @@ export {
     parseCacheControl,
     CachePresets,
 } from './cache.js';
+
+// =============================================================================
+// Targeted Cache-Control (RFC 9213)
+// =============================================================================
+export {
+    parseTargetedCacheControl,
+    formatTargetedCacheControl,
+    parseCdnCacheControl,
+    formatCdnCacheControl,
+    selectTargetedCacheControl,
+} from './targeted-cache-control.js';
+
+// =============================================================================
+// Cache Groups (RFC 9875)
+// =============================================================================
+export {
+    parseCacheGroups,
+    formatCacheGroups,
+    parseCacheGroupInvalidation,
+    formatCacheGroupInvalidation,
+    sharesCacheGroup,
+} from './cache-groups.js';
 
 // =============================================================================
 // Problem Details (RFC 9457)
@@ -155,6 +207,15 @@ export {
 } from './negotiate.js';
 
 // =============================================================================
+// Accept-Patch (RFC 5789)
+// =============================================================================
+export {
+    parseAcceptPatch,
+    formatAcceptPatch,
+    supportsPatch,
+} from './patch.js';
+
+// =============================================================================
 // Accept-Language (RFC 9110 + RFC 4647)
 // =============================================================================
 export {
@@ -169,6 +230,22 @@ export {
     parseAcceptEncoding,
     negotiateEncoding,
 } from './encoding.js';
+
+// =============================================================================
+// Compression Dictionary Transport (RFC 9842)
+// =============================================================================
+export {
+    parseUseAsDictionary,
+    formatUseAsDictionary,
+    validateUseAsDictionary,
+    parseAvailableDictionary,
+    formatAvailableDictionary,
+    parseDictionaryId,
+    formatDictionaryId,
+    matchesDictionary,
+    selectBestDictionary,
+    mergeDictionaryVary,
+} from './compression-dictionary.js';
 
 // =============================================================================
 // Sorting
@@ -194,6 +271,16 @@ export {
     quoteIfNeeded,
     unquote,
 } from './link.js';
+
+// =============================================================================
+// Link-Template Header (RFC 9652)
+// =============================================================================
+export {
+    parseLinkTemplateHeader,
+    formatLinkTemplateHeader,
+    expandLinkTemplate,
+    resolveTemplateVariableUri,
+} from './link-template.js';
 
 // =============================================================================
 // Linkset (RFC 9264) + API Catalog (RFC 9727)
@@ -359,6 +446,16 @@ export {
 } from './proxy-status.js';
 
 // =============================================================================
+// Priority (RFC 9218)
+// =============================================================================
+export {
+    parsePriority,
+    formatPriority,
+    applyPriorityDefaults,
+    mergePriority,
+} from './priority.js';
+
+// =============================================================================
 // Conditional Requests (RFC 9110)
 // =============================================================================
 export {
@@ -383,6 +480,60 @@ export {
     formatSunset,
     isSunsetImminent,
 } from './headers.js';
+
+// =============================================================================
+// Early-Data + 425 Too Early (RFC 8470)
+// =============================================================================
+export {
+    parseEarlyData,
+    formatEarlyData,
+    hasEarlyDataSignal,
+    canSend425,
+} from './early-data.js';
+
+// =============================================================================
+// Alt-Svc + Alt-Used (RFC 7838)
+// =============================================================================
+export {
+    parseAltSvc,
+    formatAltSvc,
+    parseAltUsed,
+    formatAltUsed,
+} from './alt-svc.js';
+
+// =============================================================================
+// W3C Fetch Metadata
+// =============================================================================
+export {
+    parseSecFetchDest,
+    formatSecFetchDest,
+    parseSecFetchMode,
+    formatSecFetchMode,
+    parseSecFetchSite,
+    formatSecFetchSite,
+    parseSecFetchUser,
+    formatSecFetchUser,
+    parseFetchMetadata,
+    evaluateFetchMetadataPolicy,
+    fetchMetadataVary,
+} from './fetch-metadata.js';
+
+// =============================================================================
+// W3C Trace Context
+// =============================================================================
+export {
+    parseTraceparent,
+    formatTraceparent,
+    validateTraceparent,
+    parseTracestate,
+    formatTracestate,
+    validateTracestate,
+    updateTraceparentParent,
+    restartTraceparent,
+    addOrUpdateTracestate,
+    removeTracestateKey,
+    truncateTracestate,
+} from './trace-context.js';
 
 // =============================================================================
 // Structured Field Values (RFC 8941 + RFC 9651)
@@ -497,6 +648,21 @@ export {
 } from './digest.js';
 
 // =============================================================================
+// Named Information URI (RFC 6920)
+// =============================================================================
+export {
+    parseNiUri,
+    formatNiUri,
+    compareNiUris,
+    parseNiUrlSegment,
+    formatNiUrlSegment,
+    toWellKnownNiUrl,
+    fromWellKnownNiUrl,
+    computeNiDigest,
+    verifyNiDigest,
+} from './ni.js';
+
+// =============================================================================
 // HTTP Message Signatures (RFC 9421)
 // =============================================================================
 export type {
@@ -580,6 +746,7 @@ export type {
 export {
     JRD_CONTENT_TYPE,
     parseJrd,
+    tryParseJrd,
     formatJrd,
     validateJrd,
     matchResource,
@@ -598,5 +765,19 @@ export {
     parseHostMeta,
     formatHostMeta,
     parseHostMetaJson,
+    tryParseHostMetaJson,
     formatHostMetaJson,
 } from './host-meta.js';
+
+// =============================================================================
+// RFC 8615 — Well-Known URIs
+// =============================================================================
+export {
+    WELL_KNOWN_PREFIX,
+    isWellKnownPath,
+    isWellKnownUri,
+    validateWellKnownSuffix,
+    buildWellKnownPath,
+    buildWellKnownUri,
+    parseWellKnownPath,
+} from './well-known.js';

@@ -353,6 +353,32 @@ describe('Proxy-Status extension parameters (RFC 9209 Section 2.2)', () => {
             },
         }]);
     });
+
+    it('lets extension keys use known names when typed field is unset', () => {
+        const formatted = formatProxyStatus([{
+            proxy: 'ExampleCDN',
+            params: {
+                extensions: {
+                    error: 7,
+                    'custom-param': 42,
+                },
+            },
+        }]);
+        assert.equal(formatted, 'ExampleCDN;error=7;custom-param=42');
+    });
+
+    it('does not let extensions override explicitly mapped fields', () => {
+        const formatted = formatProxyStatus([{
+            proxy: 'ExampleCDN',
+            params: {
+                error: 'connection_timeout',
+                extensions: {
+                    error: 'ignored',
+                },
+            },
+        }]);
+        assert.equal(formatted, 'ExampleCDN;error=connection_timeout');
+    });
 });
 
 // RFC 9209 §2: Formatting tests.
