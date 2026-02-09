@@ -32,6 +32,12 @@ describe('Range Requests (RFC 9110 Sections 14.2-14.4, 13.1.5)', () => {
         assert.equal(parseRange('bytes=1-0'), null);
     });
 
+    it('rejects non-digit numeric tokens in Range (RFC 9110 Section 14.1.2)', () => {
+        assert.equal(parseRange('bytes=0x-99'), null);
+        assert.equal(parseRange('bytes=0-99x'), null);
+        assert.equal(parseRange('bytes=-9x'), null);
+    });
+
     it('formats Content-Range (RFC 9110 Section 14.4)', () => {
         assert.equal(formatContentRange({ start: 0, end: 99 }, 200), 'bytes 0-99/200');
     });
@@ -43,6 +49,12 @@ describe('Range Requests (RFC 9110 Sections 14.2-14.4, 13.1.5)', () => {
             range: { start: 0, end: 99 },
             size: 200,
         });
+    });
+
+    it('rejects non-digit numeric tokens in Content-Range (RFC 9110 Section 14.4)', () => {
+        assert.equal(parseContentRange('bytes 0x-99/200'), null);
+        assert.equal(parseContentRange('bytes 0-99x/200'), null);
+        assert.equal(parseContentRange('bytes 0-99/200x'), null);
     });
 
     it('returns Accept-Ranges value (RFC 9110 Section 14.3)', () => {

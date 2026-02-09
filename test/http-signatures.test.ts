@@ -124,6 +124,18 @@ describe('RFC 9421 HTTP Message Signatures', () => {
         it('returns null for non-inner-list value', () => {
             assert.equal(parseSignatureInput('sig1="not-a-list"'), null);
         });
+
+        // RFC 9421 §2: Component identifiers in Signature-Input MUST be quoted sf-strings.
+        it('returns null for token component identifiers', () => {
+            assert.equal(parseSignatureInput('sig1=(content-type)'), null);
+            assert.equal(parseSignatureInput('sig1=(@method)'), null);
+        });
+
+        // RFC 9421 §2.3: created/expires are integer structured fields.
+        it('returns null for non-integer created or expires', () => {
+            assert.equal(parseSignatureInput('sig1=("@method");created=1.5'), null);
+            assert.equal(parseSignatureInput('sig1=("@method");expires=2.25'), null);
+        });
     });
 
     // RFC 9421 §4.1: Signature-Input field formatting
@@ -136,14 +148,12 @@ describe('RFC 9421 HTTP Message Signatures', () => {
             }];
             const result = formatSignatureInput(inputs);
 
-            // RFC 8941 §4.1.7: Strings matching token syntax are serialized as tokens
-            // So "content-type" becomes content-type (no quotes), but "@method" is quoted
-            // because @ is not valid in a token
+            // RFC 9421 §2 + RFC 8941 §3.3.3: Component identifiers are sf-strings.
             assert.ok(result.includes('sig1='));
             assert.ok(result.includes('"@method"'));
-            assert.ok(result.includes('content-type'));
+            assert.ok(result.includes('"content-type"'));
             assert.ok(result.includes('created=1618884473'));
-            assert.ok(result.includes('keyid=test-key'));
+            assert.ok(result.includes('keyid="test-key"'));
         });
 
         it('formats component with parameters', () => {
@@ -157,8 +167,7 @@ describe('RFC 9421 HTTP Message Signatures', () => {
             const result = formatSignatureInput(inputs);
 
             assert.ok(result.includes(';sf'));
-            // RFC 8941: "member" can be serialized as token since it matches token syntax
-            assert.ok(result.includes(';key=member'));
+            assert.ok(result.includes(';key="member"'));
         });
 
         // RFC 9421 §4.1: Round-trip consistency
@@ -172,6 +181,21 @@ describe('RFC 9421 HTTP Message Signatures', () => {
             assert.ok(reparsed);
             assert.deepEqual(parsed[0].components, reparsed[0].components);
             assert.deepEqual(parsed[0].params, reparsed[0].params);
+        });
+
+        // RFC 9421 §2.3: created/expires MUST be integer values.
+        it('throws for non-integer created or expires', () => {
+            assert.throws(() => formatSignatureInput([{
+                label: 'sig1',
+                components: [{ name: '@method' }],
+                params: { created: 1.5 },
+            }]));
+
+            assert.throws(() => formatSignatureInput([{
+                label: 'sig1',
+                components: [{ name: '@method' }],
+                params: { expires: 2.1 },
+            }]));
         });
     });
 
@@ -741,6 +765,16 @@ describe('RFC 9421 HTTP Message Signatures', () => {
             assert.ok(result.signatureParams.includes('alg="rsa-v1_5-sha256"'));
             assert.ok(result.signatureParams.includes('keyid="test-key"'));
             assert.ok(result.signatureParams.includes('tag="my-app"'));
+        });
+
+        // RFC 9421 §2.3: created/expires MUST be integers.
+        it('returns null for non-integer created or expires', () => {
+            const message: SignatureMessageContext = {
+                headers: new Map(),
+            };
+
+            assert.equal(createSignatureBase(message, [], { created: 1.5 }), null);
+            assert.equal(createSignatureBase(message, [], { expires: 2.5 }), null);
         });
 
         // RFC 9421 §2.5: Component identifiers with parameters

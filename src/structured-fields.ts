@@ -6,13 +6,47 @@
  */
 
 import { Buffer } from 'node:buffer';
-import { SfDate } from './types.js';
+import { SfDate, SfToken } from './types.js';
 import type { SfBareItem, SfItem, SfInnerList, SfList, SfDictionary } from './types.js';
 
 // RFC 8941 §3.3.4: sf-token allows ALPHA (case-insensitive), digits, and tchar plus : and /
 const TOKEN_RE = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:\/]*$/;
 const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const KEY_RE = /^[a-z*][a-z0-9_\-\.\*]*$/;
+
+function isKeyChar(char: string): boolean {
+    const code = char.charCodeAt(0);
+    return (code >= 0x61 && code <= 0x7a)
+        || (code >= 0x30 && code <= 0x39)
+        || char === '_'
+        || char === '-'
+        || char === '.'
+        || char === '*';
+}
+
+function isTokenChar(char: string): boolean {
+    const code = char.charCodeAt(0);
+    return (code >= 0x41 && code <= 0x5a)
+        || (code >= 0x61 && code <= 0x7a)
+        || (code >= 0x30 && code <= 0x39)
+        || char === '!'
+        || char === '#'
+        || char === '$'
+        || char === '%'
+        || char === '&'
+        || char === '\''
+        || char === '*'
+        || char === '+'
+        || char === '-'
+        || char === '.'
+        || char === '^'
+        || char === '_'
+        || char === '`'
+        || char === '|'
+        || char === '~'
+        || char === ':'
+        || char === '/';
+}
 
 class Parser {
     private input: string;
@@ -109,6 +143,11 @@ class Parser {
             }
             if (this.peek() === ',') {
                 this.consume();
+                this.skipOWS();
+                // RFC 8941 §3.1: A trailing comma does not produce a member.
+                if (this.eof()) {
+                    return null;
+                }
                 continue;
             }
             return null;
@@ -163,6 +202,11 @@ class Parser {
             }
             if (this.peek() === ',') {
                 this.consume();
+                this.skipOWS();
+                // RFC 8941 §3.2: A trailing comma does not produce a member.
+                if (this.eof()) {
+                    return null;
+                }
                 continue;
             }
             return null;
@@ -237,24 +281,45 @@ class Parser {
         if (this.consume() !== '@') {
             return null;
         }
-        // The value after '@' MUST be an sf-integer (RFC 9651 §3.3.7)
-        const numValue = this.parseNumber();
-        if (numValue === null || !Number.isInteger(numValue)) {
+        const intValue = this.parseInteger();
+        if (intValue === null) {
             return null;
         }
-        return new SfDate(numValue);
+        return new SfDate(intValue);
+    }
+
+    private parseInteger(): number | null {
+        const remaining = this.input.slice(this.index);
+        const match = remaining.match(/^-?\d+/);
+        if (!match) {
+            return null;
+        }
+
+        const integerPart = match[0].startsWith('-') ? match[0].slice(1) : match[0];
+        if (integerPart.length === 0 || integerPart.length > 15) {
+            return null;
+        }
+
+        this.index += match[0].length;
+        const value = Number(match[0]);
+        if (!Number.isInteger(value)) {
+            return null;
+        }
+
+        return value;
     }
 
     private parseKey(): string | null {
-        let key = '';
+        const start = this.index;
         while (!this.eof()) {
             const char = this.peek();
-            if (!/[a-z0-9_\-\.\*]/.test(char)) {
+            if (!isKeyChar(char)) {
                 break;
             }
-            key += char;
             this.consume();
         }
+
+        const key = this.input.slice(start, this.index);
 
         if (!key || !KEY_RE.test(key)) {
             return null;
@@ -269,11 +334,11 @@ class Parser {
             return null;
         }
 
-        let result = '';
+        const chars: string[] = [];
         while (!this.eof()) {
             const char = this.consume();
             if (char === '"') {
-                return result;
+                return chars.join('');
             }
             if (char === '\\') {
                 if (this.eof()) {
@@ -284,14 +349,14 @@ class Parser {
                 if (escapedChar !== '"' && escapedChar !== '\\') {
                     return null;
                 }
-                result += escapedChar;
+                chars.push(escapedChar);
             } else {
                 // RFC 8941 §3.3.3: Validate unescaped chars are printable ASCII (excluding " and \).
                 const code = char.charCodeAt(0);
                 if (code < 0x20 || code > 0x7E || code === 0x22 || code === 0x5C) {
                     return null;
                 }
-                result += char;
+                chars.push(char);
             }
         }
 
@@ -318,11 +383,12 @@ class Parser {
         if (this.consume() !== ':') {
             return null;
         }
-        let base64 = '';
+        const start = this.index;
         while (!this.eof()) {
             const char = this.consume();
             if (char === ':') {
                 try {
+                    const base64 = this.input.slice(start, this.index - 1);
                     if (base64.includes('\n') || base64.includes('\r')) {
                         return null;
                     }
@@ -338,7 +404,6 @@ class Parser {
                     return null;
                 }
             }
-            base64 += char;
         }
 
         return null;
@@ -374,23 +439,24 @@ class Parser {
     }
 
     // RFC 8941 §3.3.4: Token parsing.
-    private parseToken(): string | null {
-        let token = '';
+    private parseToken(): SfToken | null {
+        const start = this.index;
         while (!this.eof()) {
             const char = this.peek();
             // RFC 8941 §3.3.4: tchar plus ":" and "/"
-            if (!/[A-Za-z0-9!#$%&'*+\-.^_`|~:\/]/.test(char)) {
+            if (!isTokenChar(char)) {
                 break;
             }
-            token += char;
             this.consume();
         }
+
+        const token = this.input.slice(start, this.index);
 
         if (!token || !TOKEN_RE.test(token)) {
             return null;
         }
 
-        return token;
+        return new SfToken(token);
     }
 }
 
@@ -466,11 +532,22 @@ function serializeBareItem(value: SfBareItem): string {
             return String(value);
         }
 
+        // RFC 8941 §4.1.5: Decimal range check.
+        if (value < -999_999_999_999.999 || value > 999_999_999_999.999) {
+            throw new Error('Decimal out of range for structured field');
+        }
+
         let encoded = value.toFixed(3);
         encoded = encoded.replace(/0+$/, '');
         if (encoded.endsWith('.')) {
             encoded = encoded.slice(0, -1);
         }
+
+        const [wholePart] = encoded.startsWith('-') ? encoded.slice(1).split('.') : encoded.split('.');
+        if (!wholePart || wholePart.length > 12) {
+            throw new Error('Decimal out of range for structured field');
+        }
+
         return encoded;
     }
 
@@ -479,8 +556,15 @@ function serializeBareItem(value: SfBareItem): string {
         return `:${base64}:`;
     }
 
-    if (TOKEN_RE.test(value)) {
-        return value;
+    if (value instanceof SfToken) {
+        return value.value;
+    }
+
+    for (let i = 0; i < value.length; i++) {
+        const code = value.charCodeAt(i);
+        if (code < 0x20 || code > 0x7E) {
+            throw new Error('Invalid string character for structured field');
+        }
     }
 
     const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');

@@ -70,7 +70,7 @@ export type {
     DigestPreference,
 } from './types.js';
 
-export { isPaginationError, isPaginationParams, SfDate } from './types.js';
+export { isPaginationError, isPaginationParams, SfDate, SfToken } from './types.js';
 
 // =============================================================================
 // ETag (RFC 9110)

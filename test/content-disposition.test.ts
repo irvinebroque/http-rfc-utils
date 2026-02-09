@@ -29,6 +29,22 @@ describe('Content-Disposition (RFC 6266 Section 4, RFC 8187 Section 3.2)', () =>
         assert.equal(parsed?.params['filename*'], 'preferred.txt');
     });
 
+    // RFC 6266 Section 4.3 + RFC 8187 Section 3.2.1: invalid filename* should not replace filename fallback.
+    it('keeps filename fallback when filename* decoding fails', () => {
+        const parsed = parseContentDisposition(
+            'attachment; filename="fallback.txt"; filename*=UTF-8\'\'%ZZ'
+        );
+        assert.equal(parsed?.params.filename, 'fallback.txt');
+        assert.equal(parsed?.params['filename*'], "UTF-8''%ZZ");
+    });
+
+    // RFC 8187 Section 3.2.1: malformed ext-value is invalid; no filename fallback exists.
+    it('does not synthesize filename when only invalid filename* is present', () => {
+        const parsed = parseContentDisposition('attachment; filename*=UTF-8\'\'%ZZ');
+        assert.equal(parsed?.params.filename, undefined);
+        assert.equal(parsed?.params['filename*'], "UTF-8''%ZZ");
+    });
+
     it('formats filename* using RFC 8187 (RFC 8187 Section 3.2)', () => {
         const header = formatContentDisposition('attachment', {
             filenameStar: { value: '\u20ac rates' },

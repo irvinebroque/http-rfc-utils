@@ -30,6 +30,27 @@ export const API_CATALOG_PROFILE = 'https://www.rfc-editor.org/info/rfc9727';
 // RFC 9727 §2: Well-known URI path for API catalog.
 export const API_CATALOG_PATH = '/.well-known/api-catalog';
 
+const LINK_DEFINITION_STANDARD_KEYS = new Set([
+    'href',
+    'rel',
+    'type',
+    'title',
+    'titleLang',
+    'hreflang',
+    'media',
+    'anchor',
+    'rev',
+]);
+
+const LINKSET_TARGET_STANDARD_KEYS = new Set([
+    'href',
+    'type',
+    'title',
+    'title*',
+    'hreflang',
+    'media',
+]);
+
 /**
  * Parse an application/linkset document into link definitions.
  * RFC 9264 §4.1: Same as HTTP Link header format but allows newlines as separators.
@@ -264,9 +285,8 @@ function linkDefinitionToTarget(link: LinkDefinition): LinksetTarget {
     }
 
     // Copy extension attributes
-    const standardKeys = new Set(['href', 'rel', 'type', 'title', 'titleLang', 'hreflang', 'media', 'anchor', 'rev']);
     for (const [key, value] of Object.entries(link)) {
-        if (!standardKeys.has(key) && value !== undefined) {
+        if (!LINK_DEFINITION_STANDARD_KEYS.has(key) && value !== undefined) {
             // RFC 9264 §4.2.4.3: Extension attributes are always arrays
             target[key] = Array.isArray(value) ? value : [value];
         }
@@ -362,9 +382,8 @@ function linksetJsonToDefinitions(linkset: Linkset): LinkDefinition[] {
                 }
 
                 // Copy extension attributes
-                const standardKeys = new Set(['href', 'type', 'title', 'title*', 'hreflang', 'media']);
                 for (const [attrKey, attrValue] of Object.entries(target)) {
-                    if (!standardKeys.has(attrKey) && attrValue !== undefined) {
+                    if (!LINKSET_TARGET_STANDARD_KEYS.has(attrKey) && attrValue !== undefined) {
                         // Flatten single-element arrays
                         if (Array.isArray(attrValue) && attrValue.length === 1) {
                             const first = attrValue[0];
@@ -546,13 +565,21 @@ export function createApiCatalog(options: ApiCatalogOptions): ApiCatalog {
  */
 // RFC 9727 §4: Parse and validate API catalog.
 export function parseApiCatalog(json: string | object): ApiCatalog | null {
-    const linkset = parseLinksetJson(json);
+    let input: unknown = json;
+    if (typeof json === 'string') {
+        try {
+            input = JSON.parse(json);
+        } catch {
+            return null;
+        }
+    }
+
+    const linkset = parseLinksetJson(input as object);
     if (!linkset) {
         return null;
     }
 
     // Add profile if present in the input
-    const input = typeof json === 'string' ? JSON.parse(json) : json;
     if (input && typeof input === 'object' && 'profile' in input) {
         return { ...linkset, profile: (input as { profile: string }).profile };
     }

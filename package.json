@@ -24,6 +24,7 @@
         "clean": "rm -rf dist",
         "test": "tsx --test test/*.test.ts",
         "test:watch": "tsx --test --watch test/*.test.ts",
+        "bench": "tsx bench/perf.ts",
         "typecheck": "tsc --noEmit",
         "prepublishOnly": "pnpm run build",
         "changeset": "changeset",

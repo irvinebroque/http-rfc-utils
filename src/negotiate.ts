@@ -4,7 +4,7 @@
  */
 
 import type { AcceptEntry, MediaType } from './types.js';
-import { isEmptyHeader, splitQuotedValue, unquote, parseQValue } from './header-utils.js';
+import { isEmptyHeader, splitQuotedValue, unquote, parseQValue, TOKEN_CHARS } from './header-utils.js';
 
 /**
  * Media type constants mapping format names to MIME types.
@@ -90,14 +90,12 @@ function parseMediaRange(range: string): AcceptEntry | null {
     const parts = splitQuotedValue(range, ';').map(p => p.trim());
     const mediaType = parts[0];
 
-    if (!mediaType || !mediaType.includes('/')) {
+    const parsed = parseTypeAndSubtype(mediaType);
+    if (!parsed) {
         return null;
     }
 
-    const [type, subtype] = mediaType.split('/');
-    if (!type || !subtype) {
-        return null;
-    }
+    const { type, subtype } = parsed;
 
     let q = 1.0;
     const params = new Map<string, string>();
@@ -161,24 +159,16 @@ function matchesMediaType(entry: AcceptEntry, mediaType: MediaType): number {
     return matchesMimeType(entry, mimeType);
 }
 
-/**
- * Check if an Accept entry matches a MIME type string.
- * Returns specificity score if match, 0 if no match.
- */
-function matchesMimeType(entry: AcceptEntry, mimeType: string): number {
-    const parsed = parseMimeTypeWithParams(mimeType);
+interface ParsedMimeType {
+    type: string;
+    subtype: string;
+    params: Map<string, string>;
+}
 
-    if (!parsed) {
-        return 0;
-    }
-
+function matchesParsedMimeType(entry: AcceptEntry, parsed: ParsedMimeType): number {
     const { type, subtype, params } = parsed;
 
     if (!paramsMatch(entry.params, params)) {
-        return 0;
-    }
-
-    if (!type || !subtype) {
         return 0;
     }
 
@@ -200,18 +190,30 @@ function matchesMimeType(entry: AcceptEntry, mimeType: string): number {
     return 0;
 }
 
-function parseMimeTypeWithParams(mimeType: string): { type: string; subtype: string; params: Map<string, string> } | null {
+/**
+ * Check if an Accept entry matches a MIME type string.
+ * Returns specificity score if match, 0 if no match.
+ */
+function matchesMimeType(entry: AcceptEntry, mimeType: string): number {
+    const parsed = parseMimeTypeWithParams(mimeType);
+
+    if (!parsed) {
+        return 0;
+    }
+
+    return matchesParsedMimeType(entry, parsed);
+}
+
+function parseMimeTypeWithParams(mimeType: string): ParsedMimeType | null {
     const parts = splitQuotedValue(mimeType, ';').map(p => p.trim());
     const mediaType = parts[0];
 
-    if (!mediaType || !mediaType.includes('/')) {
+    const parsed = parseTypeAndSubtype(mediaType);
+    if (!parsed) {
         return null;
     }
 
-    const [type, subtype] = mediaType.split('/');
-    if (!type || !subtype) {
-        return null;
-    }
+    const { type, subtype } = parsed;
 
     const params = new Map<string, string>();
 
@@ -230,10 +232,92 @@ function parseMimeTypeWithParams(mimeType: string): { type: string; subtype: str
     }
 
     return {
-        type: type.toLowerCase(),
-        subtype: subtype.toLowerCase(),
+        type,
+        subtype,
         params,
     };
+}
+
+function parseTypeAndSubtype(mediaType: string | undefined): { type: string; subtype: string } | null {
+    if (!mediaType) {
+        return null;
+    }
+
+    const typeSubtype = mediaType.trim();
+    if (!typeSubtype) {
+        return null;
+    }
+
+    const slashIndex = typeSubtype.indexOf('/');
+    if (slashIndex === -1 || slashIndex !== typeSubtype.lastIndexOf('/')) {
+        return null;
+    }
+
+    const type = typeSubtype.slice(0, slashIndex).trim().toLowerCase();
+    const subtype = typeSubtype.slice(slashIndex + 1).trim().toLowerCase();
+
+    if (!type || !subtype) {
+        return null;
+    }
+
+    const validType = type === '*' || TOKEN_CHARS.test(type);
+    const validSubtype = subtype === '*' || TOKEN_CHARS.test(subtype);
+    if (!validType || !validSubtype) {
+        return null;
+    }
+
+    // RFC 7231 §5.3.2: wildcard media-range is only "*/*".
+    if (type === '*' && subtype !== '*') {
+        return null;
+    }
+
+    return { type, subtype };
+}
+
+function negotiateWithEntries(entries: AcceptEntry[], supported: string[]): string | null {
+    // RFC 7231 §5.3.2: each candidate's quality comes from its highest-precedence matching media-range.
+    let bestMatch: string | null = null;
+    let bestSpecificity = 0;
+    let bestQ = 0;
+
+    const parsedSupported = supported.map((mimeType) => ({
+        mimeType,
+        parsed: parseMimeTypeWithParams(mimeType),
+    }));
+
+    for (const candidate of parsedSupported) {
+        if (!candidate.parsed) {
+            continue;
+        }
+
+        let candidateSpecificity = -1;
+        let candidateQ = 0;
+
+        for (const entry of entries) {
+            const specificity = matchesParsedMimeType(entry, candidate.parsed);
+            if (specificity === 0) {
+                continue;
+            }
+
+            if (specificity > candidateSpecificity || (specificity === candidateSpecificity && entry.q > candidateQ)) {
+                candidateSpecificity = specificity;
+                candidateQ = entry.q;
+            }
+        }
+
+        if (candidateSpecificity < 0 || candidateQ === 0) {
+            continue;
+        }
+
+        // Prefer higher q, then higher precedence specificity.
+        if (candidateQ > bestQ || (candidateQ === bestQ && candidateSpecificity > bestSpecificity)) {
+            bestMatch = candidate.mimeType;
+            bestSpecificity = candidateSpecificity;
+            bestQ = candidateQ;
+        }
+    }
+
+    return bestMatch;
 }
 
 function paramsMatch(required: Map<string, string>, candidate: Map<string, string>): boolean {
@@ -292,31 +376,7 @@ export function negotiate(input: Request | string | undefined | null, supported:
         return supported[0] ?? null;
     }
 
-    // Find best match
-    let bestMatch: string | null = null;
-    let bestScore = 0;
-    let bestQ = 0;
-
-    for (const entry of entries) {
-        // Skip explicitly not acceptable
-        if (entry.q === 0) {
-            continue;
-        }
-
-        for (const mimeType of supported) {
-            const score = matchesMimeType(entry, mimeType);
-            if (score > 0) {
-                // Prefer higher q, then higher specificity
-                if (entry.q > bestQ || (entry.q === bestQ && score > bestScore)) {
-                    bestMatch = mimeType;
-                    bestScore = score;
-                    bestQ = entry.q;
-                }
-            }
-        }
-    }
-
-    return bestMatch;
+    return negotiateWithEntries(entries, supported);
 }
 
 /**
@@ -350,7 +410,7 @@ export function getResponseFormat(input: Request | string | undefined | null): '
         return 'json';
     }
 
-    const best = negotiate(acceptHeader, ['application/json', 'text/csv']);
+    const best = negotiateWithEntries(entries, ['application/json', 'text/csv']);
     if (!best) {
         return null;
     }

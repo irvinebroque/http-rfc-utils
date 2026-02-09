@@ -125,6 +125,12 @@ describe('parseAccept', () => {
         assert.deepEqual(result, []);
     });
 
+    // RFC 7231 §5.3.2: media-range is type "/" subtype (single slash).
+    it('rejects malformed media range with extra slash', () => {
+        const result = parseAccept('text/html/extra');
+        assert.deepEqual(result, []);
+    });
+
     describe('specificity sorting (when q values are equal)', () => {
         it('exact match with params beats exact without', () => {
             const result = parseAccept('text/plain, text/plain;format=flowed');
@@ -188,6 +194,12 @@ describe('negotiate', () => {
         assert.equal(result, null);
     });
 
+    // RFC 7231 §5.3.2: Invalid offered media types are ignored as candidates.
+    it('ignores invalid supported media types', () => {
+        const result = negotiate('application/json', ['invalid/media/type', 'application/json']);
+        assert.equal(result, 'application/json');
+    });
+
     it('rejects param-specific ranges when supported lacks params', () => {
         const result = negotiate('text/plain;format=flowed', ['text/plain']);
         assert.equal(result, null);
@@ -224,6 +236,21 @@ describe('negotiate', () => {
         assert.equal(result, 'text/html');
     });
 
+    // RFC 7231 §5.3.2: quality for a candidate uses the highest-precedence matching media-range.
+    it('applies candidate-specific precedence over higher-q wildcards', () => {
+        const result = negotiate('text/*;q=0.3, text/html;q=0.7, */*;q=0.5', ['text/plain', 'application/json']);
+        assert.equal(result, 'application/json');
+    });
+
+    // RFC 7231 §5.3.2: candidate quality is independent of supported iteration order.
+    it('is independent of supported order when precedence differs by candidate', () => {
+        const accept = 'text/*;q=0.3, text/html;q=0.7, */*;q=0.5';
+        const firstOrder = negotiate(accept, ['text/plain', 'application/json']);
+        const secondOrder = negotiate(accept, ['application/json', 'text/plain']);
+        assert.equal(firstOrder, 'application/json');
+        assert.equal(secondOrder, 'application/json');
+    });
+
     it('returns first supported when Accept missing', () => {
         const result = negotiate(undefined, supported);
         assert.equal(result, 'application/json');
@@ -236,6 +263,12 @@ describe('negotiate', () => {
 
     it('returns first supported when Accept is null', () => {
         const result = negotiate(null as unknown as string, supported);
+        assert.equal(result, 'application/json');
+    });
+
+    // RFC 7231 §5.3.2: malformed media-ranges are invalid.
+    it('rejects malformed media ranges during negotiation', () => {
+        const result = negotiate('text/html/extra, application/json;q=0.9', supported);
         assert.equal(result, 'application/json');
     });
 });
@@ -292,6 +325,12 @@ describe('getResponseFormat', () => {
     it('returns null when Accept excludes json/csv', () => {
         const result = getResponseFormat('text/html');
         assert.equal(result, null);
+    });
+
+    // RFC 7231 §5.3.2: Malformed media-ranges are ignored.
+    it('ignores malformed entries and still chooses acceptable format', () => {
+        const result = getResponseFormat('text/html/extra, text/csv;q=0.9');
+        assert.equal(result, 'csv');
     });
 });
 

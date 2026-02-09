@@ -286,3 +286,9 @@ const links = parseLinkHeader(response.headers.get('Link') ?? '');
 ```bash
 pnpm test
 ```
+
+## Benchmarking
+
+```bash
+pnpm bench
+```

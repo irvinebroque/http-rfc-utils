@@ -11,9 +11,9 @@ describe('Strict-Transport-Security (RFC 6797 Section 6.1)', () => {
         assert.deepEqual(parsed, { maxAge: 31536000, includeSubDomains: undefined });
     });
 
-    it('accepts quoted max-age (RFC 6797 Section 6.1.1)', () => {
+    it('rejects quoted max-age (RFC 6797 Section 6.1.1)', () => {
         const parsed = parseStrictTransportSecurity('max-age="60"');
-        assert.deepEqual(parsed, { maxAge: 60, includeSubDomains: undefined });
+        assert.equal(parsed, null);
     });
 
     it('requires max-age (RFC 6797 Section 6.1.1)', () => {

@@ -612,55 +612,29 @@ function isDigestQop(value: string): value is DigestAuthQop {
 }
 
 /**
- * Get the Web Crypto algorithm name for a Digest algorithm.
+ * Get the Node crypto hash algorithm name for a Digest algorithm.
  * RFC 7616 §3.3.
  */
 function getHashAlgorithm(algorithm: DigestAuthAlgorithm): string {
     const base = algorithm.replace(/-sess$/, '');
     switch (base) {
         case 'MD5':
-            return 'MD5';
+            return 'md5';
         case 'SHA-256':
-            return 'SHA-256';
+            return 'sha256';
         case 'SHA-512-256':
-            return 'SHA-512';
+            return 'sha512-256';
         default:
-            return 'SHA-256';
+            return 'sha256';
     }
 }
 
 /**
- * Compute a hash using Web Crypto.
+ * Compute a hash using Node crypto.
  * Returns lowercase hex string.
  */
 async function computeHash(algorithm: string, data: string | Uint8Array): Promise<string> {
-    const encoder = new TextEncoder();
-    const bytes = typeof data === 'string' ? encoder.encode(data) : data;
-
-    // MD5 is not available in Web Crypto, use a simple implementation
-    if (algorithm === 'MD5') {
-        return computeMD5(bytes);
-    }
-
-    // Create a copy to ensure a plain ArrayBuffer
-    const buffer = new Uint8Array(bytes).buffer;
-    const hashBuffer = await crypto.subtle.digest(algorithm, buffer);
-    const hashArray = new Uint8Array(hashBuffer);
-
-    // For SHA-512-256, truncate to 256 bits (32 bytes)
-    const truncated = algorithm === 'SHA-512' ? hashArray.slice(0, 32) : hashArray;
-
-    return Array.from(truncated)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-/**
- * Simple MD5 implementation using Node.js crypto.
- * Note: MD5 is deprecated and only included for backward compatibility.
- */
-function computeMD5(data: Uint8Array): string {
-    return createHash('md5').update(data).digest('hex');
+    return createHash(algorithm).update(data).digest('hex');
 }
 
 /**

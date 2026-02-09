@@ -6,6 +6,21 @@
 import type { LanguageRange } from './types.js';
 import { isEmptyHeader, splitListValue, parseQValue } from './header-utils.js';
 
+function languageSpecificity(tag: string): number {
+    if (tag === '*') {
+        return 0;
+    }
+
+    let count = 1;
+    for (let i = 0; i < tag.length; i++) {
+        if (tag[i] === '-') {
+            count++;
+        }
+    }
+
+    return count;
+}
+
 /**
  * Parse an Accept-Language header into ranges.
  */
@@ -15,7 +30,7 @@ export function parseAcceptLanguage(header: string): LanguageRange[] {
         return [];
     }
 
-    const ranges: LanguageRange[] = [];
+    const ranges: Array<LanguageRange & { specificity: number }> = [];
     const parts = splitListValue(header);
 
     for (let i = 0; i < parts.length; i++) {
@@ -44,7 +59,7 @@ export function parseAcceptLanguage(header: string): LanguageRange[] {
             continue;
         }
 
-        ranges.push({ tag, q });
+        ranges.push({ tag, q, specificity: languageSpecificity(tag) });
     }
 
     ranges.sort((a, b) => {
@@ -52,16 +67,14 @@ export function parseAcceptLanguage(header: string): LanguageRange[] {
             return b.q - a.q;
         }
 
-        const specA = a.tag === '*' ? 0 : a.tag.split('-').length;
-        const specB = b.tag === '*' ? 0 : b.tag.split('-').length;
-        if (specA !== specB) {
-            return specB - specA;
+        if (a.specificity !== b.specificity) {
+            return b.specificity - a.specificity;
         }
 
         return 0;
     });
 
-    return ranges;
+    return ranges.map(({ tag, q }) => ({ tag, q }));
 }
 
 // RFC 4647 §3: Basic filtering.

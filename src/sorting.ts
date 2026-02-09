@@ -45,15 +45,7 @@ export function parseSortString(sort: string): SortField[] {
         });
 }
 
-/**
- * Get a nested value from an object using dot notation.
- *
- * @param obj - The object to access
- * @param path - Dot-separated path (e.g., "user.name")
- * @returns The value at the path, or undefined if not found
- */
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-    const parts = path.split('.');
+function getNestedValueByParts(obj: Record<string, unknown>, parts: string[]): unknown {
     let current: unknown = obj;
 
     for (const part of parts) {
@@ -67,6 +59,11 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
     }
 
     return current;
+}
+
+function compileNestedAccessor(path: string): (obj: Record<string, unknown>) => unknown {
+    const parts = path.split('.');
+    return (obj: Record<string, unknown>) => getNestedValueByParts(obj, parts);
 }
 
 /**
@@ -152,13 +149,18 @@ export function applySorting<T extends Record<string, unknown>>(
         return data;
     }
 
+    const compiledFields = sortFields.map(({ field, direction }) => ({
+        direction,
+        getValue: compileNestedAccessor(field),
+    }));
+
     // Create shallow copy to avoid mutating input
     const result = [...data];
 
     result.sort((a, b) => {
-        for (const { field, direction } of sortFields) {
-            const aValue = getNestedValue(a, field);
-            const bValue = getNestedValue(b, field);
+        for (const { direction, getValue } of compiledFields) {
+            const aValue = getValue(a);
+            const bValue = getValue(b);
 
             const comparison = compareValues(aValue, bValue, direction);
 

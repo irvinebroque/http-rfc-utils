@@ -92,7 +92,7 @@ export function jsonResponse<T>(
         headers['Link'] = linkHeader;
     }
 
-    return new Response(JSON.stringify({ data, meta }, null, 2), {
+    return new Response(JSON.stringify({ data, meta }), {
         status: 200,
         headers,
     });
@@ -197,7 +197,7 @@ export function simpleJsonResponse<T>(
         headers['Last-Modified'] = formatHTTPDate(lastModified);
     }
 
-    return new Response(JSON.stringify(data, null, 2), {
+    return new Response(JSON.stringify(data), {
         status: 200,
         headers,
     });

@@ -281,5 +281,14 @@ describe('RFC 9309 Robots Exclusion Protocol', () => {
             const config = parseRobotsTxt(`User-agent: *\nDisallow:\n`);
             assert.equal(isAllowed(config, 'AnyBot', '/anything'), true);
         });
+
+        it('returns stable results across repeated evaluations', () => {
+            const config = parseRobotsTxt(`User-agent: *\nAllow: /public/*\nDisallow: /private/*\n`);
+
+            for (let i = 0; i < 20; i++) {
+                assert.equal(isAllowed(config, 'AnyBot', '/public/page'), true);
+                assert.equal(isAllowed(config, 'AnyBot', '/private/secret'), false);
+            }
+        });
     });
 });

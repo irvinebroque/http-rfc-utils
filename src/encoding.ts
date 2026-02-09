@@ -50,13 +50,14 @@ export function parseAcceptEncoding(header: string): EncodingRange[] {
     return ranges;
 }
 
-function getQForEncoding(ranges: EncodingRange[], encoding: string): number | null {
+function buildQMap(ranges: EncodingRange[]): Map<string, number> {
+    const qMap = new Map<string, number>();
     for (const range of ranges) {
-        if (range.encoding === encoding) {
-            return range.q;
+        if (!qMap.has(range.encoding)) {
+            qMap.set(range.encoding, range.q);
         }
     }
-    return null;
+    return qMap;
 }
 
 /**
@@ -72,18 +73,19 @@ export function negotiateEncoding(ranges: EncodingRange[], supported: string[]):
         return supported[0] ?? null;
     }
 
-    const wildcard = ranges.find(range => range.encoding === '*');
+    const qMap = buildQMap(ranges);
+    const wildcardQ = qMap.get('*');
     let best: string | null = null;
     let bestQ = 0;
 
     for (const encoding of supported) {
         const normalized = encoding.toLowerCase();
-        const explicitQ = getQForEncoding(ranges, normalized);
-        const q = explicitQ !== null
+        const explicitQ = qMap.get(normalized);
+        const q = explicitQ !== undefined
             ? explicitQ
             : (normalized === 'identity'
-                ? (wildcard ? wildcard.q : 1.0)
-                : (wildcard ? wildcard.q : 0));
+                ? (wildcardQ ?? 1.0)
+                : (wildcardQ ?? 0));
 
         if (q > bestQ) {
             best = encoding;
