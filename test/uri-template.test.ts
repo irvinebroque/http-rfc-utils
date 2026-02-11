@@ -1,3 +1,7 @@
+/**
+ * Tests for uri template behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -601,6 +605,11 @@ describe('Edge Cases', () => {
 
     it('preserves literal percent signs in values when using + operator', () => {
         assert.equal(expandUriTemplate('{+half}', specVars), '50%25');
+    });
+
+    it('does not double-encode valid percent triplets across uri and uri-template', () => {
+        assert.equal(expandUriTemplate('{+path}', { path: '/files/%2f%3a' }), '/files/%2F%3A');
+        assert.equal(expandUriTemplate('{path}', { path: '/files/%2f%3a' }), '%2Ffiles%2F%252f%253a');
     });
 
     it('encodes percent signs in values for simple expansion', () => {

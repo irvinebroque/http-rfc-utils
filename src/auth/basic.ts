@@ -1,6 +1,7 @@
 /**
  * Basic authentication utilities.
  * RFC 7617 §2, §2.1.
+ * @see https://www.rfc-editor.org/rfc/rfc7617.html
  */
 
 import { Buffer } from 'node:buffer';
@@ -92,7 +93,7 @@ export function parseBasicChallenge(header: string): BasicChallenge | null {
     for (const param of challenge.params) {
         const name = param.name.toLowerCase();
         if (seen.has(name)) {
-            continue;
+            return null;
         }
         seen.add(name);
 

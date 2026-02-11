@@ -1,3 +1,7 @@
+/**
+ * Tests for compression dictionary behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -119,6 +123,25 @@ describe('validateUseAsDictionary and matchesDictionary (RFC 9842 Sections 2.1.1
             false,
         );
         assert.equal(matchesDictionary(dictionary, 'https://other.test/app/main.js'), false);
+    });
+
+    it('treats regex metacharacters as literal text except * wildcard', () => {
+        const literalDictionary = storedDictionary({
+            match: '/app/file+.min.js',
+        });
+
+        assert.equal(matchesDictionary(literalDictionary, 'https://example.test/app/file+.min.js'), true);
+        assert.equal(matchesDictionary(literalDictionary, 'https://example.test/app/fileXmin.js'), false);
+    });
+
+    it('supports multiple wildcard segments with full-string matching', () => {
+        const wildcardDictionary = storedDictionary({
+            match: '/app/*/chunks/*.js',
+        });
+
+        assert.equal(matchesDictionary(wildcardDictionary, 'https://example.test/app/v1/chunks/main.js'), true);
+        assert.equal(matchesDictionary(wildcardDictionary, 'https://example.test/app/v1/chunks/main.css'), false);
+        assert.equal(matchesDictionary(wildcardDictionary, 'https://example.test/app/v1/chunks/main.js.map'), false);
     });
 
     // RFC 9842 §2.1.4: unsupported type must not be used unless caller opts in.

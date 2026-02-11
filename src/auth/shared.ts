@@ -1,6 +1,7 @@
 /**
  * Shared authorization parsing and formatting utilities.
  * RFC 7235 §2.1.
+ * @see https://www.rfc-editor.org/rfc/rfc7235.html
  */
 
 import type {

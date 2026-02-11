@@ -1,3 +1,7 @@
+/**
+ * Tests for range behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -8,7 +12,7 @@ import {
     evaluateRange,
 } from '../src/range.js';
 
-describe('Range Requests (RFC 9110 Sections 14.2-14.4, 13.1.5)', () => {
+describe('Range Requests (RFC 9110 §14.1.2, §14.2, §14.3, §14.4, §13.1.5, §15.5.17)', () => {
     it('parses byte-range-spec (RFC 9110 Section 14.1.2)', () => {
         const parsed = parseRange('bytes=0-99');
         assert.equal(parsed?.unit, 'bytes');
@@ -51,10 +55,39 @@ describe('Range Requests (RFC 9110 Sections 14.2-14.4, 13.1.5)', () => {
         });
     });
 
+    it('parses Content-Range with unknown complete-length for range-resp (RFC 9110 Section 14.4)', () => {
+        const parsed = parseContentRange('bytes 42-1233/*');
+        assert.deepEqual(parsed, {
+            unit: 'bytes',
+            range: { start: 42, end: 1233 },
+            size: '*',
+        });
+    });
+
+    it('parses unsatisfied Content-Range with known complete-length (RFC 9110 Section 14.4)', () => {
+        const parsed = parseContentRange('bytes */1234');
+        assert.deepEqual(parsed, {
+            unit: 'bytes',
+            size: 1234,
+            unsatisfied: true,
+        });
+    });
+
     it('rejects non-digit numeric tokens in Content-Range (RFC 9110 Section 14.4)', () => {
         assert.equal(parseContentRange('bytes 0x-99/200'), null);
         assert.equal(parseContentRange('bytes 0-99x/200'), null);
         assert.equal(parseContentRange('bytes 0-99/200x'), null);
+    });
+
+    it('rejects invalid complete-length relationships in Content-Range (RFC 9110 Section 14.4)', () => {
+        assert.equal(parseContentRange('bytes */*'), null);
+        assert.equal(parseContentRange('bytes 500-999/500'), null);
+        assert.equal(parseContentRange('bytes 0-0/0'), null);
+    });
+
+    it('rejects non-bytes Content-Range units (RFC 9110 Section 14.4)', () => {
+        assert.equal(parseContentRange('items 0-99/200'), null);
+        assert.equal(parseContentRange('bytesx 0-99/200'), null);
     });
 
     it('returns Accept-Ranges value (RFC 9110 Section 14.3)', () => {
@@ -73,6 +106,12 @@ describe('Range Requests (RFC 9110 Sections 14.2-14.4, 13.1.5)', () => {
         assert.equal(result.headers?.['Content-Range'], 'bytes 0-9/100');
     });
 
+    it('returns none when Range is absent (RFC 9110 Section 14.2)', () => {
+        const request = new Request('https://example.com');
+        const result = evaluateRange(request, 100);
+        assert.equal(result.type, 'none');
+    });
+
     it('returns unsatisfiable for out-of-range (RFC 9110 Section 15.5.17)', () => {
         const request = new Request('https://example.com', {
             headers: { Range: 'bytes=200-300' },
@@ -81,6 +120,16 @@ describe('Range Requests (RFC 9110 Sections 14.2-14.4, 13.1.5)', () => {
         const result = evaluateRange(request, 100);
         assert.equal(result.type, 'unsatisfiable');
         assert.equal(result.headers?.['Content-Range'], 'bytes */100');
+    });
+
+    it('returns unsatisfiable for empty representations (RFC 9110 Section 15.5.17)', () => {
+        const request = new Request('https://example.com', {
+            headers: { Range: 'bytes=0-0' },
+        });
+
+        const result = evaluateRange(request, 0);
+        assert.equal(result.type, 'unsatisfiable');
+        assert.equal(result.headers?.['Content-Range'], 'bytes */0');
     });
 
     it('ignores Range when If-Range does not match (RFC 9110 Section 13.1.5)', () => {
@@ -121,16 +170,22 @@ describe('Range Requests (RFC 9110 Sections 14.2-14.4, 13.1.5)', () => {
         assert.equal(result.type, 'partial');
     });
 
-    // RFC 9110 Section 14.2: Range applies to GET; others are ignored.
-    it('ignores Range for non-GET requests', () => {
-        const request = new Request('https://example.com', {
+    // RFC 9110 Section 14.2: GET is the only method with defined range handling.
+    it('ignores Range for methods other than GET, including HEAD (RFC 9110 Section 14.2)', () => {
+        const headRequest = new Request('https://example.com', {
+            method: 'HEAD',
+            headers: {
+                Range: 'bytes=0-9',
+            },
+        });
+        assert.equal(evaluateRange(headRequest, 100).type, 'ignored');
+
+        const postRequest = new Request('https://example.com', {
             method: 'POST',
             headers: {
                 Range: 'bytes=0-9',
             },
         });
-
-        const result = evaluateRange(request, 100);
-        assert.equal(result.type, 'ignored');
+        assert.equal(evaluateRange(postRequest, 100).type, 'ignored');
     });
 });

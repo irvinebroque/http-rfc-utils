@@ -1,3 +1,9 @@
+/**
+ * TypeScript API model helpers for SemVer compatibility checks.
+ * Extracts exported symbol/type information from declaration entrypoints.
+ * @see https://semver.org/
+ */
+
 import * as ts from 'typescript';
 import type { ApiExportKind, ApiExportModel } from './types.js';
 

@@ -1,6 +1,7 @@
 /**
  * Content negotiation-related types.
  * RFC 7231, RFC 5789, RFC 7240, RFC 9110, RFC 4647.
+ * @see https://www.rfc-editor.org/rfc/rfc7231.html
  */
 
 // Content Negotiation (RFC 7231)

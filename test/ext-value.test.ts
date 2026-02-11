@@ -1,3 +1,7 @@
+/**
+ * Tests for ext value behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -146,6 +150,23 @@ describe('decodeExtValue', () => {
 
     it('returns null for missing second quote', () => {
         assert.equal(decodeExtValue("utf-8'envalue"), null);
+    });
+
+    // RFC 8187 §3.2.1: optional language must follow BCP47-like syntax.
+    it('returns null for malformed language token', () => {
+        assert.equal(decodeExtValue("utf-8'en--US'test"), null);
+        assert.equal(decodeExtValue("utf-8'9en'test"), null);
+    });
+
+    // RFC 8187 §3.2.1: value-chars are attr-char / pct-encoded only.
+    it('returns null for disallowed unescaped value characters', () => {
+        assert.equal(decodeExtValue("utf-8''hello world"), null);
+        assert.equal(decodeExtValue("utf-8''abc'xyz"), null);
+    });
+
+    it('returns null for stray percent signs', () => {
+        assert.equal(decodeExtValue("utf-8''abc%"), null);
+        assert.equal(decodeExtValue("utf-8''abc%2"), null);
     });
 
     it('handles value containing single quotes', () => {

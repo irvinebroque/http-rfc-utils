@@ -1,3 +1,7 @@
+/**
+ * Tests for etag behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -44,6 +48,13 @@ describe('ETag Generation', () => {
             const data = new Uint8Array([72, 101, 108, 108, 111]);
             const etag = generateETag(data);
             assert.match(etag, /^"[^"]+"$/);
+        });
+
+        it('keeps ArrayBuffer and TypedArray byte views consistent', () => {
+            const source = new Uint8Array([0, 72, 101, 108, 108, 111, 0]);
+            const buffer = source.buffer.slice(1, 6);
+            const view = new Uint8Array(source.buffer, 1, 5);
+            assert.equal(generateETag(buffer), generateETag(view));
         });
 
         it('same content as string and Uint8Array produces same ETag', () => {
@@ -107,6 +118,13 @@ describe('ETag Generation', () => {
             const data = new Uint8Array([72, 101, 108, 108, 111]);
             const etag = await generateETagAsync(data);
             assert.match(etag, /^"[^"]+"$/);
+        });
+
+        it('keeps ArrayBuffer and TypedArray byte views consistent', async () => {
+            const source = new Uint8Array([0, 72, 101, 108, 108, 111, 0]);
+            const buffer = source.buffer.slice(1, 6);
+            const view = new Uint8Array(source.buffer, 1, 5);
+            assert.equal(await generateETagAsync(buffer), await generateETagAsync(view));
         });
     });
 });

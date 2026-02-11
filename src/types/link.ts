@@ -1,6 +1,7 @@
 /**
  * Linking and pagination-related types.
  * RFC 8288, RFC 9264, RFC 9727.
+ * @see https://www.rfc-editor.org/rfc/rfc8288.html
  */
 import type { SfBareItem } from './structured-fields.js';
 

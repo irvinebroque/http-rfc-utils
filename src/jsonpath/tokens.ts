@@ -1,6 +1,7 @@
 /**
  * JSONPath lexer token definitions.
  * RFC 9535 §2.1, §2.3.
+ * @see https://www.rfc-editor.org/rfc/rfc9535.html
  */
 
 // RFC 9535 §2.1: Integers MUST be within I-JSON range.

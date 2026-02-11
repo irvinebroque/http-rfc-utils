@@ -1,3 +1,9 @@
+/**
+ * Declaration build helpers for SemVer API comparison.
+ * Emits `.d.ts` snapshots for HEAD and historical git refs.
+ * @see https://semver.org/
+ */
+
 import { access, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { constants as fsConstants, existsSync } from 'node:fs';
 import os from 'node:os';

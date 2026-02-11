@@ -1,3 +1,7 @@
+/**
+ * Tests for alt svc behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -109,6 +113,15 @@ describe('formatAltSvc (RFC 7838 Section 3)', () => {
         });
 
         assert.equal(value, 'h2=":8000"; ma=60, h3="alt.example.test:443"; persist=1');
+    });
+
+    it('formats authority with embedded quote and backslash', () => {
+        const value = formatAltSvc({
+            clear: false,
+            alternatives: [{ protocolId: 'h2', authority: 'alt\\"svc:443' }],
+        });
+
+        assert.equal(value, 'h2="alt\\\\\\"svc:443"');
     });
 });
 

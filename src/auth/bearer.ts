@@ -1,6 +1,7 @@
 /**
  * Bearer token authentication utilities.
  * RFC 6750 §2.1, §3.
+ * @see https://www.rfc-editor.org/rfc/rfc6750.html
  */
 
 import type {

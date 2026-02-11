@@ -6,33 +6,10 @@
 
 import type { CookieAttributes, CookieHeaderOptions, SetCookie, StoredCookie } from './types.js';
 import { formatHTTPDate } from './datetime.js';
-import { assertHeaderToken, assertNoCtl, quoteString } from './header-utils.js';
+import { assertHeaderToken, assertNoCtl, quoteString, unquoteLenient } from './header-utils.js';
 import { createObjectMap } from './object-map.js';
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-
-function unquoteCookieValue(value: string): string {
-    const trimmed = value.trim();
-    if (!trimmed.startsWith('"') || !trimmed.endsWith('"') || trimmed.length < 2) {
-        return trimmed;
-    }
-
-    const inner = trimmed.slice(1, -1);
-    let result = '';
-    let i = 0;
-
-    while (i < inner.length) {
-        if (inner[i] === '\\' && i + 1 < inner.length) {
-            result += inner[i + 1];
-            i += 2;
-        } else {
-            result += inner[i];
-            i++;
-        }
-    }
-
-    return result;
-}
 
 function formatCookieValue(value: string): string {
     assertNoCtl(value, 'Cookie value');
@@ -183,7 +160,7 @@ export function parseCookie(header: string): Map<string, string> {
             continue;
         }
 
-        const value = unquoteCookieValue(trimmed.slice(eqIndex + 1));
+        const value = unquoteLenient(trimmed.slice(eqIndex + 1));
         if (!cookies.has(name)) {
             cookies.set(name, value);
         }
@@ -229,7 +206,7 @@ export function parseSetCookie(header: string): SetCookie | null {
         return null;
     }
 
-    const value = unquoteCookieValue(cookiePair.slice(eqIndex + 1).trim());
+    const value = unquoteLenient(cookiePair.slice(eqIndex + 1).trim());
     const attributes: CookieAttributes = {};
 
     for (const part of parts) {

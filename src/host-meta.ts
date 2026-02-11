@@ -29,7 +29,7 @@ const ATTR_REGEX_CACHE = new Map<string, RegExp>();
  */
 export function parseHostMeta(xml: string): HostMeta {
     const links: HostMetaLink[] = [];
-    const properties = createObjectMap<string | null>();
+    let properties: Record<string, string | null> | null = null;
 
     // Parse <Link> elements.
     const linkRegex = /<Link\s([^>]*?)\/?>(?:<\/Link>)?/gi;
@@ -56,11 +56,14 @@ export function parseHostMeta(xml: string): HostMeta {
         }
 
         const value = match[2] !== undefined ? decodeXmlEntities(match[2]) : null;
+        if (properties === null) {
+            properties = createObjectMap<string | null>();
+        }
         properties[type] = value;
     }
 
     const result: HostMeta = { links };
-    if (Object.keys(properties).length > 0) {
+    if (properties !== null) {
         result.properties = properties;
     }
     return result;
@@ -74,13 +77,13 @@ function parseLinkAttributes(attrs: string): HostMetaLink | null {
     if (!rel) return null;
 
     const link: HostMetaLink = { rel };
-
+ 
     const type = extractAttr(attrs, 'type');
     if (type) link.type = type;
-
+ 
     const href = extractAttr(attrs, 'href');
     if (href) link.href = href;
-
+ 
     const template = extractAttr(attrs, 'template');
     if (template) link.template = template;
 
@@ -108,6 +111,10 @@ function extractAttr(attrs: string, name: string): string | null {
  * Decode basic XML entities.
  */
 function decodeXmlEntities(text: string): string {
+    if (!text.includes('&')) {
+        return text;
+    }
+
     return text
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')

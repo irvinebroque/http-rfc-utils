@@ -1,3 +1,7 @@
+/**
+ * Tests for host meta behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -10,7 +14,7 @@ import {
 import type { HostMeta } from '../src/types.js';
 
 // RFC 6415 §2-3: Host Metadata in XRD and JSON formats.
-describe('RFC 6415 Host Metadata', () => {
+describe('RFC 6415 Host Metadata (§2 XRD, §3 JSON)', () => {
     const sampleHostMeta: HostMeta = {
         links: [
             {

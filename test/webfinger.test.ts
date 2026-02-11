@@ -1,3 +1,7 @@
+/**
+ * Tests for webfinger behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -12,7 +16,7 @@ import {
 import type { WebFingerResponse } from '../src/types.js';
 
 // RFC 7033 §4: WebFinger JSON Resource Descriptor (JRD).
-describe('RFC 7033 WebFinger', () => {
+describe('WebFinger JRD helpers (RFC 7033 Sections 4, 4.2-4.4)', () => {
     const sampleJrd: WebFingerResponse = {
         subject: 'acct:bob@example.com',
         aliases: [

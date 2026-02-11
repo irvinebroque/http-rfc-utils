@@ -1,6 +1,7 @@
 /**
  * Content negotiation utilities per RFC 7231.
  * RFC 7231 §5.3.1, §5.3.2.
+ * @see https://www.rfc-editor.org/rfc/rfc7231.html
  */
 
 import type { AcceptEntry, MediaType } from './types.js';

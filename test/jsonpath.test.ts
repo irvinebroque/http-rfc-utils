@@ -1,3 +1,7 @@
+/**
+ * Tests for jsonpath behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -619,6 +623,12 @@ describe('RFC 9535 JSONPath', () => {
                 // Repeat to ensure behavior is stable across repeated evaluations.
                 assert.deepEqual(queryJsonPath('$[?match(@.s, "(")]', data), []);
             });
+
+            it('rejects quantified overlapping alternation patterns by default', () => {
+                const data = [{ s: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }];
+                const result = queryJsonPath('$[?match(@.s, "(a|aa)+$")]', data);
+                assert.equal(result, null);
+            });
         });
 
         // RFC 9535 §2.4.7: search()
@@ -631,6 +641,30 @@ describe('RFC 9535 JSONPath', () => {
             it('finds pattern anywhere in string', () => {
                 const data = [{ s: 'xfoox' }, { s: 'bar' }];
                 assert.deepEqual(queryJsonPath('$[?search(@.s, "foo")]', data), [{ s: 'xfoox' }]);
+            });
+
+            it('rejects quantified overlapping alternation variants by default', () => {
+                const data = [{ s: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }];
+                const result = queryJsonPath('$[?search(@.s, "(ab|a)+$")]', data);
+                assert.equal(result, null);
+            });
+
+            it('allows opted-out unsafe regex policy', () => {
+                const data = [{ s: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }];
+                const result = queryJsonPath(
+                    '$[?search(@.s, "(a|aa)+$")]',
+                    data,
+                    { rejectUnsafeRegex: false }
+                );
+                assert.notEqual(result, null);
+            });
+
+            it('keeps safe quantified alternation behavior', () => {
+                const data = [{ s: 'catdog' }, { s: 'cat' }, { s: 'wolf' }];
+                assert.deepEqual(
+                    queryJsonPath('$[?match(@.s, "(cat|dog)+")]', data),
+                    [{ s: 'catdog' }, { s: 'cat' }]
+                );
             });
         });
 
@@ -806,6 +840,13 @@ describe('RFC 9535 JSONPath', () => {
             const data = [{ s: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }];
             const result = queryJsonPath('$[?search(@.s, "(a+)+$")]', data);
             assert.equal(result, null);
+        });
+
+        it('throws for unsafe regex patterns when throwOnError is true', () => {
+            const data = [{ s: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }];
+            assert.throws(() => {
+                queryJsonPath('$[?search(@.s, "(a|aa)+$")]', data, { throwOnError: true });
+            }, /unsafe regular expression pattern/);
         });
 
         // RFC 9535 §2.4.6-§2.4.7 + implementation limits: regex input and pattern budgets.

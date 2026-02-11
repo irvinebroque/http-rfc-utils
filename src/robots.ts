@@ -13,7 +13,7 @@ const MAX_LINE_BYTES = 500;
 const UTF8_ENCODER = new TextEncoder();
 
 interface CompiledRule {
-    regex: RegExp;
+    glob: string;
     length: number;
 }
 
@@ -230,23 +230,49 @@ export function matchUserAgent(config: RobotsConfig, userAgent: string): RobotsG
 }
 
 /**
- * Convert a robots.txt path pattern to a RegExp.
- * RFC 9309 §2.2.2: `*` matches zero or more characters; `$` anchors end of URL.
+ * Compile a robots.txt path pattern to a wildcard glob.
+ * RFC 9309 §2.2.2: `*` matches zero or more characters; terminal `$` anchors end of URL.
  */
-function pathPatternToRegex(pattern: string): RegExp {
-    let regex = '';
-    for (let i = 0; i < pattern.length; i++) {
-        const ch = pattern.charAt(i);
-        if (ch === '*') {
-            regex += '.*';
-        } else if (ch === '$' && i === pattern.length - 1) {
-            regex += '$';
+function compilePathPattern(pattern: string): string {
+    const anchoredEnd = pattern.endsWith('$');
+    const corePattern = anchoredEnd ? pattern.slice(0, -1) : pattern;
+
+    // RFC 9309 §2.2.2 matching is prefix-based unless terminal `$` is present.
+    // Use an explicit trailing wildcard for unanchored patterns.
+    return anchoredEnd ? corePattern : `${corePattern}*`;
+}
+
+/**
+ * Match a path against a `*`-wildcard glob in linear time.
+ */
+function wildcardMatchLinear(glob: string, value: string): boolean {
+    let globIndex = 0;
+    let valueIndex = 0;
+    let starIndex = -1;
+    let matchIndex = 0;
+
+    while (valueIndex < value.length) {
+        if (globIndex < glob.length && glob.charAt(globIndex) === '*') {
+            starIndex = globIndex;
+            matchIndex = valueIndex;
+            globIndex++;
+        } else if (globIndex < glob.length && glob.charAt(globIndex) === value.charAt(valueIndex)) {
+            globIndex++;
+            valueIndex++;
+        } else if (starIndex >= 0) {
+            globIndex = starIndex + 1;
+            matchIndex++;
+            valueIndex = matchIndex;
         } else {
-            // Escape regex special characters.
-            regex += ch.replace(/[.+?^{}()|[\]\\]/g, '\\$&');
+            return false;
         }
     }
-    return new RegExp('^' + regex);
+
+    while (globIndex < glob.length && glob.charAt(globIndex) === '*') {
+        globIndex++;
+    }
+
+    return globIndex === glob.length;
 }
 
 /**
@@ -266,14 +292,19 @@ function getCompiledGroup(group: RobotsGroup): CompiledRobotsGroup {
 
     const compiled: CompiledRobotsGroup = {
         allow: group.allow.map((pattern) => ({
-            regex: pathPatternToRegex(pattern),
+            glob: compilePathPattern(pattern),
             length: effectiveLength(pattern),
         })),
         disallow: group.disallow.map((pattern) => ({
-            regex: pathPatternToRegex(pattern),
+            glob: compilePathPattern(pattern),
             length: effectiveLength(pattern),
         })),
     };
+
+    // RFC 9309 §2.2: Only longest matching rule matters.
+    // Sort once so checks can stop at first match.
+    compiled.allow.sort((left, right) => right.length - left.length);
+    compiled.disallow.sort((left, right) => right.length - left.length);
 
     COMPILED_ROBOTS_GROUPS.set(group, compiled);
     return compiled;
@@ -300,19 +331,19 @@ export function isAllowed(config: RobotsConfig, userAgent: string, path: string)
     let bestDisallow = -1;
     const compiledGroup = getCompiledGroup(group);
 
-    for (const rule of compiledGroup.allow) {
-        if (rule.regex.test(path)) {
-            if (rule.length > bestAllow) {
-                bestAllow = rule.length;
-            }
+    for (let index = 0; index < compiledGroup.allow.length; index++) {
+        const rule = compiledGroup.allow[index]!;
+        if (wildcardMatchLinear(rule.glob, path)) {
+            bestAllow = rule.length;
+            break;
         }
     }
 
-    for (const rule of compiledGroup.disallow) {
-        if (rule.regex.test(path)) {
-            if (rule.length > bestDisallow) {
-                bestDisallow = rule.length;
-            }
+    for (let index = 0; index < compiledGroup.disallow.length; index++) {
+        const rule = compiledGroup.disallow[index]!;
+        if (wildcardMatchLinear(rule.glob, path)) {
+            bestDisallow = rule.length;
+            break;
         }
     }
 

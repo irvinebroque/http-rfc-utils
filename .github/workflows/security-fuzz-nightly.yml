@@ -5,12 +5,20 @@ on:
     - cron: '25 4 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   fuzz-full:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
@@ -19,7 +27,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm fuzz:full
 
       - name: Upload fuzz artifacts

@@ -1,3 +1,7 @@
+/**
+ * Tests for proxy status behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -114,6 +118,15 @@ describe('Proxy-Status next-protocol parameter (RFC 9209 Section 2.1.3)', () => 
         assert.deepEqual(parsed, [{
             proxy: 'ExampleCDN',
             params: { nextProtocol: 'h3' },
+        }]);
+    });
+
+    // RFC 9209 §2.1.3: next-protocol allows Byte Sequence form.
+    it('parses next-protocol byte sequence form', () => {
+        const parsed = parseProxyStatus('ExampleCDN; next-protocol=:aDIA:');
+        assert.deepEqual(parsed, [{
+            proxy: 'ExampleCDN',
+            params: { nextProtocol: 'h2\x00' },
         }]);
     });
 });
@@ -425,6 +438,14 @@ describe('Proxy-Status formatting (RFC 9209 Section 2)', () => {
         assert.equal(formatted, 'cdn.example.org;next-hop=backend.example.org:8001');
     });
 
+    it('formats next-hop with slash as token', () => {
+        const formatted = formatProxyStatus([{
+            proxy: 'cdn.example.org',
+            params: { nextHop: 'origin/api' },
+        }]);
+        assert.equal(formatted, 'cdn.example.org;next-hop=origin/api');
+    });
+
     // RFC 9209 §2.1.2: next-hop as quoted string when value contains characters not valid in token.
     it('formats next-hop parameter with spaces as quoted string', () => {
         const formatted = formatProxyStatus([{
@@ -441,6 +462,24 @@ describe('Proxy-Status formatting (RFC 9209 Section 2)', () => {
             params: { nextProtocol: 'h2' },
         }]);
         assert.equal(formatted, 'ExampleCDN;next-protocol=h2');
+    });
+
+    // RFC 9209 §2.1.3: token-safe IDs MUST use token form.
+    it('formats token-safe next-protocol values as token', () => {
+        const formatted = formatProxyStatus([{
+            proxy: 'ExampleCDN',
+            params: { nextProtocol: 'h3-29' },
+        }]);
+        assert.equal(formatted, 'ExampleCDN;next-protocol=h3-29');
+    });
+
+    // RFC 9209 §2.1.3: non-token-safe IDs use Byte Sequence.
+    it('formats non-token-safe next-protocol values as byte sequence', () => {
+        const formatted = formatProxyStatus([{
+            proxy: 'ExampleCDN',
+            params: { nextProtocol: 'h2\x00' },
+        }]);
+        assert.equal(formatted, 'ExampleCDN;next-protocol=:aDIA:');
     });
 
     // RFC 9209 §2.1.4: received-status formatting.
@@ -486,6 +525,23 @@ describe('Proxy-Status formatting (RFC 9209 Section 2)', () => {
         }]);
         assert.equal(formatted, 'ExampleCDN;error=http_request_error;custom-param=42');
     });
+
+    // RFC 9209 §2.1.5: details is String only.
+    it('throws when formatting details with non-string values', () => {
+        assert.throws(() => {
+            formatProxyStatus([{
+                proxy: 'ExampleCDN',
+                params: { details: 123 as unknown as string },
+            }]);
+        }, /Invalid Proxy-Status details value/);
+
+        assert.throws(() => {
+            formatProxyStatus([{
+                proxy: 'ExampleCDN',
+                params: { details: true as unknown as string },
+            }]);
+        }, /Invalid Proxy-Status details value/);
+    });
 });
 
 // Round-trip tests.
@@ -522,5 +578,29 @@ describe('Proxy-Status round-trip (RFC 9209)', () => {
         // Parameter order may differ, so parse again and compare
         const reparsed = parseProxyStatus(formatted);
         assert.deepEqual(reparsed, parsed);
+    });
+
+    it('round-trips next-protocol token and byte sequence representations', () => {
+        const tokenOriginal = 'ExampleCDN;next-protocol=h2';
+        const tokenParsed = parseProxyStatus(tokenOriginal);
+        assert.ok(tokenParsed);
+        assert.equal(formatProxyStatus(tokenParsed), tokenOriginal);
+
+        const binaryOriginal = 'ExampleCDN;next-protocol=:aDIA:';
+        const binaryParsed = parseProxyStatus(binaryOriginal);
+        assert.ok(binaryParsed);
+        assert.equal(formatProxyStatus(binaryParsed), binaryOriginal);
+    });
+});
+
+describe('Proxy-Status details parsing (RFC 9209 Section 2.1.5)', () => {
+    it('ignores non-string details values while preserving extensions', () => {
+        const parsed = parseProxyStatus('ExampleCDN;details=?1;custom=1');
+        assert.deepEqual(parsed, [{
+            proxy: 'ExampleCDN',
+            params: {
+                extensions: { custom: 1 },
+            },
+        }]);
     });
 });

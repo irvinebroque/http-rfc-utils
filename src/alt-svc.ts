@@ -8,6 +8,7 @@ import type { AltSvcAlternative, AltSvcRecord, AltUsed } from './types.js';
 import {
     TOKEN_CHARS,
     assertNoCtl,
+    escapeQuotedString,
     parseDeltaSeconds,
     parseKeyValueSegment,
     parseQuotedStringStrict,
@@ -220,7 +221,7 @@ function formatAlternative(alternative: AltSvcAlternative): string {
         throw new Error('Alt-Svc alt-authority must not be empty');
     }
 
-    const escapedAuthority = alternative.authority.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const escapedAuthority = escapeQuotedString(alternative.authority);
     const parts = [`${alternative.protocolId}="${escapedAuthority}"`];
 
     if (alternative.ma !== undefined) {
@@ -293,7 +294,7 @@ function isValidAltUsedHost(host: string): boolean {
         return false;
     }
 
-    if (/[\s\[\]\/]/.test(host)) {
+    if (/[\s[\]/]/.test(host)) {
         return false;
     }
 

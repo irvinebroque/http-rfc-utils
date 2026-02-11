@@ -1,6 +1,7 @@
 /**
  * HTTP message signature types.
  * RFC 9421.
+ * @see https://www.rfc-editor.org/rfc/rfc9421.html
  */
 
 /**

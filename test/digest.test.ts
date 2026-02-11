@@ -1,3 +1,7 @@
+/**
+ * Tests for digest behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -32,7 +36,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
 }
 
 // RFC 9530 §2, §3, §4, §5: Digest Fields parsing, formatting, and verification.
-describe('RFC 9530 Digest Fields', () => {
+describe('RFC 9530 Digest Fields (§2-§5, Appendix D)', () => {
     // RFC 9530 §5: Hash algorithm status and identification.
     describe('Algorithm Identification', () => {
         it('identifies active algorithms', () => {
@@ -340,6 +344,42 @@ describe('RFC 9530 Digest Fields', () => {
                 value: new Uint8Array([1, 2, 3, 4]),
             };
             const result = await verifyDigest(HELLO_WORLD, digest);
+            assert.equal(result, false);
+        });
+
+        it('rejects digest with matching prefix but different last byte (F8 regression)', async () => {
+            const expected = await generateDigest(HELLO_WORLD, 'sha-256');
+            const almost = expected.value.slice();
+            almost[almost.length - 1] ^= 0x01;
+
+            const result = await verifyDigest(HELLO_WORLD, {
+                algorithm: 'sha-256',
+                value: almost,
+            });
+            assert.equal(result, false);
+        });
+
+        it('rejects shorter digest even when prefix matches (F8 regression)', async () => {
+            const expected = await generateDigest(HELLO_WORLD, 'sha-256');
+            const shorter = expected.value.slice(0, expected.value.length - 1);
+
+            const result = await verifyDigest(HELLO_WORLD, {
+                algorithm: 'sha-256',
+                value: shorter,
+            });
+            assert.equal(result, false);
+        });
+
+        it('rejects longer digest even when prefix matches (F8 regression)', async () => {
+            const expected = await generateDigest(HELLO_WORLD, 'sha-256');
+            const longer = new Uint8Array(expected.value.length + 1);
+            longer.set(expected.value, 0);
+            longer[longer.length - 1] = 0;
+
+            const result = await verifyDigest(HELLO_WORLD, {
+                algorithm: 'sha-256',
+                value: longer,
+            });
             assert.equal(result, false);
         });
 

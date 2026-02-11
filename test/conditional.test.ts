@@ -1,3 +1,7 @@
+/**
+ * Tests for conditional behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -17,7 +21,7 @@ function mockRequest(method: string, headers: Record<string, string>): Request {
 }
 
 // RFC 9110 §13.1.1-§13.1.4, §13.2.2: Conditional request header handling.
-describe('RFC 9110 Conditional Requests', () => {
+describe('RFC 9110 Conditional Requests (§13.1.1-§13.1.4, §13.2.2)', () => {
     // RFC 9110 §13.1.2: If-None-Match field value parsing.
     describe('parseIfNoneMatch', () => {
         it('parses single ETag', () => {

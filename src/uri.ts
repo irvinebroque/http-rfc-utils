@@ -6,11 +6,13 @@
 
 import type { UriComponent } from './types.js';
 import {
+    createAsciiAllowTable,
+    encodeRfc3986,
+} from './internal-uri-encoding.js';
+import {
     isHexDigit,
-    isHexDigitByte,
-    pushPercentEncodedByte,
-    toUpperHexChar,
 } from './internal-percent-encoding.js';
+import { encodeUtf8 } from './internal-unicode.js';
 
 // RFC 3986 §2.3: Unreserved characters.
 // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
@@ -26,21 +28,9 @@ export const SUB_DELIMS = '!$&\'()*+,;=';
 // Combined reserved = gen-delims / sub-delims
 const RESERVED_CHARS = GEN_DELIMS + SUB_DELIMS;
 
-const UTF8_ENCODER = new TextEncoder();
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
 
-function createAsciiTable(chars: string): boolean[] {
-    const table = Array<boolean>(128).fill(false);
-    for (let i = 0; i < chars.length; i++) {
-        const code = chars.charCodeAt(i);
-        if (code < 128) {
-            table[code] = true;
-        }
-    }
-    return table;
-}
-
-const UNRESERVED_TABLE = createAsciiTable(UNRESERVED_CHARS);
+const UNRESERVED_TABLE = createAsciiAllowTable(UNRESERVED_CHARS);
 
 // RFC 3986 §3.3: pchar = unreserved / pct-encoded / sub-delims / ":" / "@"
 const PCHAR_EXTRA = SUB_DELIMS + ':@';
@@ -57,11 +47,11 @@ const COMPONENT_ALLOWED: Record<UriComponent, string> = {
     userinfo: SUB_DELIMS + ':',
 };
 
-const COMPONENT_ALLOWED_TABLE: Record<UriComponent, boolean[]> = {
-    path: createAsciiTable(COMPONENT_ALLOWED.path),
-    query: createAsciiTable(COMPONENT_ALLOWED.query),
-    fragment: createAsciiTable(COMPONENT_ALLOWED.fragment),
-    userinfo: createAsciiTable(COMPONENT_ALLOWED.userinfo),
+const COMPONENT_ALLOW_TABLE: Record<UriComponent, ReadonlyArray<boolean>> = {
+    path: createAsciiAllowTable(UNRESERVED_CHARS + COMPONENT_ALLOWED.path),
+    query: createAsciiAllowTable(UNRESERVED_CHARS + COMPONENT_ALLOWED.query),
+    fragment: createAsciiAllowTable(UNRESERVED_CHARS + COMPONENT_ALLOWED.fragment),
+    userinfo: createAsciiAllowTable(UNRESERVED_CHARS + COMPONENT_ALLOWED.userinfo),
 };
 
 // Default ports for scheme-based normalization (RFC 3986 §6.2.3)
@@ -117,59 +107,11 @@ export function isReserved(char: string): boolean {
 // RFC 3986 §2.1: Percent-encoding uses uppercase HEXDIG.
 // RFC 3986 §2.3: Unreserved characters SHOULD NOT be encoded.
 export function percentEncode(str: string, component: UriComponent = 'path'): string {
-    if (!str) {
-        return '';
-    }
-
-    const allowedExtra = COMPONENT_ALLOWED_TABLE[component];
-    const result: string[] = [];
-
-    // Encode string as UTF-8 bytes
-    const bytes = UTF8_ENCODER.encode(str);
-
-    let i = 0;
-    while (i < bytes.length) {
-        const byte = bytes[i];
-        if (byte === undefined) {
-            break;
-        }
-
-        // Check if this is an ASCII character we can represent directly
-        if (byte < 128) {
-            // RFC 3986 §2.3: Do not encode unreserved characters
-            if (UNRESERVED_TABLE[byte] === true) {
-                result.push(String.fromCharCode(byte));
-                i++;
-                continue;
-            }
-
-            // Check component-specific allowed characters
-            if (allowedExtra[byte] === true) {
-                result.push(String.fromCharCode(byte));
-                i++;
-                continue;
-            }
-
-            // Check for already-encoded sequence to avoid double-encoding
-            // RFC 3986 §2.4: MUST NOT percent-encode an already percent-encoded string
-            if (byte === 0x25 && i + 2 < bytes.length) {
-                const hex1 = bytes[i + 1]!;
-                const hex2 = bytes[i + 2]!;
-                if (isHexDigitByte(hex1) && isHexDigitByte(hex2)) {
-                    // Already encoded - pass through with uppercase normalization
-                    result.push('%', toUpperHexChar(hex1), toUpperHexChar(hex2));
-                    i += 3;
-                    continue;
-                }
-            }
-        }
-
-        // Percent-encode the byte with uppercase hex
-        pushPercentEncodedByte(result, byte);
-        i++;
-    }
-
-    return result.join('');
+    return encodeRfc3986(str, {
+        allowTable: COMPONENT_ALLOW_TABLE[component],
+        preservePctTriplets: true,
+        normalizePctHexUppercase: true,
+    });
 }
 
 /**
@@ -189,7 +131,6 @@ export function percentDecode(str: string): string {
     }
 
     const bytes: number[] = [];
-    const encoder = UTF8_ENCODER;
     let i = 0;
 
     while (i < str.length) {
@@ -214,7 +155,7 @@ export function percentDecode(str: string): string {
             bytes.push(charCode);
         } else {
             // Non-ASCII character that wasn't encoded - encode as UTF-8
-            const charBytes = encoder.encode(str.charAt(i));
+            const charBytes = encodeUtf8(str.charAt(i));
             bytes.push(...charBytes);
         }
         i++;
@@ -456,6 +397,10 @@ function removeLastSegment(output: string[]): void {
 function normalizePercentEncoding(str: string): string {
     if (!str) {
         return '';
+    }
+
+    if (!str.includes('%')) {
+        return str;
     }
 
     const result: string[] = [];

@@ -1,3 +1,7 @@
+/**
+ * Tests for link template behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { SfDisplayString } from '../src/types.js';

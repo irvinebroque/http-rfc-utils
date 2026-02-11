@@ -1,3 +1,7 @@
+/**
+ * Tests for uri behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
@@ -121,6 +125,11 @@ describe('percentEncode (RFC 3986 Section 2.1)', () => {
     it('normalizes lowercase hex to uppercase when passing through', () => {
         assert.strictEqual(percentEncode('%2f'), '%2F');
         assert.strictEqual(percentEncode('%3a'), '%3A');
+    });
+
+    it('preserves uppercase percent-triplets after helper migration', () => {
+        assert.strictEqual(percentEncode('a%2Fb%3A'), 'a%2Fb%3A');
+        assert.strictEqual(percentEncode('a%2fb%3a'), 'a%2Fb%3A');
     });
 
     it('encodes non-ASCII as UTF-8 percent-encoded', () => {

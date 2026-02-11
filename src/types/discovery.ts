@@ -1,6 +1,7 @@
 /**
  * Discovery and metadata document types.
- * RFC 9309, RFC 9116, RFC 7033, RFC 6415.
+ * RFC 9309, RFC 9116, RFC 7033, RFC 6415, RFC 8414.
+ * @see https://www.rfc-editor.org/rfc/rfc9309.html
  */
 
 // Robots Exclusion Protocol (RFC 9309)
@@ -46,7 +47,7 @@ export interface WebFingerLink {
 }
 
 export interface WebFingerResponse {
-    subject: string;
+    subject?: string;
     aliases?: string[];
     properties?: Record<string, string | null>;
     links?: WebFingerLink[];
@@ -63,4 +64,42 @@ export interface HostMetaLink {
 export interface HostMeta {
     links: HostMetaLink[];
     properties?: Record<string, string | null>;
+}
+
+// OAuth 2.0 Authorization Server Metadata (RFC 8414)
+export interface AuthorizationServerMetadata {
+    [member: string]: unknown;
+    issuer: string;
+    authorization_endpoint?: string;
+    token_endpoint?: string;
+    jwks_uri?: string;
+    registration_endpoint?: string;
+    scopes_supported?: string[];
+    response_types_supported: string[];
+    response_modes_supported?: string[];
+    grant_types_supported?: string[];
+    token_endpoint_auth_methods_supported?: string[];
+    token_endpoint_auth_signing_alg_values_supported?: string[];
+    service_documentation?: string;
+    ui_locales_supported?: string[];
+    op_policy_uri?: string;
+    op_tos_uri?: string;
+    revocation_endpoint?: string;
+    revocation_endpoint_auth_methods_supported?: string[];
+    revocation_endpoint_auth_signing_alg_values_supported?: string[];
+    introspection_endpoint?: string;
+    introspection_endpoint_auth_methods_supported?: string[];
+    introspection_endpoint_auth_signing_alg_values_supported?: string[];
+    code_challenge_methods_supported?: string[];
+    signed_metadata?: string;
+}
+
+export interface AuthorizationServerMetadataValidationOptions {
+    expectedIssuer?: string;
+}
+
+export interface AuthorizationServerMetadataParseOptions extends AuthorizationServerMetadataValidationOptions {
+}
+
+export interface AuthorizationServerMetadataFormatOptions extends AuthorizationServerMetadataValidationOptions {
 }

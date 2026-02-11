@@ -1,3 +1,7 @@
+/**
+ * Tests for encoding behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { parseAcceptEncoding, negotiateEncoding } from '../src/encoding.js';
@@ -7,6 +11,11 @@ describe('Accept-Encoding (RFC 9110 Section 12.5.3)', () => {
         const ranges = parseAcceptEncoding('gzip;q=0.5, br;q=1.0');
         assert.equal(ranges[0]?.encoding, 'br');
         assert.equal(ranges[1]?.encoding, 'gzip');
+    });
+
+    it('preserves duplicate ordering when q values tie', () => {
+        const ranges = parseAcceptEncoding('gzip;q=0.5, br;q=0.5, gzip;q=0.5');
+        assert.deepEqual(ranges.map(range => range.encoding), ['gzip', 'br', 'gzip']);
     });
 
     // RFC 9110 Section 12.4.2 (qvalue grammar)

@@ -1,3 +1,9 @@
+/**
+ * SemVer policy evaluation for API compatibility results.
+ * Applies changeset intent checks and optional allowlist filtering.
+ * @see https://semver.org/
+ */
+
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { SEMVER_BUMP_ORDER } from './types.js';

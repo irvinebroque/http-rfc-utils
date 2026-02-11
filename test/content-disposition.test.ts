@@ -1,3 +1,7 @@
+/**
+ * Tests for content disposition behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -9,10 +13,32 @@ import {
 } from '../src/content-disposition.js';
 
 describe('Content-Disposition (RFC 6266 Section 4, RFC 8187 Section 3.2)', () => {
+    // RFC 6266 Section 4.1 + RFC 9110 §5.6.2: disposition-type must be token.
+    it('rejects non-token disposition type values', () => {
+        assert.equal(parseContentDisposition('"attachment"; filename="example.txt"'), null);
+        assert.equal(parseContentDisposition('bad type; filename="example.txt"'), null);
+    });
+
     it('parses basic attachment filename (RFC 6266 Section 4)', () => {
         const parsed = parseContentDisposition('attachment; filename="example.txt"');
         assert.equal(parsed?.type, 'attachment');
         assert.equal(parsed?.params.filename, 'example.txt');
+    });
+
+    // RFC 6266 Section 4.1: duplicate parameter names are invalid.
+    it('rejects duplicate parameter names case-insensitively', () => {
+        assert.equal(
+            parseContentDisposition('attachment; filename="a.txt"; filename="b.txt"'),
+            null
+        );
+        assert.equal(
+            parseContentDisposition('attachment; Filename="a.txt"; filename="b.txt"'),
+            null
+        );
+        assert.equal(
+            parseContentDisposition('attachment; foo=1; foo=2'),
+            null
+        );
     });
 
     it('parses filename* with RFC 8187 encoding (RFC 6266 Section 4.3)', () => {

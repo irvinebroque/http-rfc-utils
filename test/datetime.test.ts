@@ -1,3 +1,7 @@
+/**
+ * Tests for datetime behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTTPDate, parseRFC3339 } from '../src/datetime.js';

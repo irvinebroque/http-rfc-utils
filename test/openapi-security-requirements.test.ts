@@ -1,0 +1,210 @@
+/**
+ * Tests for OpenAPI security requirement parsing and evaluation.
+ * OpenAPI Specification v3.1.1: Security Requirement Object semantics.
+ */
+
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+
+import {
+    evaluateOpenApiSecurity,
+    normalizeOpenApiSecurityRequirements,
+    parseOpenApiSecurityRequirements,
+    resolveEffectiveOpenApiSecurity,
+    tryParseOpenApiSecurityRequirements,
+    validateOpenApiSecurityRequirements,
+} from '../src/openapi.js';
+
+describe('OpenAPI security requirement parser', () => {
+    it('parses valid requirement arrays and preserves empty-object alternatives', () => {
+        const parsed = parseOpenApiSecurityRequirements([
+            { apiKeyAuth: [] },
+            {},
+            { oauth: ['read:pets', 'write:pets'] },
+        ]);
+
+        assert.deepEqual(parsed, [
+            { apiKeyAuth: [] },
+            {},
+            { oauth: ['read:pets', 'write:pets'] },
+        ]);
+    });
+
+    it('returns null for malformed shapes', () => {
+        assert.equal(parseOpenApiSecurityRequirements({ apiKeyAuth: [] }), null);
+        assert.equal(parseOpenApiSecurityRequirements([{ apiKeyAuth: 'read' }]), null);
+        assert.equal(parseOpenApiSecurityRequirements([{ apiKeyAuth: [1] }]), null);
+        assert.equal(parseOpenApiSecurityRequirements([null]), null);
+    });
+
+    it('tryParse returns null for invalid JSON and invalid structure', () => {
+        assert.equal(tryParseOpenApiSecurityRequirements('{"oops"'), null);
+        assert.equal(tryParseOpenApiSecurityRequirements('{"apiKeyAuth":[]}'), null);
+        assert.deepEqual(
+            tryParseOpenApiSecurityRequirements('[{"apiKeyAuth":[]},{"oauth":["read"]}]'),
+            [{ apiKeyAuth: [] }, { oauth: ['read'] }],
+        );
+    });
+});
+
+describe('OpenAPI security requirement evaluator', () => {
+    const schemeRegistry = {
+        apiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' },
+        mtls: { type: 'mutualTLS' },
+        oauth: { type: 'oauth2', availableScopes: ['read', 'write'] },
+        bearer: { type: 'http', scheme: 'bearer' },
+        oidc: { type: 'openIdConnect', availableScopes: ['profile', 'email'] },
+    } as const;
+
+    it('applies AND inside an object and OR across array entries', () => {
+        const result = evaluateOpenApiSecurity(
+            [
+                { apiKeyAuth: [], mtls: [] },
+                { oauth: ['read'] },
+            ],
+            schemeRegistry,
+            {
+                oauth: { scopes: ['read'] },
+            },
+        );
+
+        assert.equal(result.allowed, true);
+        assert.equal(result.matchedRequirementIndex, 1);
+        assert.equal(result.requirements[0]?.satisfied, false);
+        assert.equal(result.requirements[1]?.satisfied, true);
+    });
+
+    it('treats {} as an anonymous-access alternative', () => {
+        const result = evaluateOpenApiSecurity(
+            [
+                {},
+                { apiKeyAuth: [] },
+            ],
+            schemeRegistry,
+            {},
+        );
+
+        assert.equal(result.allowed, true);
+        assert.equal(result.anonymous, true);
+        assert.equal(result.matchedRequirementIndex, 0);
+        assert.equal(result.requirements[0]?.anonymous, true);
+    });
+
+    it('evaluates OAuth2/OpenID required scopes with AND semantics', () => {
+        const missingScope = evaluateOpenApiSecurity(
+            [{ oauth: ['read', 'write'] }],
+            schemeRegistry,
+            {
+                oauth: { scopes: ['read'] },
+            },
+        );
+
+        assert.equal(missingScope.allowed, false);
+        assert.deepEqual(missingScope.requirements[0]?.schemes[0]?.missingScopes, ['write']);
+
+        const satisfied = evaluateOpenApiSecurity(
+            [{ oidc: ['profile', 'email'] }],
+            schemeRegistry,
+            {
+                oidc: { scopes: ['email', 'profile'] },
+            },
+        );
+
+        assert.equal(satisfied.allowed, true);
+        assert.equal(satisfied.requirements[0]?.schemes[0]?.code, 'satisfied');
+    });
+
+    it('normalizes deterministic ordering and de-duplicates scope entries', () => {
+        const normalized = normalizeOpenApiSecurityRequirements(
+            [{ oauth: ['write', 'read', 'read'], bearer: [] }],
+            schemeRegistry,
+        );
+
+        assert.deepEqual(normalized, [{ bearer: [], oauth: ['read', 'write'] }]);
+    });
+
+    it('uses role-list semantics for non-oauth requirements and still fails closed on missing roles', () => {
+        const result = evaluateOpenApiSecurity(
+            [{ apiKeyAuth: ['admin'] }],
+            schemeRegistry,
+            { apiKeyAuth: true },
+            { mode: 'tolerant' },
+        );
+
+        assert.equal(result.allowed, false);
+        assert.equal(result.requirements[0]?.schemes[0]?.satisfied, false);
+        assert.equal(result.requirements[0]?.schemes[0]?.code, 'missing-scopes');
+        assert.deepEqual(result.diagnostics, []);
+
+        const satisfied = evaluateOpenApiSecurity(
+            [{ apiKeyAuth: ['admin'] }],
+            schemeRegistry,
+            {
+                apiKeyAuth: {
+                    present: true,
+                    scopes: ['admin'],
+                },
+            },
+            { mode: 'tolerant' },
+        );
+
+        assert.equal(satisfied.allowed, true);
+        assert.equal(satisfied.requirements[0]?.schemes[0]?.code, 'satisfied');
+        assert.deepEqual(satisfied.requirements[0]?.schemes[0]?.missingScopes, []);
+    });
+
+    it('does not treat empty credential objects as present credentials', () => {
+        const apiKeyResult = evaluateOpenApiSecurity(
+            [{ apiKeyAuth: [] }],
+            schemeRegistry,
+            { apiKeyAuth: {} },
+        );
+        assert.equal(apiKeyResult.allowed, false);
+        assert.equal(apiKeyResult.requirements[0]?.schemes[0]?.code, 'missing-credential');
+
+        const httpResult = evaluateOpenApiSecurity(
+            [{ bearer: [] }],
+            schemeRegistry,
+            { bearer: {} },
+        );
+        assert.equal(httpResult.allowed, false);
+        assert.equal(httpResult.requirements[0]?.schemes[0]?.code, 'missing-credential');
+    });
+});
+
+describe('OpenAPI security helpers', () => {
+    it('operation-level security overrides root-level security, including empty arrays', () => {
+        const rootSecurity = [{ apiKeyAuth: [] }];
+
+        const inherited = resolveEffectiveOpenApiSecurity(rootSecurity, undefined);
+        assert.deepEqual(inherited, [{ apiKeyAuth: [] }]);
+
+        const overriddenByEmpty = resolveEffectiveOpenApiSecurity(rootSecurity, []);
+        assert.deepEqual(overriddenByEmpty, []);
+
+        const overriddenByAnonymous = resolveEffectiveOpenApiSecurity(rootSecurity, [{}]);
+        assert.deepEqual(overriddenByAnonymous, [{}]);
+    });
+
+    it('handles unknown schemes differently in tolerant and strict validation modes', () => {
+        const requirements = [{ unknownAuth: [] }];
+
+        assert.doesNotThrow(() => {
+            validateOpenApiSecurityRequirements(requirements, {}, { mode: 'tolerant' });
+        });
+
+        assert.throws(() => {
+            validateOpenApiSecurityRequirements(requirements, {}, { mode: 'strict' });
+        }, /unknownAuth/);
+    });
+
+    it('allows role lists for non-oauth schemes in strict validation mode', () => {
+        assert.doesNotThrow(() => {
+            validateOpenApiSecurityRequirements(
+                [{ apiKeyAuth: ['admin'] }],
+                { apiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },
+                { mode: 'strict' },
+            );
+        });
+    });
+});

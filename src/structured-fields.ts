@@ -8,15 +8,17 @@
 import { Buffer } from 'node:buffer';
 import { SfDate, SfDisplayString, SfToken } from './types.js';
 import type { SfBareItem, SfItem, SfInnerList, SfList, SfDictionary } from './types.js';
+import { encodeUtf8, hasLoneSurrogate } from './internal-unicode.js';
 
 // RFC 8941 §3.3.4: sf-token allows ALPHA (case-insensitive), digits, and tchar plus : and /
-const TOKEN_RE = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:\/]*$/;
+export const SF_TOKEN_TEXT_RE = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:/]*$/;
 const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
-const KEY_RE = /^[a-z*][a-z0-9_\-\.\*]*$/;
+export const SF_KEY_TEXT_RE = /^[a-z*][a-z0-9_\-.*]*$/;
 const LOWER_HEX_RE = /^[0-9a-f]{2}$/;
+const INTEGER_RE = /-?\d+/y;
+const NUMBER_RE = /(-?)(\d+)(?:\.(\d{1,3}))?/y;
 
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
-const UTF8_ENCODER = new TextEncoder();
 
 function isKeyChar(char: string): boolean {
     const code = char.charCodeAt(0);
@@ -84,18 +86,28 @@ class Parser {
         }
     }
 
+    private skipSP(): void {
+        while (!this.eof() && this.peek() === ' ') {
+            this.consume();
+        }
+    }
+
     isAtEnd(): boolean {
         this.skipOWS();
         return this.eof();
     }
 
     parseItem(): SfItem | null {
+        return this.parseItemWithParameterOWS(true);
+    }
+
+    private parseItemWithParameterOWS(allowLeadingParameterOWS: boolean): SfItem | null {
         const value = this.parseBareItem();
         if (value === null) {
             return null;
         }
 
-        const params = this.parseParameters();
+        const params = this.parseParameters(allowLeadingParameterOWS);
         return params ? { value, params } : { value };
     }
 
@@ -107,14 +119,27 @@ class Parser {
         this.consume();
         const items: SfItem[] = [];
 
-        this.skipOWS();
-        while (!this.eof() && this.peek() !== ')') {
-            const item = this.parseItem();
+        while (!this.eof()) {
+            this.skipSP();
+            if (this.peek() === ')') {
+                break;
+            }
+
+            const item = this.parseItemWithParameterOWS(false);
             if (!item) {
                 return null;
             }
             items.push(item);
-            this.skipOWS();
+
+            const next = this.peek();
+            if (next === ')') {
+                break;
+            }
+            if (next !== ' ') {
+                return null;
+            }
+
+            this.skipSP();
         }
 
         if (this.peek() !== ')') {
@@ -219,11 +244,14 @@ class Parser {
         return dict;
     }
 
-    private parseParameters(): Record<string, SfBareItem> | null {
+    private parseParameters(allowLeadingOWS: boolean = true): Record<string, SfBareItem> | null {
         const params: Record<string, SfBareItem> = {};
+        let hasParams = false;
 
         while (true) {
-            this.skipOWS();
+            if (allowLeadingOWS) {
+                this.skipOWS();
+            }
             if (this.peek() !== ';') {
                 break;
             }
@@ -248,9 +276,10 @@ class Parser {
             }
 
             params[key] = value;
+            hasParams = true;
         }
 
-        return Object.keys(params).length > 0 ? params : null;
+        return hasParams ? params : null;
     }
 
     private parseBareItem(): SfBareItem | null {
@@ -336,19 +365,20 @@ class Parser {
     }
 
     private parseInteger(): number | null {
-        const remaining = this.input.slice(this.index);
-        const match = remaining.match(/^-?\d+/);
+        INTEGER_RE.lastIndex = this.index;
+        const match = INTEGER_RE.exec(this.input);
         if (!match) {
             return null;
         }
 
-        const integerPart = match[0].startsWith('-') ? match[0].slice(1) : match[0];
+        const raw = match[0];
+        const integerPart = raw.startsWith('-') ? raw.slice(1) : raw;
         if (integerPart.length === 0 || integerPart.length > 15) {
             return null;
         }
 
-        this.index += match[0].length;
-        const value = Number(match[0]);
+        this.index = INTEGER_RE.lastIndex;
+        const value = Number(raw);
         if (!Number.isInteger(value)) {
             return null;
         }
@@ -357,7 +387,16 @@ class Parser {
     }
 
     private parseKey(): string | null {
+        const first = this.peek();
+        const firstCode = first.charCodeAt(0);
+        const isValidFirst = first === '*' || (firstCode >= 0x61 && firstCode <= 0x7A);
+        if (!isValidFirst) {
+            return null;
+        }
+
         const start = this.index;
+        this.consume();
+
         while (!this.eof()) {
             const char = this.peek();
             if (!isKeyChar(char)) {
@@ -366,13 +405,7 @@ class Parser {
             this.consume();
         }
 
-        const key = this.input.slice(start, this.index);
-
-        if (!key || !KEY_RE.test(key)) {
-            return null;
-        }
-
-        return key;
+        return this.input.slice(start, this.index);
     }
 
     // RFC 8941 §3.3.3: String bare item.
@@ -458,8 +491,8 @@ class Parser {
 
     // RFC 8941 §3.3.1: Numeric bare item.
     private parseNumber(): number | null {
-        const remaining = this.input.slice(this.index);
-        const match = remaining.match(/^(-?)(\d+)(?:\.(\d{1,3}))?/);
+        NUMBER_RE.lastIndex = this.index;
+        const match = NUMBER_RE.exec(this.input);
         if (!match) {
             return null;
         }
@@ -477,7 +510,7 @@ class Parser {
             return null;
         }
 
-        this.index += match[0].length;
+        this.index = NUMBER_RE.lastIndex;
         const value = Number(match[0]);
         if (!Number.isFinite(value)) {
             return null;
@@ -487,7 +520,16 @@ class Parser {
 
     // RFC 8941 §3.3.4: Token parsing.
     private parseToken(): SfToken | null {
+        const first = this.peek();
+        const firstCode = first.charCodeAt(0);
+        const isAlpha = (firstCode >= 0x41 && firstCode <= 0x5A) || (firstCode >= 0x61 && firstCode <= 0x7A);
+        if (!(isAlpha || first === '*')) {
+            return null;
+        }
+
         const start = this.index;
+        this.consume();
+
         while (!this.eof()) {
             const char = this.peek();
             // RFC 8941 §3.3.4: tchar plus ":" and "/"
@@ -498,11 +540,6 @@ class Parser {
         }
 
         const token = this.input.slice(start, this.index);
-
-        if (!token || !TOKEN_RE.test(token)) {
-            return null;
-        }
-
         return new SfToken(token);
     }
 }
@@ -587,7 +624,7 @@ function serializeBareItem(value: SfBareItem): string {
         let encoded = value.toFixed(3);
         encoded = encoded.replace(/0+$/, '');
         if (encoded.endsWith('.')) {
-            encoded = encoded.slice(0, -1);
+            encoded += '0';
         }
 
         const [wholePart] = encoded.startsWith('-') ? encoded.slice(1).split('.') : encoded.split('.');
@@ -613,7 +650,7 @@ function serializeBareItem(value: SfBareItem): string {
             throw new Error('Invalid display string value for structured field');
         }
 
-        const bytes = UTF8_ENCODER.encode(value.value);
+        const bytes = encodeUtf8(value.value);
         let encoded = '%"';
         for (const byte of bytes) {
             if (byte === 0x25 || byte === 0x22 || byte < 0x20 || byte > 0x7E) {
@@ -636,41 +673,25 @@ function serializeBareItem(value: SfBareItem): string {
     return `"${escaped}"`;
 }
 
-function hasLoneSurrogate(value: string): boolean {
-    for (let i = 0; i < value.length; i++) {
-        const code = value.charCodeAt(i);
-        if (code >= 0xD800 && code <= 0xDBFF) {
-            const next = value.charCodeAt(i + 1);
-            if (next < 0xDC00 || next > 0xDFFF) {
-                return true;
-            }
-            i++;
-            continue;
-        }
-
-        if (code >= 0xDC00 && code <= 0xDFFF) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 function serializeParams(params?: Record<string, SfBareItem>): string {
     if (!params) {
         return '';
     }
 
-    const parts: string[] = [];
-    for (const [key, value] of Object.entries(params)) {
+    let serialized = '';
+    for (const key in params) {
+        if (!Object.prototype.hasOwnProperty.call(params, key)) {
+            continue;
+        }
+        const value = params[key]!;
         if (value === true) {
-            parts.push(`;${key}`);
+            serialized += `;${key}`;
         } else {
-            parts.push(`;${key}=${serializeBareItem(value)}`);
+            serialized += `;${key}=${serializeBareItem(value)}`;
         }
     }
 
-    return parts.join('');
+    return serialized;
 }
 
 function serializeItem(item: SfItem): string {
@@ -679,7 +700,14 @@ function serializeItem(item: SfItem): string {
 }
 
 function serializeInnerList(list: SfInnerList): string {
-    const items = list.items.map(serializeItem).join(' ');
+    let items = '';
+    for (let index = 0; index < list.items.length; index++) {
+        if (index > 0) {
+            items += ' ';
+        }
+        items += serializeItem(list.items[index]!);
+    }
+
     return `(${items})${serializeParams(list.params)}`;
 }
 
@@ -688,12 +716,21 @@ function serializeInnerList(list: SfInnerList): string {
  */
 // RFC 8941 §4: Structured Field List serialization.
 export function serializeSfList(list: SfList): string {
-    return list.map(member => {
-        if ('items' in member) {
-            return serializeInnerList(member);
+    let serialized = '';
+    for (let index = 0; index < list.length; index++) {
+        if (index > 0) {
+            serialized += ', ';
         }
-        return serializeItem(member);
-    }).join(', ');
+
+        const member = list[index]!;
+        if ('items' in member) {
+            serialized += serializeInnerList(member);
+        } else {
+            serialized += serializeItem(member);
+        }
+    }
+
+    return serialized;
 }
 
 /**
@@ -701,25 +738,36 @@ export function serializeSfList(list: SfList): string {
  */
 // RFC 8941 §4: Structured Field Dictionary serialization.
 export function serializeSfDict(dict: SfDictionary): string {
-    const parts: string[] = [];
+    let serialized = '';
+    let first = true;
 
-    for (const [key, value] of Object.entries(dict)) {
+    for (const key in dict) {
+        if (!Object.prototype.hasOwnProperty.call(dict, key)) {
+            continue;
+        }
+        const value = dict[key]!;
+
+        if (!first) {
+            serialized += ', ';
+        } else {
+            first = false;
+        }
+
         if ('items' in value) {
-            parts.push(`${key}=${serializeInnerList(value)}`);
+            serialized += `${key}=${serializeInnerList(value)}`;
             continue;
         }
 
         const item = value as SfItem;
-        const isBareTrue = item.value === true && !item.params;
-        if (isBareTrue) {
-            parts.push(key);
+        if (item.value === true) {
+            serialized += key + serializeParams(item.params);
             continue;
         }
 
-        parts.push(`${key}=${serializeItem(item)}`);
+        serialized += `${key}=${serializeItem(item)}`;
     }
 
-    return parts.join(', ');
+    return serialized;
 }
 
 /**

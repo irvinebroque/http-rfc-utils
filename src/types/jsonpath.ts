@@ -1,6 +1,7 @@
 /**
  * JSONPath types.
  * RFC 9535.
+ * @see https://www.rfc-editor.org/rfc/rfc9535.html
  */
 
 /**
@@ -75,6 +76,8 @@ export interface JsonPathIndexSelector {
     index: number;
 }
 
+export type JsonPathSingularSelector = JsonPathNameSelector | JsonPathIndexSelector;
+
 export interface JsonPathSliceSelector {
     type: 'slice';
     start?: number;
@@ -145,7 +148,14 @@ export interface JsonPathLiteral {
 export interface JsonPathSingularQuery {
     type: 'singular-query';
     root: '$' | '@';
-    segments: JsonPathSegment[];
+    segments: JsonPathSingularSegment[];
+}
+
+export type JsonPathSingularSegment = JsonPathSingularChildSegment;
+
+export interface JsonPathSingularChildSegment {
+    type: 'child';
+    selectors: [JsonPathSingularSelector];
 }
 
 /**

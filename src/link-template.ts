@@ -6,6 +6,7 @@
 
 import { expandUriTemplate, getTemplateVariables } from './uri-template.js';
 import { parseSfList, serializeSfList } from './structured-fields.js';
+import { expectSfItem } from './structured-field-helpers.js';
 import { SfDisplayString } from './types.js';
 import type { SfBareItem, SfItem, LinkTemplate, ExpandedLinkTemplate, UriTemplateVariables } from './types.js';
 
@@ -26,11 +27,10 @@ export function parseLinkTemplateHeader(value: string): LinkTemplate[] | null {
     const templates: LinkTemplate[] = [];
 
     for (const member of list) {
-        if ('items' in member) {
+        const item = expectSfItem(member);
+        if (!item) {
             return null;
         }
-
-        const item = member as SfItem;
         if (typeof item.value !== 'string') {
             return null;
         }
@@ -144,7 +144,7 @@ export function expandLinkTemplate(
 
     const expanded: ExpandedLinkTemplate = {
         href,
-        params: { ...(template.params ?? {}) },
+        params: { ...template.params },
         variableUris,
     };
 

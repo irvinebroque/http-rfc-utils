@@ -1,6 +1,7 @@
 /**
  * Response builders for common HTTP patterns.
  * RFC 9110 §8.8.2/§8.8.3, RFC 9111 §5.2.2, RFC 8288 §3, RFC 6266 §4, RFC 5789 §3.1.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html
  */
 
 import type { PaginatedMeta, PaginationLinks, CacheOptions, OptionsResponseOptions } from './types.js';

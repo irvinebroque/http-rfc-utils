@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 
+/**
+ * Coverage runner wrapper.
+ *
+ * Executes the Node test coverage pass and persists full stdout/stderr output
+ * to a report file consumed by downstream threshold checks.
+ */
+
 import { mkdir, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname } from 'node:path';

@@ -1,3 +1,7 @@
+/**
+ * Tests for auth behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
@@ -50,6 +54,12 @@ describe('Basic Authentication (RFC 7617 Section 2)', () => {
 
         const parsed = parseBasicChallenge(header);
         assert.deepEqual(parsed, { scheme: 'Basic', realm: 'Restricted', charset: 'UTF-8' });
+    });
+
+    // RFC 9110 §11.2: auth-param names MUST occur at most once per challenge.
+    it('rejects Basic challenge with duplicate auth params', () => {
+        assert.equal(parseBasicChallenge('Basic realm="one", realm="two"'), null);
+        assert.equal(parseBasicChallenge('Basic Realm="one", realm="two"'), null);
     });
 });
 
@@ -186,6 +196,18 @@ describe('Digest Authentication (RFC 7616)', () => {
             const parsed = parseDigestChallenge(challenges[0]!);
             assert.equal(parsed, null);
         });
+
+        // RFC 9110 §11.2 and RFC 7616 §3.3: auth-param names are unique per challenge.
+        it('rejects duplicate Digest challenge auth params', () => {
+            const duplicateNonce = parseWWWAuthenticate('Digest realm="test", nonce="n1", nonce="n2"');
+            assert.equal(parseDigestChallenge(duplicateNonce[0]!), null);
+
+            const duplicateRealmCase = parseWWWAuthenticate('Digest Realm="a", realm="b", nonce="n1"');
+            assert.equal(parseDigestChallenge(duplicateRealmCase[0]!), null);
+
+            const duplicateQop = parseWWWAuthenticate('Digest realm="test", nonce="n1", qop="auth", qop="auth-int"');
+            assert.equal(parseDigestChallenge(duplicateQop[0]!), null);
+        });
     });
 
     // RFC 7616 §3.3: Challenge formatting
@@ -300,6 +322,33 @@ describe('Digest Authentication (RFC 7616)', () => {
             const longAuth = parseAuthorization(longHeader);
             const longParsed = parseDigestAuthorization(longAuth!);
             assert.equal(longParsed, null);
+        });
+
+        // RFC 7616 §3.4: if qop is present, cnonce and nc are required.
+        it('rejects qop without cnonce or nc and accepts fully coupled qop inputs', () => {
+            const missingCnonceHeader =
+                'Digest username="test", realm="r", uri="/", response="abc", qop=auth, nc=00000001';
+            const missingCnonceAuth = parseAuthorization(missingCnonceHeader);
+            assert.equal(parseDigestAuthorization(missingCnonceAuth!), null);
+
+            const missingNcHeader =
+                'Digest username="test", realm="r", uri="/", response="abc", qop=auth, cnonce="xyz"';
+            const missingNcAuth = parseAuthorization(missingNcHeader);
+            assert.equal(parseDigestAuthorization(missingNcAuth!), null);
+
+            const malformedNcHeader =
+                'Digest username="test", realm="r", uri="/", response="abc", qop=auth, cnonce="xyz", nc=1';
+            const malformedNcAuth = parseAuthorization(malformedNcHeader);
+            assert.equal(parseDigestAuthorization(malformedNcAuth!), null);
+
+            const validQopHeader =
+                'Digest username="test", realm="r", uri="/", response="abc", qop=auth-int, cnonce="xyz", nc=00000001';
+            const validQopAuth = parseAuthorization(validQopHeader);
+            const validQopParsed = parseDigestAuthorization(validQopAuth!);
+            assert.ok(validQopParsed);
+            assert.equal(validQopParsed.qop, 'auth-int');
+            assert.equal(validQopParsed.cnonce, 'xyz');
+            assert.equal(validQopParsed.nc, '00000001');
         });
 
         it('rejects both username and username* present (RFC 7616 §3.4)', () => {

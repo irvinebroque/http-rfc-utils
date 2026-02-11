@@ -6,7 +6,12 @@
 
 import { mergeVary } from './headers.js';
 import { parseSfDict, parseSfItem, serializeSfDict, serializeSfItem } from './structured-fields.js';
-import { isSfItem, normalizeOptionalHeaderValue } from './structured-field-helpers.js';
+import {
+    hasNoSfParams,
+    isSfItem,
+    isSfTokenText,
+    normalizeOptionalHeaderValue,
+} from './structured-field-helpers.js';
 import { SfToken } from './types.js';
 import type {
     DictionaryMatchOptions,
@@ -18,7 +23,6 @@ import type {
 const MAX_DICTIONARY_ID_LENGTH = 1024;
 const SHA256_DIGEST_BYTES = 32;
 const DEFAULT_DICTIONARY_TYPE = 'raw';
-const SF_TOKEN = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:\/]*$/;
 const SCHEME_RE = /^[A-Za-z][A-Za-z\d+\-.]*:/;
 
 function hasRegExpGroups(match: string): boolean {
@@ -40,10 +44,41 @@ function isSupportedDictionaryType(type: string, options?: DictionaryMatchOption
     return supportedTypes.some((supported) => supported === type);
 }
 
-function wildcardToRegExp(pattern: string): RegExp {
-    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
-    const wildcardPattern = escaped.replace(/\*/g, '.*');
-    return new RegExp(`^${wildcardPattern}$`);
+function wildcardMatch(pattern: string, candidate: string): boolean {
+    let patternIndex = 0;
+    let candidateIndex = 0;
+    let lastStarPatternIndex = -1;
+    let lastStarCandidateIndex = -1;
+
+    while (candidateIndex < candidate.length) {
+        if (patternIndex < pattern.length && pattern.charCodeAt(patternIndex) === 42) {
+            lastStarPatternIndex = patternIndex;
+            patternIndex += 1;
+            lastStarCandidateIndex = candidateIndex;
+            continue;
+        }
+
+        if (patternIndex < pattern.length && pattern.charCodeAt(patternIndex) === candidate.charCodeAt(candidateIndex)) {
+            patternIndex += 1;
+            candidateIndex += 1;
+            continue;
+        }
+
+        if (lastStarPatternIndex !== -1) {
+            patternIndex = lastStarPatternIndex + 1;
+            lastStarCandidateIndex += 1;
+            candidateIndex = lastStarCandidateIndex;
+            continue;
+        }
+
+        return false;
+    }
+
+    while (patternIndex < pattern.length && pattern.charCodeAt(patternIndex) === 42) {
+        patternIndex += 1;
+    }
+
+    return patternIndex === pattern.length;
 }
 
 function buildPatternTarget(match: string, requestUrl: URL): string {
@@ -75,7 +110,7 @@ export function parseUseAsDictionary(header: string): UseAsDictionary | null {
     }
 
     const matchMember = dict.match;
-    if (!matchMember || !isSfItem(matchMember) || typeof matchMember.value !== 'string' || matchMember.params) {
+    if (!matchMember || !isSfItem(matchMember) || typeof matchMember.value !== 'string' || !hasNoSfParams(matchMember)) {
         return null;
     }
 
@@ -98,7 +133,7 @@ export function parseUseAsDictionary(header: string): UseAsDictionary | null {
 
         const destinations: string[] = [];
         for (const item of matchDestMember.items) {
-            if (item.params || typeof item.value !== 'string') {
+            if (!hasNoSfParams(item) || typeof item.value !== 'string') {
                 return null;
             }
             if (item.value.length === 0) {
@@ -111,7 +146,7 @@ export function parseUseAsDictionary(header: string): UseAsDictionary | null {
 
     const idMember = dict.id;
     if (idMember !== undefined) {
-        if (!isSfItem(idMember) || typeof idMember.value !== 'string' || idMember.params) {
+        if (!isSfItem(idMember) || typeof idMember.value !== 'string' || !hasNoSfParams(idMember)) {
             return null;
         }
         if (!validateDictionaryIdLength(idMember.value)) {
@@ -122,7 +157,7 @@ export function parseUseAsDictionary(header: string): UseAsDictionary | null {
 
     const typeMember = dict.type;
     if (typeMember !== undefined) {
-        if (!isSfItem(typeMember) || !(typeMember.value instanceof SfToken) || typeMember.params) {
+        if (!isSfItem(typeMember) || !(typeMember.value instanceof SfToken) || !hasNoSfParams(typeMember)) {
             return null;
         }
         parsed.type = typeMember.value.value;
@@ -144,7 +179,7 @@ export function formatUseAsDictionary(value: UseAsDictionary): string {
         throw new Error('Invalid Use-As-Dictionary id length; expected <=1024 characters');
     }
 
-    if (!SF_TOKEN.test(value.type)) {
+    if (!isSfTokenText(value.type)) {
         throw new Error('Invalid Use-As-Dictionary type token');
     }
 
@@ -191,7 +226,7 @@ export function validateUseAsDictionary(value: UseAsDictionary, dictionaryUrl: s
         return false;
     }
 
-    if (!SF_TOKEN.test(value.type)) {
+    if (!isSfTokenText(value.type)) {
         return false;
     }
 
@@ -322,7 +357,7 @@ export function matchesDictionary(
                 ? `${request.pathname}${request.search}`
                 : request.pathname;
 
-        return wildcardToRegExp(patternTarget).test(candidate);
+        return wildcardMatch(patternTarget, candidate);
     } catch {
         return false;
     }

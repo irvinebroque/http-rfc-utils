@@ -1,8 +1,16 @@
+/**
+ * Promote a persisted fuzz counterexample into corpus fixtures.
+ *
+ * Converts failure artifacts into reusable corpus entries for regression and
+ * future mutation seeding.
+ */
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const CORPUS_ROOT = path.resolve(ROOT, 'test', 'fuzz', 'corpus');
 
 function parseArgs(argv) {
     const parsed = {};
@@ -39,6 +47,30 @@ function resolvePath(candidate) {
         return candidate;
     }
     return path.join(ROOT, candidate);
+}
+
+function assertPathInsideRoot(root, candidate, label) {
+    const relative = path.relative(root, candidate);
+    const isInside = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    if (!isInside) {
+        throw new Error(`${label} escapes corpus root: ${candidate}`);
+    }
+}
+
+function validateModuleName(value) {
+    if (typeof value !== 'string' || value.length === 0) {
+        throw new Error('Module name must be a non-empty string');
+    }
+
+    if (value === '.' || value === '..' || value.includes('/') || value.includes('\\')) {
+        throw new Error(`Invalid module name: ${value}`);
+    }
+
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(value)) {
+        throw new Error(`Invalid module name: ${value}`);
+    }
+
+    return value;
 }
 
 function sanitize(value) {
@@ -79,7 +111,9 @@ if (!moduleName) {
 }
 
 const targetName = args.target ?? artifact.target ?? moduleName;
-const corpusDirectory = path.join(ROOT, 'test', 'fuzz', 'corpus', moduleName);
+const safeModuleName = validateModuleName(moduleName);
+const corpusDirectory = path.resolve(CORPUS_ROOT, safeModuleName);
+assertPathInsideRoot(CORPUS_ROOT, corpusDirectory, 'Corpus directory');
 await fs.mkdir(corpusDirectory, { recursive: true });
 
 const counterexample = artifact.counterexample;
@@ -99,7 +133,8 @@ if (typeof payload === 'string') {
     content = `${JSON.stringify(payload, null, 4)}\n`;
 }
 
-const destination = path.join(corpusDirectory, `${basename}.${extension}`);
+const destination = path.resolve(corpusDirectory, `${basename}.${extension}`);
+assertPathInsideRoot(CORPUS_ROOT, destination, 'Destination path');
 await fs.writeFile(destination, content, 'utf8');
 
 console.log(`Promoted counterexample: ${path.relative(ROOT, destination)}`);

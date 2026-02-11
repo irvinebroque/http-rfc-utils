@@ -1,6 +1,7 @@
 /**
  * Forwarded header utilities per RFC 7239.
  * RFC 7239 §4.
+ * @see https://www.rfc-editor.org/rfc/rfc7239.html
  */
 
 import type { ForwardedElement } from './types.js';
@@ -34,6 +35,7 @@ export function parseForwarded(header: string): ForwardedElement[] {
         const pairs = splitAndParseKeyValueSegments(trimmed, ';');
         const element: ForwardedElement = {};
         const extensions = createObjectMap<string>();
+        let hasExtensions = false;
 
         for (const pair of pairs) {
             if (!pair.hasEquals) continue;
@@ -44,7 +46,11 @@ export function parseForwarded(header: string): ForwardedElement[] {
             }
 
             const rawValue = pair.value ?? '';
-            const value = unquote(rawValue);
+            const trimmedValue = rawValue.trim();
+            const value =
+                trimmedValue.length >= 2 && trimmedValue.charCodeAt(0) === 34 && trimmedValue.charCodeAt(trimmedValue.length - 1) === 34
+                    ? unquote(trimmedValue)
+                    : trimmedValue;
 
             if (key === 'for') {
                 if (element.for === undefined) {
@@ -65,11 +71,12 @@ export function parseForwarded(header: string): ForwardedElement[] {
             } else if (key) {
                 if (!hasOwnKey(extensions, key)) {
                     extensions[key] = value;
+                    hasExtensions = true;
                 }
             }
         }
 
-        if (Object.keys(extensions).length > 0) {
+        if (hasExtensions) {
             element.extensions = extensions;
         }
 
@@ -105,7 +112,16 @@ export function formatForwarded(elements: ForwardedElement[]): string {
         }
 
         if (element.extensions) {
-            for (const [key, value] of Object.entries(element.extensions)) {
+            for (const key in element.extensions) {
+                if (!Object.prototype.hasOwnProperty.call(element.extensions, key)) {
+                    continue;
+                }
+
+                const value = element.extensions[key];
+                if (value === undefined) {
+                    continue;
+                }
+
                 assertHeaderToken(key, `Forwarded extension parameter name "${key}"`);
                 assertNoCtl(value, `Forwarded extension parameter "${key}" value`);
                 parts.push(`${key}=${quoteIfNeeded(value)}`);

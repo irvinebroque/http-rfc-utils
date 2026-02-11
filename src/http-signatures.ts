@@ -9,6 +9,7 @@
  */
 
 import { Buffer } from 'node:buffer';
+import { escapeQuotedString } from './header-utils.js';
 import { parseSfDict, serializeSfDict } from './structured-fields.js';
 import type {
     SignatureComponent,
@@ -423,7 +424,7 @@ export function parseComponentIdentifier(value: string): SignatureComponent | nu
         let paramName = '';
         while (i < trimmed.length) {
             const ch = trimmed[i];
-            if (ch === undefined || !/[a-z0-9_\-\.\*]/.test(ch)) {
+            if (ch === undefined || !/[a-z0-9_\-.*]/.test(ch)) {
                 break;
             }
             paramName += ch;
@@ -473,7 +474,7 @@ export function parseComponentIdentifier(value: string): SignatureComponent | nu
                 let paramValue = '';
                 while (i < trimmed.length) {
                     const ch = trimmed[i];
-                    if (ch === undefined || !/[A-Za-z0-9!#$%&'*+\-.^_`|~:\/]/.test(ch)) {
+                    if (ch === undefined || !/[A-Za-z0-9!#$%&'*+\-.^_`|~:/]/.test(ch)) {
                         break;
                     }
                     paramValue += ch;
@@ -518,7 +519,7 @@ export function parseComponentIdentifier(value: string): SignatureComponent | nu
  */
 export function formatComponentIdentifier(component: SignatureComponent): string {
     // Escape special characters in name
-    const escapedName = component.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const escapedName = escapeQuotedString(component.name);
     let result = `"${escapedName}"`;
 
     if (component.params) {
@@ -526,7 +527,7 @@ export function formatComponentIdentifier(component: SignatureComponent): string
             result += ';sf';
         }
         if (component.params.key !== undefined) {
-            const escapedKey = component.params.key.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            const escapedKey = escapeQuotedString(component.params.key);
             result += `;key="${escapedKey}"`;
         }
         if (component.params.bs) {
@@ -848,19 +849,19 @@ function buildSignatureParamsValue(
             result += `;expires=${params.expires}`;
         }
         if (params.nonce !== undefined) {
-            const escapedNonce = params.nonce.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            const escapedNonce = escapeQuotedString(params.nonce);
             result += `;nonce="${escapedNonce}"`;
         }
         if (params.alg !== undefined) {
-            const escapedAlg = params.alg.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            const escapedAlg = escapeQuotedString(params.alg);
             result += `;alg="${escapedAlg}"`;
         }
         if (params.keyid !== undefined) {
-            const escapedKeyid = params.keyid.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            const escapedKeyid = escapeQuotedString(params.keyid);
             result += `;keyid="${escapedKeyid}"`;
         }
         if (params.tag !== undefined) {
-            const escapedTag = params.tag.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            const escapedTag = escapeQuotedString(params.tag);
             result += `;tag="${escapedTag}"`;
         }
     }

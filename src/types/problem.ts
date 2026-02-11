@@ -1,4 +1,8 @@
-// Problem Details types (RFC 9457): https://www.rfc-editor.org/rfc/rfc9457.html
+/**
+ * Problem Details type contracts.
+ * RFC 9457.
+ * @see https://www.rfc-editor.org/rfc/rfc9457.html
+ */
 
 export interface ProblemDetails {
     type: string;

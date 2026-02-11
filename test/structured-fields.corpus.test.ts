@@ -1,3 +1,7 @@
+/**
+ * Tests for structured fields corpus behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

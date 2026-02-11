@@ -1,6 +1,7 @@
 /**
  * Digest authentication utilities.
  * RFC 7616 §3.3-§3.5.
+ * @see https://www.rfc-editor.org/rfc/rfc7616.html
  */
 
 import { createHash } from 'node:crypto';
@@ -87,9 +88,10 @@ export function parseDigestChallenge(challenge: AuthChallenge): DigestChallenge 
     const seen = new Map<string, string>();
     for (const param of challenge.params) {
         const name = param.name.toLowerCase();
-        if (!seen.has(name)) {
-            seen.set(name, param.value);
+        if (seen.has(name)) {
+            return null;
         }
+        seen.set(name, param.value);
     }
 
     const realm = seen.get('realm');
@@ -287,24 +289,37 @@ export function parseDigestAuthorization(credentials: AuthCredentials): DigestCr
     }
 
     const cnonce = seen.get('cnonce');
+    const opaque = seen.get('opaque');
+    const qop = seen.get('qop');
+    const nc = seen.get('nc');
+
     if (cnonce) {
         result.cnonce = cnonce;
     }
 
-    const opaque = seen.get('opaque');
     if (opaque) {
         result.opaque = opaque;
     }
 
     // RFC 7616 §3.4: qop is token (not quoted)
-    const qop = seen.get('qop');
-    if (qop && isDigestQop(qop)) {
+    if (qop) {
+        if (!isDigestQop(qop)) {
+            return null;
+        }
         result.qop = qop;
-    }
 
-    // RFC 7616 §3.4: nc is exactly 8 hex digits
-    const nc = seen.get('nc');
-    if (nc) {
+        // RFC 7616 §3.4: cnonce and nc are required when qop is present.
+        if (!cnonce || cnonce.length === 0) {
+            return null;
+        }
+
+        if (!nc || !NC_REGEX.test(nc)) {
+            return null;
+        }
+
+        result.nc = nc;
+    } else if (nc) {
+        // RFC 7616 §3.4: nc is exactly 8 hex digits when present.
         if (!NC_REGEX.test(nc)) {
             return null;
         }

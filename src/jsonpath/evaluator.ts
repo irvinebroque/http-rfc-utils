@@ -1,6 +1,7 @@
 /**
  * JSONPath evaluator.
  * RFC 9535 §2.1.2, §2.3-§2.7.
+ * @see https://www.rfc-editor.org/rfc/rfc9535.html
  */
 
 import type {
@@ -898,6 +899,222 @@ function fnCount(args: JsonPathFunctionArg[], ctx: EvalContext): number {
     return 0;
 }
 
+function parseRepeatingQuantifierLength(pattern: string, start: number): number {
+    const ch = pattern[start];
+    if (!ch) {
+        return 0;
+    }
+
+    if (ch === '+' || ch === '*') {
+        return 1;
+    }
+
+    if (ch !== '{') {
+        return 0;
+    }
+
+    let cursor = start + 1;
+    let minDigits = '';
+    while (cursor < pattern.length && pattern[cursor] >= '0' && pattern[cursor] <= '9') {
+        minDigits += pattern[cursor];
+        cursor += 1;
+    }
+
+    if (minDigits.length === 0) {
+        return 0;
+    }
+
+    const next = pattern[cursor];
+    if (next === '}') {
+        const exact = Number.parseInt(minDigits, 10);
+        return exact > 1 ? cursor - start + 1 : 0;
+    }
+
+    if (next !== ',') {
+        return 0;
+    }
+
+    cursor += 1;
+    let maxDigits = '';
+    while (cursor < pattern.length && pattern[cursor] >= '0' && pattern[cursor] <= '9') {
+        maxDigits += pattern[cursor];
+        cursor += 1;
+    }
+
+    if (pattern[cursor] !== '}') {
+        return 0;
+    }
+
+    if (maxDigits.length === 0) {
+        return cursor - start + 1;
+    }
+
+    const max = Number.parseInt(maxDigits, 10);
+    return max > 1 ? cursor - start + 1 : 0;
+}
+
+function normalizeQuantifiedGroupBody(groupBody: string): string {
+    if (groupBody.startsWith('?:')) {
+        return groupBody.slice(2);
+    }
+
+    if (groupBody.startsWith('?<')) {
+        const endName = groupBody.indexOf('>');
+        if (endName >= 0) {
+            return groupBody.slice(endName + 1);
+        }
+    }
+
+    return groupBody;
+}
+
+function findQuantifiedGroups(pattern: string): string[] {
+    const quantifiedGroups: string[] = [];
+    const groupStartStack: number[] = [];
+    let escaped = false;
+    let inCharClass = false;
+
+    for (let i = 0; i < pattern.length; i++) {
+        const ch = pattern[i]!;
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (inCharClass) {
+            if (ch === ']') {
+                inCharClass = false;
+            }
+            continue;
+        }
+
+        if (ch === '[') {
+            inCharClass = true;
+            continue;
+        }
+
+        if (ch === '(') {
+            groupStartStack.push(i);
+            continue;
+        }
+
+        if (ch === ')' && groupStartStack.length > 0) {
+            const start = groupStartStack.pop()!;
+            const quantifierLength = parseRepeatingQuantifierLength(pattern, i + 1);
+            if (quantifierLength > 0) {
+                quantifiedGroups.push(normalizeQuantifiedGroupBody(pattern.slice(start + 1, i)));
+            }
+        }
+    }
+
+    return quantifiedGroups;
+}
+
+function splitTopLevelAlternatives(groupBody: string): string[] {
+    const alternatives: string[] = [];
+    let start = 0;
+    let depth = 0;
+    let escaped = false;
+    let inCharClass = false;
+
+    for (let i = 0; i < groupBody.length; i++) {
+        const ch = groupBody[i]!;
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (inCharClass) {
+            if (ch === ']') {
+                inCharClass = false;
+            }
+            continue;
+        }
+
+        if (ch === '[') {
+            inCharClass = true;
+            continue;
+        }
+
+        if (ch === '(') {
+            depth += 1;
+            continue;
+        }
+
+        if (ch === ')' && depth > 0) {
+            depth -= 1;
+            continue;
+        }
+
+        if (ch === '|' && depth === 0) {
+            alternatives.push(groupBody.slice(start, i));
+            start = i + 1;
+        }
+    }
+
+    alternatives.push(groupBody.slice(start));
+    return alternatives;
+}
+
+function extractSimpleLiteralAlternative(alt: string): string | null {
+    let value = '';
+    for (let i = 0; i < alt.length; i++) {
+        const ch = alt[i]!;
+        if (ch === '\\') {
+            i += 1;
+            const escaped = alt[i];
+            if (!escaped) {
+                return null;
+            }
+            value += escaped;
+            continue;
+        }
+
+        if ('^$.*+?()[]{}|'.includes(ch)) {
+            return null;
+        }
+
+        value += ch;
+    }
+
+    return value;
+}
+
+function alternativesHavePrefixOverlap(alternatives: string[]): boolean {
+    const literalAlternatives: string[] = [];
+    for (const alt of alternatives) {
+        const literal = extractSimpleLiteralAlternative(alt);
+        if (literal === null) {
+            return false;
+        }
+        literalAlternatives.push(literal);
+    }
+
+    for (let i = 0; i < literalAlternatives.length; i++) {
+        const left = literalAlternatives[i]!;
+        for (let j = i + 1; j < literalAlternatives.length; j++) {
+            const right = literalAlternatives[j]!;
+            if (left.startsWith(right) || right.startsWith(left)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 function hasUnsafeRegexConstructs(pattern: string): boolean {
     // Backreferences are frequently involved in catastrophic backtracking.
     if (/\\[1-9]/.test(pattern)) {
@@ -907,6 +1124,16 @@ function hasUnsafeRegexConstructs(pattern: string): boolean {
     // Heuristic nested quantifier detection, e.g. (a+)+, (a*){2,}.
     if (/\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]/.test(pattern)) {
         return true;
+    }
+
+    // Quantified groups with overlapping top-level alternatives are prone to
+    // catastrophic backtracking, e.g. (a|aa)+$.
+    const quantifiedGroups = findQuantifiedGroups(pattern);
+    for (const groupBody of quantifiedGroups) {
+        const alternatives = splitTopLevelAlternatives(groupBody);
+        if (alternatives.length > 1 && alternativesHavePrefixOverlap(alternatives)) {
+            return true;
+        }
     }
 
     return false;

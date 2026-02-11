@@ -1,3 +1,8 @@
+/**
+ * Tests for semver guard behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ * @see https://semver.org/
+ */
 import assert from 'node:assert/strict';
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -56,8 +61,8 @@ async function withAllowlistFile(
     }
 }
 
-// Semantic Versioning 2.0.0 item 8: incompatible public API changes require a major bump.
-describe('semver API compatibility fixtures', () => {
+// SemVer 2.0.0 item 8: incompatible public API changes require a major bump.
+describe('semver API compatibility fixtures (SemVer 2.0.0 item 8)', () => {
     it('flags removed exports as breaking', () => {
         const result = compareFixturePair('removed-export');
         assert.equal(result.breaking, true);
@@ -112,8 +117,8 @@ describe('semver API compatibility fixtures', () => {
     });
 });
 
-// Semantic Versioning 2.0.0 item 8: major bump is required for backward incompatible changes.
-describe('semver policy gate', () => {
+// SemVer 2.0.0 item 8: major bump is required for backward incompatible changes.
+describe('semver policy gate (SemVer 2.0.0)', () => {
     it('fails when breaking API changes are paired with patch intent', async () => {
         const comparison = compareFixturePair('removed-export');
         const intent = await readIntentFromFixture('patch.md');
@@ -182,7 +187,7 @@ describe('semver policy gate', () => {
         assert.equal(outcome.pass, false);
     });
 
-    // Semantic Versioning 2.0.0 item 8 + project policy: allowlist must be valid JSON.
+    // SemVer 2.0.0 item 8 + project policy: allowlist must be valid JSON.
     it('fails when allowlist JSON is invalid', async () => {
         const comparison = compareFixturePair('add-export-only');
 
@@ -202,7 +207,7 @@ describe('semver policy gate', () => {
         });
     });
 
-    // Semantic Versioning 2.0.0 item 8 + project policy: allowlist schema fields are required.
+    // SemVer 2.0.0 item 8 + project policy: allowlist schema fields are required.
     it('fails when allowlist entries violate schema requirements', async () => {
         const comparison = compareFixturePair('add-export-only');
         const invalidEntries = JSON.stringify([
@@ -229,7 +234,7 @@ describe('semver policy gate', () => {
         });
     });
 
-    // Semantic Versioning 2.0.0 item 8: expired allowlist entries must not suppress active breaking findings.
+    // SemVer 2.0.0 item 8: expired allowlist entries must not suppress active breaking findings.
     it('does not ignore breaking findings when allowlist entries are expired', async () => {
         const comparison = compareFixturePair('removed-export');
         const allowlist = JSON.stringify([
@@ -258,7 +263,7 @@ describe('semver policy gate', () => {
         });
     });
 
-    // Semantic Versioning 2.0.0 item 8: active allowlist entries can suppress matching findings temporarily.
+    // SemVer 2.0.0 item 8: active allowlist entries can suppress matching findings temporarily.
     it('ignores matching active allowlist findings', async () => {
         const comparison = compareFixturePair('removed-export');
         const allowlist = JSON.stringify([
@@ -287,7 +292,7 @@ describe('semver policy gate', () => {
         });
     });
 
-    // Semantic Versioning 2.0.0 item 8: allowlist reason must match finding reason when specified.
+    // SemVer 2.0.0 item 8: allowlist reason must match finding reason when specified.
     it('does not ignore allowlisted exports when reason does not match', async () => {
         const comparison = compareFixturePair('removed-export');
         const allowlist = JSON.stringify([
@@ -316,7 +321,7 @@ describe('semver policy gate', () => {
         });
     });
 
-    // Semantic Versioning 2.0.0 + project strict policy: declared bump ordering can be enforced.
+    // SemVer 2.0.0 item 7 and item 8 + project strict policy: declared bump ordering can be enforced.
     it('enforces strict bump ordering when strict mode is enabled', async () => {
         const comparison = compareFixturePair('removed-export');
         const outcome = await evaluateSemverPolicy({
@@ -336,7 +341,7 @@ describe('semver policy gate', () => {
         );
     });
 
-    // Semantic Versioning 2.0.0 + repo policy: code changes require a declared bump, docs-only changes do not.
+    // SemVer 2.0.0 item 7 and item 8 + repo policy: code changes require a declared bump, docs-only changes do not.
     it('distinguishes code-change and no-code-change bump requirements', async () => {
         const comparison = compareFixturePair('add-export-only');
 

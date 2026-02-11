@@ -1,3 +1,7 @@
+/**
+ * Tests for problem behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -82,6 +86,56 @@ describe('createProblem', () => {
             { field: 'age', message: 'Must be positive' },
         ]);
         assert.equal(problem.traceId, 'abc-123');
+    });
+
+    it('ignores __proto__ extension key and keeps safe keys', () => {
+        const extensions = Object.create(null) as Record<string, unknown>;
+        Object.defineProperty(extensions, '__proto__', {
+            value: { polluted: true },
+            enumerable: true,
+            configurable: true,
+            writable: true,
+        });
+        extensions.traceId = 'req-safe-123';
+
+        const problem = createProblem({
+            status: 400,
+            title: 'Bad Request',
+            detail: 'Invalid payload',
+            extensions,
+        });
+
+        assert.equal(problem.traceId, 'req-safe-123');
+        assert.equal(Object.prototype.hasOwnProperty.call(problem, '__proto__'), false);
+        assert.equal('polluted' in ({} as Record<string, unknown>), false);
+    });
+
+    it('ignores constructor and prototype extension keys and keeps safe keys', () => {
+        const extensions = Object.create(null) as Record<string, unknown>;
+        Object.defineProperty(extensions, 'constructor', {
+            value: 'malicious-constructor',
+            enumerable: true,
+            configurable: true,
+            writable: true,
+        });
+        Object.defineProperty(extensions, 'prototype', {
+            value: 'malicious-prototype',
+            enumerable: true,
+            configurable: true,
+            writable: true,
+        });
+        extensions.requestId = 'req-safe-456';
+
+        const problem = createProblem({
+            status: 400,
+            title: 'Bad Request',
+            detail: 'Invalid payload',
+            extensions,
+        });
+
+        assert.equal(problem.requestId, 'req-safe-456');
+        assert.equal(Object.prototype.hasOwnProperty.call(problem, 'constructor'), false);
+        assert.equal(Object.prototype.hasOwnProperty.call(problem, 'prototype'), false);
     });
 });
 

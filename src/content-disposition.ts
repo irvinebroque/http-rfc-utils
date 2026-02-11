@@ -16,6 +16,7 @@ import {
     isEmptyHeader,
     parseKeyValueSegment,
     splitQuotedValue,
+    TOKEN_CHARS,
     unquote,
     quoteIfNeeded,
 } from './header-utils.js';
@@ -50,12 +51,13 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
 
     const parts = splitQuotedValue(header, ';');
     const type = parts[0]?.trim();
-    if (!type) {
+    if (!type || !TOKEN_CHARS.test(type)) {
         return null;
     }
 
     const params = createObjectMap<string>();
     let hasValidFilenameStar = false;
+    const seenParamNames = new Set<string>();
 
     for (let i = 1; i < parts.length; i++) {
         const item = parseKeyValueSegment(parts[i] ?? '');
@@ -73,6 +75,11 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
         if (!key) {
             continue;
         }
+
+        if (seenParamNames.has(key)) {
+            return null;
+        }
+        seenParamNames.add(key);
 
         if (key === 'filename*') {
             if (params['filename*'] !== undefined) {
@@ -100,10 +107,6 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
                 continue;
             }
             params.filename = value;
-            continue;
-        }
-
-        if (params[key] !== undefined) {
             continue;
         }
 

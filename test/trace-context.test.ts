@@ -1,3 +1,7 @@
+/**
+ * Tests for trace context behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -45,10 +49,28 @@ describe('traceparent parsing/formatting (W3C Trace Context Section 3.2)', () =>
         assert.ok(result.errors.length > 0);
     });
 
-    it('rejects invalid traceparent versions and malformed field counts', () => {
+    it('accepts higher traceparent versions with compatible layout', () => {
+        assert.deepEqual(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'), {
+            version: '01',
+            traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+            parentId: '00f067aa0ba902b7',
+            traceFlags: '01',
+        });
+
+        assert.deepEqual(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra-data'), {
+            version: '01',
+            traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+            parentId: '00f067aa0ba902b7',
+            traceFlags: '01',
+        });
+    });
+
+    it('rejects invalid versions and malformed field counts/layout', () => {
         assert.equal(parseTraceparent('ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'), null);
-        assert.equal(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'), null);
         assert.equal(parseTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7'), null);
+        assert.equal(parseTraceparent('0-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'), null);
+        assert.equal(parseTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra'), null);
+        assert.equal(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01extra'), null);
     });
 
     it('throws when formatting an invalid traceparent object', () => {
@@ -105,6 +127,14 @@ describe('tracestate parsing/formatting (W3C Trace Context Section 3.3)', () => 
         assert.equal(validateTracestate(' ').valid, false);
         assert.equal(validateTracestate('rojo=1,,congo=2').valid, false);
         assert.equal(validateTracestate('rojo=' + String.fromCharCode(0x1f)).valid, false);
+    });
+
+    // W3C Trace Context §3.3.1.2: OWS around list-members is ignored, so `k=v ` is valid wire syntax.
+    // We still reject trailing-space values in direct entry APIs (see mutation helper tests).
+    it('rejects empty values and preserves OWS semantics on wire-format values', () => {
+        assert.equal(validateTracestate('rojo=').valid, false);
+        assert.equal(validateTracestate('rojo=value ').valid, true);
+        assert.equal(validateTracestate('rojo= value').valid, true);
     });
 });
 
@@ -170,6 +200,7 @@ describe('trace context mutation helpers (W3C Trace Context Sections 3.5, 4.2, 4
     it('returns null for invalid tracestate keys and values', () => {
         assert.equal(addOrUpdateTracestate('rojo=1', 'BadKey', '2'), null);
         assert.equal(addOrUpdateTracestate('rojo=1', 'ok', String.fromCharCode(0x1f)), null);
+        assert.equal(addOrUpdateTracestate('rojo=1', 'ok', 'value '), null);
         assert.equal(removeTracestateKey('rojo=1', 'BadKey'), null);
     });
 

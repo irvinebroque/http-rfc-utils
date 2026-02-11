@@ -1,3 +1,7 @@
+/**
+ * Tests for http signatures behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -21,7 +25,7 @@ import type {
 } from '../src/types.js';
 
 // RFC 9421 HTTP Message Signatures
-describe('RFC 9421 HTTP Message Signatures', () => {
+describe('RFC 9421 HTTP Message Signatures (§2-§4.2)', () => {
     // RFC 9421 §4.1: Signature-Input field parsing
     describe('parseSignatureInput', () => {
         // RFC 9421 §4.1: Parse dictionary structured field
@@ -362,6 +366,14 @@ describe('RFC 9421 HTTP Message Signatures', () => {
                 params: { key: 'member' },
             });
             assert.equal(result, '"example-dict";key="member"');
+        });
+
+        it('escapes component names and key parameters as quoted-strings', () => {
+            const result = formatComponentIdentifier({
+                name: 'example\\"dict',
+                params: { key: 'm\\"ember' },
+            });
+            assert.equal(result, '"example\\\\\\"dict";key="m\\\\\\"ember"');
         });
 
         it('formats component with multiple parameters', () => {
@@ -810,6 +822,20 @@ describe('RFC 9421 HTTP Message Signatures', () => {
                 result.signatureParams,
                 '("@method");created=1618884473;keyid="test"'
             );
+        });
+
+        it('escapes nonce, keyid, and tag as quoted-strings', () => {
+            const message: SignatureMessageContext = {
+                headers: new Map(),
+            };
+            const result = createSignatureBase(message, [], {
+                nonce: 'n\\"once',
+                keyid: 'k\\"id',
+                tag: 't\\"ag',
+            });
+
+            assert.ok(result);
+            assert.equal(result.signatureParams, '();nonce="n\\\\\\"once";keyid="k\\\\\\"id";tag="t\\\\\\"ag"');
         });
     });
 

@@ -1,18 +1,54 @@
 /**
  * Prefer / Preference-Applied utilities per RFC 7240.
  * RFC 7240 §2, §3.
+ * @see https://www.rfc-editor.org/rfc/rfc7240.html
  */
 
 import type { PreferMap, PreferToken, PreferParam } from './types.js';
 import {
+    TOKEN_CHARS,
     assertHeaderToken,
     assertNoCtl,
     isEmptyHeader,
+    parseQuotedStringStrict,
     splitAndParseKeyValueSegments,
     splitQuotedValue,
-    unquote,
     quoteIfNeeded,
 } from './header-utils.js';
+
+const DISALLOWED_CTL_REGEX = /[\u0000-\u0008\u000A-\u001F\u007F]/;
+
+interface ParsePreferWordOptions {
+    preserveQuotedEmpty?: boolean;
+}
+
+function parsePreferWord(raw: string, options?: ParsePreferWordOptions): string | undefined | null {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+        // Preserve existing semantics for empty value equivalence.
+        return undefined;
+    }
+
+    if (trimmed.startsWith('"')) {
+        const parsedQuoted = parseQuotedStringStrict(trimmed);
+        if (parsedQuoted === null) {
+            return null;
+        }
+        if (DISALLOWED_CTL_REGEX.test(parsedQuoted)) {
+            return null;
+        }
+        if (parsedQuoted === '') {
+            return options?.preserveQuotedEmpty ? '' : undefined;
+        }
+        return parsedQuoted;
+    }
+
+    if (!TOKEN_CHARS.test(trimmed)) {
+        return null;
+    }
+
+    return trimmed;
+}
 
 /**
  * Parse a Prefer header into a map of preference tokens.
@@ -40,30 +76,43 @@ export function parsePrefer(header: string): PreferMap {
 
         // RFC 7240 §2: Token names are case-insensitive.
         const token = tokenPart.key.trim().toLowerCase();
-        if (!token) continue;
+        if (!token || !TOKEN_CHARS.test(token)) continue;
 
-        const rawValue = tokenPart.hasEquals ? unquote(tokenPart.value ?? '') : undefined;
-        // RFC 7240 §2: Empty values are equivalent to no value.
-        const value = rawValue === '' ? undefined : rawValue;
+        const value = tokenPart.hasEquals ? parsePreferWord(tokenPart.value ?? '') : undefined;
+        if (value === null) {
+            continue;
+        }
+
         const params: PreferParam[] = [];
+        let invalidMember = false;
 
         for (const paramPart of paramParts) {
             const key = paramPart.key.trim().toLowerCase();
-            if (!key) {
-                continue;
+            if (!key || !TOKEN_CHARS.test(key)) {
+                invalidMember = true;
+                break;
             }
 
             if (!paramPart.hasEquals) {
                 params.push({ key });
             } else {
-                const val = unquote(paramPart.value ?? '');
+                const valueOrNull = parsePreferWord(paramPart.value ?? '');
+                if (valueOrNull === null) {
+                    invalidMember = true;
+                    break;
+                }
+
                 // RFC 7240 §2: Empty values are equivalent to no value.
-                if (val === '') {
+                if (valueOrNull === undefined) {
                     params.push({ key });
                 } else {
-                    params.push({ key, value: val });
+                    params.push({ key, value: valueOrNull });
                 }
             }
+        }
+
+        if (invalidMember) {
+            continue;
         }
 
         if (!map.has(token)) {
@@ -110,10 +159,49 @@ export function formatPrefer(preferences: PreferMap | PreferToken[]): string {
 // RFC 7240 §3: Preference-Applied header formatting.
 export function formatPreferenceApplied(preferences: PreferMap | string[]): string {
     if (Array.isArray(preferences)) {
+        const validated: string[] = [];
+
         for (const preference of preferences) {
             assertNoCtl(preference, 'Preference-Applied value');
+
+            const raw = preference.trim();
+            if (!raw) {
+                throw new Error('Preference-Applied value must not be empty');
+            }
+
+            const segments = splitAndParseKeyValueSegments(raw, ';');
+            if (segments.length !== 1) {
+                throw new Error('Preference-Applied value must not include parameters');
+            }
+
+            const [segment] = segments;
+            if (!segment) {
+                throw new Error('Preference-Applied value must not be empty');
+            }
+
+            const token = segment.key.trim();
+            assertHeaderToken(token, `Preference-Applied token "${token}"`);
+
+            if (!segment.hasEquals) {
+                validated.push(token);
+                continue;
+            }
+
+            const valueRaw = segment.value ?? '';
+
+            if (valueRaw === '') {
+                throw new Error(`Preference-Applied value "${raw}" must use token[=word] syntax`);
+            }
+
+            const value = parsePreferWord(valueRaw, { preserveQuotedEmpty: true });
+            if (value === null || value === undefined) {
+                throw new Error(`Preference-Applied value "${raw}" must use token[=word] syntax`);
+            }
+
+            validated.push(`${token}=${quoteIfNeeded(value)}`);
         }
-        return preferences.join(', ');
+
+        return validated.join(', ');
     }
 
     const tokens = Array.from(preferences.values());

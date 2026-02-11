@@ -1,3 +1,7 @@
+/**
+ * Tests for client hints behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -21,6 +25,10 @@ describe('Accept-CH (RFC 8942 Section 3.1)', () => {
     it('rejects tokens with parameters (RFC 8942 Section 3.1)', () => {
         const parsed = parseAcceptCH('sec-ch-ua;v=1');
         assert.equal(parsed, null);
+    });
+
+    it('rejects uppercase token keys (RFC 8942 Section 3.1, RFC 8941 Section 3.3.3)', () => {
+        assert.equal(parseAcceptCH('Sec-CH-UA'), null);
     });
 
     it('formats Accept-CH with tokens (RFC 8942 Section 3.1)', () => {

@@ -3,6 +3,7 @@
  */
 
 export * from '../link.js';
+export * from '../early-hints.js';
 export * from '../link-template.js';
 export * from '../linkset.js';
 export * from '../pagination.js';

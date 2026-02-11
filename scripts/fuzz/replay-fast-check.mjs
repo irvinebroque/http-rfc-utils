@@ -1,3 +1,10 @@
+/**
+ * Replay utility for fast-check failures.
+ *
+ * Reconstructs deterministic fuzz runs from explicit CLI arguments or
+ * persisted failure artifacts.
+ */
+
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

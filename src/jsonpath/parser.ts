@@ -1,6 +1,7 @@
 /**
  * JSONPath parser.
  * RFC 9535 §2.1-§2.5.
+ * @see https://www.rfc-editor.org/rfc/rfc9535.html
  */
 
 import type {
@@ -16,6 +17,8 @@ import type {
     JsonPathComparable,
     JsonPathLiteral,
     JsonPathSingularQuery,
+    JsonPathSingularSegment,
+    JsonPathSingularSelector,
     JsonPathFunctionExpr,
     JsonPathFunctionArg,
 } from '../types/jsonpath.js';
@@ -376,11 +379,16 @@ function parseComparisonOrTest(lexer: Lexer): JsonPathLogicalExpr | null {
                 return null;
             }
 
+            const singularSegments = toSingularSegments(query.segments);
+            if (singularSegments === null) {
+                return null;
+            }
+
             // Convert query to singular-query comparable
             const left: JsonPathSingularQuery = {
                 type: 'singular-query',
                 root: query.root,
-                segments: query.segments,
+                segments: singularSegments,
             };
 
             return { type: 'comparison', operator: op, left, right };
@@ -469,10 +477,15 @@ function parseComparable(lexer: Lexer): JsonPathComparable | null {
             return null;
         }
 
+        const singularSegments = toSingularSegments(query.segments);
+        if (singularSegments === null) {
+            return null;
+        }
+
         return {
             type: 'singular-query',
             root: query.root,
-            segments: query.segments,
+            segments: singularSegments,
         };
     }
 
@@ -565,4 +578,33 @@ function parseFunctionArg(lexer: Lexer): JsonPathFunctionArg | null {
 
     // Literal
     return parseLiteral(lexer);
+}
+
+function toSingularSegments(segments: JsonPathSegment[]): JsonPathSingularSegment[] | null {
+    const singularSegments: JsonPathSingularSegment[] = [];
+    for (const segment of segments) {
+        if (segment.type !== 'child') {
+            return null;
+        }
+
+        if (segment.selectors.length !== 1) {
+            return null;
+        }
+
+        const selector = segment.selectors[0];
+        if (!selector || !isSingularSelector(selector)) {
+            return null;
+        }
+
+        singularSegments.push({
+            type: 'child',
+            selectors: [selector],
+        });
+    }
+
+    return singularSegments;
+}
+
+function isSingularSelector(selector: JsonPathSelector): selector is JsonPathSingularSelector {
+    return selector.type === 'name' || selector.type === 'index';
 }

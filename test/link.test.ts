@@ -1,3 +1,7 @@
+/**
+ * Tests for link behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -148,6 +152,32 @@ describe('formatLink', () => {
     it('formats basic link with rel', () => {
         const result = formatLink({ href: 'https://example.com', rel: 'next' });
         assert.equal(result, '<https://example.com>; rel="next"');
+    });
+
+    // RFC 8288 §3.3: rel parameter MUST be present in each link-value.
+    it('throws when rel is missing, empty, or whitespace-only', () => {
+        assert.throws(() => {
+            formatLink({ href: 'https://example.com', rel: '' });
+        }, /non-empty/);
+
+        assert.throws(() => {
+            formatLink({ href: 'https://example.com', rel: '   ' });
+        }, /non-empty/);
+
+        assert.throws(() => {
+            formatLink({ href: 'https://example.com' } as unknown as { href: string; rel: string });
+        }, /non-empty/);
+    });
+
+    // RFC 8288 §3.3: rel is required; formatter emits rel first.
+    it('emits rel first and preserves extension parameters', () => {
+        const result = formatLink({
+            href: 'https://example.com',
+            rel: 'alternate',
+            title: 'English Version',
+            foo: 'bar',
+        });
+        assert.equal(result, '<https://example.com>; rel="alternate"; title="English Version"; foo=bar');
     });
 
     it('formats link with type attribute', () => {

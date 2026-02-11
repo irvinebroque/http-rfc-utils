@@ -1,10 +1,23 @@
 /**
  * Problem Details utilities per RFC 9457.
  * RFC 9457 §3.1, §3.2, §4.1.
+ * @see https://www.rfc-editor.org/rfc/rfc9457.html
  */
 
 import type { ProblemDetails, ProblemOptions } from './types.js';
 import { defaultCorsHeaders } from './cors.js';
+
+const BLOCKED_EXTENSION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function applyProblemExtensions(problem: ProblemDetails, extensions: Record<string, unknown>): void {
+    for (const [key, value] of Object.entries(extensions)) {
+        if (BLOCKED_EXTENSION_KEYS.has(key)) {
+            continue;
+        }
+
+        problem[key] = value;
+    }
+}
 
 /**
  * Create a Problem Details object per RFC 9457.
@@ -35,7 +48,7 @@ export function createProblem(options: ProblemOptions): ProblemDetails {
     }
 
     if (options.extensions) {
-        Object.assign(problem, options.extensions);
+        applyProblemExtensions(problem, options.extensions);
     }
 
     return problem;

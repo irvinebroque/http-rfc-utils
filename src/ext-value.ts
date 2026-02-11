@@ -14,7 +14,47 @@ import { formatPercentEncodedByte } from './internal-percent-encoding.js';
  * (token except "*" / "'" / "%")
  */
 const ATTR_CHAR = /^[A-Za-z0-9!#$&+\-.^_`|~]$/;
+const CHARSET_TOKEN = /^[A-Za-z0-9!#$%&+\-^_`{}~]+$/;
+const LANGUAGE_TAG = /^[A-Za-z]{1,8}(?:-[A-Za-z0-9]{1,8})*$/;
 const UTF8_ENCODER = new TextEncoder();
+
+function isHexDigit(char: string): boolean {
+    if (char.length !== 1) {
+        return false;
+    }
+
+    const code = char.charCodeAt(0);
+    return (
+        (code >= 0x30 && code <= 0x39)
+        || (code >= 0x41 && code <= 0x46)
+        || (code >= 0x61 && code <= 0x66)
+    );
+}
+
+function isValidValueChars(valueChars: string): boolean {
+    for (let index = 0; index < valueChars.length; index++) {
+        const char = valueChars[index]!;
+
+        if (char === '%') {
+            const firstHex = valueChars[index + 1];
+            const secondHex = valueChars[index + 2];
+            if (firstHex === undefined || secondHex === undefined) {
+                return false;
+            }
+            if (!isHexDigit(firstHex) || !isHexDigit(secondHex)) {
+                return false;
+            }
+            index += 2;
+            continue;
+        }
+
+        if (!isAttrChar(char)) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 /**
  * Check if a character is a valid attr-char per RFC 8187 §3.2.1.
@@ -82,6 +122,18 @@ export function decodeExtValue(encoded: string): ExtValue | null {
 
     // RFC 8187 §3.2: charset MUST NOT be omitted
     if (!charset) {
+        return null;
+    }
+
+    if (!CHARSET_TOKEN.test(charset)) {
+        return null;
+    }
+
+    if (language !== '' && !LANGUAGE_TAG.test(language)) {
+        return null;
+    }
+
+    if (!isValidValueChars(valueChars)) {
         return null;
     }
 

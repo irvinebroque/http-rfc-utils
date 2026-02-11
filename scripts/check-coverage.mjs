@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 
+/**
+ * Coverage threshold validator.
+ *
+ * Parses the persisted coverage report, enforces global thresholds, and emits
+ * optional hotspot diagnostics for targeted modules.
+ */
+
 import { readFile } from 'node:fs/promises';
 
 const DEFAULT_REPORT_PATH = 'temp/coverage/report.txt';

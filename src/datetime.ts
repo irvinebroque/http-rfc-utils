@@ -1,6 +1,7 @@
 /**
  * Date/time utilities for HTTP headers.
  * RFC 3339 §5.6, RFC 9110 §5.6.7, RFC 850 §2.
+ * @see https://www.rfc-editor.org/rfc/rfc3339.html
  */
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

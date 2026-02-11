@@ -1,3 +1,10 @@
+/**
+ * Benchmark suite for representative hot paths across public modules.
+ *
+ * Measures parser/formatter throughput and utility operations under larger
+ * synthetic payloads to detect regressions before release.
+ */
+
 import { Bench } from 'tinybench';
 import { cacheControl, parseCacheControl } from '../src/cache.js';
 import { formatCacheStatus, parseCacheStatus } from '../src/cache-status.js';

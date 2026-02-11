@@ -119,6 +119,10 @@ export function parseSecurityTxt(text: string): SecurityTxt {
  * RFC 9116 §2.3: File MUST use CRLF line endings.
  */
 export function formatSecurityTxt(config: SecurityTxt): string {
+    if (!config.contact || config.contact.every((contact) => contact.trim() === '')) {
+        throw new Error('Contact field is required');
+    }
+
     const lines: string[] = [];
 
     for (const contact of config.contact) {

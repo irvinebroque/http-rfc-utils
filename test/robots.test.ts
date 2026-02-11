@@ -1,3 +1,7 @@
+/**
+ * Tests for robots behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -265,11 +269,38 @@ describe('RFC 9309 Robots Exclusion Protocol', () => {
             assert.equal(isAllowed(config, 'AnyBot', '/a/anything/c'), false);
         });
 
+        it('handles many wildcards without changing match semantics', () => {
+            const config = parseRobotsTxt(`User-agent: *\nDisallow: /x*y*z\n`);
+            assert.equal(isAllowed(config, 'AnyBot', '/x-middle-y-end-z-tail'), false);
+            assert.equal(isAllowed(config, 'AnyBot', '/x-middle-z-end-y-tail'), true);
+        });
+
+        it('remains stable for wildcard-heavy non-matches', () => {
+            const config = parseRobotsTxt(`User-agent: *\nDisallow: /a*a*a*a*a*a*a*a*a*b$\n`);
+            const path = '/' + 'a'.repeat(512) + 'c';
+
+            for (let i = 0; i < 200; i++) {
+                assert.equal(isAllowed(config, 'AnyBot', path), true);
+            }
+        });
+
         // RFC 9309 §2.2.2: $ end-of-URL anchor.
         it('handles $ end-of-URL anchor', () => {
             const config = parseRobotsTxt(`User-agent: *\nDisallow: /*.php$\n`);
             assert.equal(isAllowed(config, 'AnyBot', '/page.php'), false);
             assert.equal(isAllowed(config, 'AnyBot', '/page.php?id=1'), true);
+        });
+
+        it('treats non-terminal $ as a literal character', () => {
+            const config = parseRobotsTxt(`User-agent: *\nDisallow: /price$usd\n`);
+            assert.equal(isAllowed(config, 'AnyBot', '/price$usd'), false);
+            assert.equal(isAllowed(config, 'AnyBot', '/price-usd'), true);
+        });
+
+        it('keeps non-anchored patterns prefix-based', () => {
+            const config = parseRobotsTxt(`User-agent: *\nDisallow: /*.php\n`);
+            assert.equal(isAllowed(config, 'AnyBot', '/page.php?id=1'), false);
+            assert.equal(isAllowed(config, 'AnyBot', '/page.html'), true);
         });
 
         it('disallow all with /', () => {

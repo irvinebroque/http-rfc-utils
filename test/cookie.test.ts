@@ -1,3 +1,7 @@
+/**
+ * Tests for cookie behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -28,6 +32,11 @@ describe('Cookie header (RFC 6265 Section 4.2.1)', () => {
         const parsed = parseCookie('theme="light mode"; theme=dark; escaped="a\\\\b"');
         assert.equal(parsed.get('theme'), 'light mode');
         assert.equal(parsed.get('escaped'), 'a\\b');
+    });
+
+    it('parses quoted values with escaped backslash pairs', () => {
+        const parsed = parseCookie('token="path\\\\\\\\to\\\\\\\\cookie"');
+        assert.equal(parsed.get('token'), 'path\\\\to\\\\cookie');
     });
 
     it('quotes cookie values containing separators when formatting', () => {

@@ -1,3 +1,9 @@
+/**
+ * Git command helpers for SemVer CI checks.
+ * Provides merge-base, file listing, and historical file-read primitives.
+ * @see https://semver.org/
+ */
+
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
