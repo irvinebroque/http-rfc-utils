@@ -1,0 +1,130 @@
+src/webfinger.ts
+  63f0dce5460e6816 49-50,53-55
+src/auth/basic.ts
+  63f0dce5460e6816 156-160,162
+test/fuzz/security-fuzz.spec.ts
+  63f0dce5460e6816 84,89-115,474-481,513-514,1016-1019,1208,1292,1294,1314
+src/types/discovery.ts
+  63f0dce5460e6816 50
+src/openapi/security-requirements.ts
+  70afde8bc6b8e726 143,188-192,333-334,350-359,364-365,367-368,379,384,407,419,425,493,507-549,563-574,578,581-583,586-587,590-592,594-595,598,602-607,610-611
+  63f0dce5460e6816 223
+  8df4941993b8bb1c 163-166,244-247
+test/json-canonicalization.test.ts
+  63f0dce5460e6816 106
+src/types/jsonpath.ts
+  63f0dce5460e6816 151
+src/problem.ts
+  63f0dce5460e6816 12-18,45-46,110,115-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.1",
+  "base_commit_sha": "01a26d1fe22cdf6476db15fdbddbc6cbbce477c1",
+  "prompts": {
+    "63f0dce5460e6816": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b255e012ffe6nz3qElrGLqTK5",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 95,
+      "total_deletions": 30,
+      "accepted_lines": 88,
+      "overriden_lines": 0
+    },
+    "70afde8bc6b8e726": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b25b14e6ffe6iuxoFjaAoiUoB",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 183,
+      "total_deletions": 75,
+      "accepted_lines": 171,
+      "overriden_lines": 0
+    },
+    "870ef1192d759835": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b24e4220ffeAD6H80471Rgr7C",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 30,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    },
+    "8df4941993b8bb1c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b25538b3ffe4hlmdJiPOlzkSv",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 105,
+      "total_deletions": 19,
+      "accepted_lines": 105,
+      "overriden_lines": 0
+    },
+    "9dc3cb92352d2535": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b252f8a3ffe4V0S59G897j3aX",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 58,
+      "total_deletions": 2,
+      "accepted_lines": 58,
+      "overriden_lines": 0
+    },
+    "db25d25af24a7a15": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b2573437ffeiAmcEogbZgRCfA",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 93,
+      "total_deletions": 4,
+      "accepted_lines": 93,
+      "overriden_lines": 0
+    },
+    "e256319134366697": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b24fe2cfffeSefvL9oqrh23Bb",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 60,
+      "total_deletions": 2,
+      "accepted_lines": 60,
+      "overriden_lines": 0
+    },
+    "f82f78b7487eedad": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b2518970ffeTKkw1SrBLDzy2c",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 39,
+      "total_deletions": 13,
+      "accepted_lines": 39,
+      "overriden_lines": 0
+    }
+  }
+}
