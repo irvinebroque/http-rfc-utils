@@ -65,10 +65,8 @@ describe('WebFinger JRD helpers (RFC 7033 Sections 4, 4.2-4.4)', () => {
             assert.equal(result.links, undefined);
         });
 
-        // RFC 7033 §4.4.1: subject is SHOULD, not MUST.
-        it('accepts JRD without subject', () => {
-            const result = parseJrd('{}');
-            assert.equal(result.subject, undefined);
+        it('throws when subject is missing', () => {
+            assert.throws(() => parseJrd('{}'), /subject/);
         });
 
         it('throws when subject is non-string', () => {
@@ -78,7 +76,7 @@ describe('WebFinger JRD helpers (RFC 7033 Sections 4, 4.2-4.4)', () => {
         // RFC 7033 §4.4 + security hardening: non-throwing parse path for untrusted input.
         it('provides tryParseJrd for malformed or invalid JRD input', () => {
             assert.equal(tryParseJrd('{'), null);
-            assert.deepEqual(tryParseJrd('{}'), {});
+            assert.equal(tryParseJrd('{}'), null);
             assert.equal(tryParseJrd('{"subject":123}'), null);
             assert.throws(() => parseJrd('{'));
         });

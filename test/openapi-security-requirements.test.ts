@@ -138,6 +138,29 @@ describe('OpenAPI security requirement evaluator', () => {
         assert.equal(result.requirements[0]?.anonymous, true);
     });
 
+    it('ignores unknown schemes during tolerant evaluation', () => {
+        const tolerant = evaluateOpenApiSecurity(
+            [{ unknownAuth: [] }],
+            schemeRegistry,
+            {},
+            { mode: 'tolerant', unknownSchemes: 'ignore' },
+        );
+
+        assert.equal(tolerant.allowed, true);
+        assert.equal(tolerant.requirements[0]?.satisfied, true);
+        assert.deepEqual(tolerant.requirements[0]?.schemes, []);
+
+        const explicitError = evaluateOpenApiSecurity(
+            [{ unknownAuth: [] }],
+            schemeRegistry,
+            {},
+            { mode: 'tolerant', unknownSchemes: 'error' },
+        );
+
+        assert.equal(explicitError.allowed, false);
+        assert.equal(explicitError.requirements[0]?.schemes[0]?.code, 'unknown-scheme');
+    });
+
     it('evaluates OAuth2/OpenID required scopes with AND semantics', () => {
         const missingScope = evaluateOpenApiSecurity(
             [{ oauth: ['read', 'write'] }],
@@ -171,7 +194,7 @@ describe('OpenAPI security requirement evaluator', () => {
         assert.deepEqual(normalized, [{ bearer: [], oauth: ['read', 'write'] }]);
     });
 
-    it('uses role-list semantics for non-oauth requirements and still fails closed on missing roles', () => {
+    it('ignores scope lists for non-oauth security schemes', () => {
         const result = evaluateOpenApiSecurity(
             [{ apiKeyAuth: ['admin'] }],
             schemeRegistry,
@@ -179,29 +202,13 @@ describe('OpenAPI security requirement evaluator', () => {
             { mode: 'tolerant' },
         );
 
-        assert.equal(result.allowed, false);
-        assert.equal(result.requirements[0]?.schemes[0]?.satisfied, false);
-        assert.equal(result.requirements[0]?.schemes[0]?.code, 'missing-scopes');
+        assert.equal(result.allowed, true);
+        assert.equal(result.requirements[0]?.schemes[0]?.satisfied, true);
+        assert.equal(result.requirements[0]?.schemes[0]?.code, 'satisfied');
         assert.deepEqual(result.diagnostics, []);
-
-        const satisfied = evaluateOpenApiSecurity(
-            [{ apiKeyAuth: ['admin'] }],
-            schemeRegistry,
-            {
-                apiKeyAuth: {
-                    present: true,
-                    scopes: ['admin'],
-                },
-            },
-            { mode: 'tolerant' },
-        );
-
-        assert.equal(satisfied.allowed, true);
-        assert.equal(satisfied.requirements[0]?.schemes[0]?.code, 'satisfied');
-        assert.deepEqual(satisfied.requirements[0]?.schemes[0]?.missingScopes, []);
     });
 
-    it('does not treat empty credential objects as present credentials', () => {
+    it('requires scheme-appropriate credential shapes', () => {
         const apiKeyResult = evaluateOpenApiSecurity(
             [{ apiKeyAuth: [] }],
             schemeRegistry,
@@ -210,6 +217,14 @@ describe('OpenAPI security requirement evaluator', () => {
         assert.equal(apiKeyResult.allowed, false);
         assert.equal(apiKeyResult.requirements[0]?.schemes[0]?.code, 'missing-credential');
 
+        const apiKeyScopeOnly = evaluateOpenApiSecurity(
+            [{ apiKeyAuth: [] }],
+            schemeRegistry,
+            { apiKeyAuth: { scopes: ['admin'] } },
+        );
+        assert.equal(apiKeyScopeOnly.allowed, false);
+        assert.equal(apiKeyScopeOnly.requirements[0]?.schemes[0]?.code, 'missing-credential');
+
         const httpResult = evaluateOpenApiSecurity(
             [{ bearer: [] }],
             schemeRegistry,
@@ -217,6 +232,22 @@ describe('OpenAPI security requirement evaluator', () => {
         );
         assert.equal(httpResult.allowed, false);
         assert.equal(httpResult.requirements[0]?.schemes[0]?.code, 'missing-credential');
+
+        const httpScopeOnly = evaluateOpenApiSecurity(
+            [{ bearer: [] }],
+            schemeRegistry,
+            { bearer: { scopes: ['read'] } },
+        );
+        assert.equal(httpScopeOnly.allowed, false);
+        assert.equal(httpScopeOnly.requirements[0]?.schemes[0]?.code, 'missing-credential');
+
+        const oauthScopeOnly = evaluateOpenApiSecurity(
+            [{ oauth: ['read'] }],
+            schemeRegistry,
+            { oauth: { scopes: ['read'] } },
+        );
+        assert.equal(oauthScopeOnly.allowed, true);
+        assert.equal(oauthScopeOnly.requirements[0]?.schemes[0]?.code, 'satisfied');
     });
 });
 
