@@ -22,6 +22,9 @@ import type {
 const MODE_DEFAULT = 'tolerant';
 const UNKNOWN_SCHEMES_DEFAULT_TOLERANT: OpenApiUnknownSchemeHandling = 'ignore';
 const UNKNOWN_SCHEMES_DEFAULT_STRICT: OpenApiUnknownSchemeHandling = 'error';
+const INVALID_SHAPE_MESSAGE = 'OpenAPI field "security" must be an array of Security Requirement Objects';
+const STRICT_FALLBACK_MESSAGE =
+    'OpenAPI security requirements validation failed in strict mode with no diagnostic detail; verify schemes and scopes';
 
 export function parseOpenApiSecurityRequirements(value: unknown): OpenApiSecurityRequirement[] | null {
     if (!Array.isArray(value)) {
@@ -73,12 +76,12 @@ export function validateOpenApiSecurityRequirements(
 ): void {
     const parsed = parseOpenApiSecurityRequirements(requirements);
     if (parsed === null) {
-        throw new Error('OpenAPI security requirements must be an array of Security Requirement Objects.');
+        throw new Error(INVALID_SHAPE_MESSAGE);
     }
 
     const diagnostics = collectRequirementDiagnostics(parsed, schemeRegistry, options);
     if (isStrictMode(options) && diagnostics.length > 0) {
-        throw new Error(diagnostics[0]?.message ?? 'OpenAPI security requirements validation failed.');
+        throw new Error(diagnostics[0]?.message ?? STRICT_FALLBACK_MESSAGE);
     }
 }
 
@@ -89,13 +92,13 @@ export function normalizeOpenApiSecurityRequirements(
 ): OpenApiSecurityRequirement[] {
     const parsed = parseOpenApiSecurityRequirements(requirements);
     if (parsed === null) {
-        throw new Error('OpenAPI security requirements must be an array of Security Requirement Objects.');
+        throw new Error(INVALID_SHAPE_MESSAGE);
     }
 
     const normalized = parsed.map((requirement) => normalizeRequirement(requirement));
     const diagnostics = collectRequirementDiagnostics(normalized, schemeRegistry, options);
     if (isStrictMode(options) && diagnostics.length > 0) {
-        throw new Error(diagnostics[0]?.message ?? 'OpenAPI security requirements validation failed.');
+        throw new Error(diagnostics[0]?.message ?? STRICT_FALLBACK_MESSAGE);
     }
 
     return normalized;
@@ -118,7 +121,7 @@ export function evaluateOpenApiSecurity(
     const parsed = parseOpenApiSecurityRequirements(requirements);
     if (parsed === null) {
         if (isStrictMode(options)) {
-            throw new Error('OpenAPI security requirements must be an array of Security Requirement Objects.');
+            throw new Error(INVALID_SHAPE_MESSAGE);
         }
 
         return {
@@ -129,7 +132,7 @@ export function evaluateOpenApiSecurity(
             diagnostics: [{
                 severity: 'error',
                 code: 'openapi-security.invalid-shape',
-                message: 'OpenAPI security requirements must be an array of Security Requirement Objects.',
+                message: INVALID_SHAPE_MESSAGE,
                 path: 'security',
             }],
         };
@@ -138,7 +141,7 @@ export function evaluateOpenApiSecurity(
     const normalized = parsed.map((requirement) => normalizeRequirement(requirement));
     const diagnostics = collectRequirementDiagnostics(normalized, schemeRegistry, options);
     if (isStrictMode(options) && diagnostics.length > 0) {
-        throw new Error(diagnostics[0]?.message ?? 'OpenAPI security requirements validation failed.');
+        throw new Error(diagnostics[0]?.message ?? STRICT_FALLBACK_MESSAGE);
     }
 
     if (normalized.length === 0) {
@@ -244,7 +247,7 @@ function collectRequirementDiagnostics(
             }
 
             if ((scheme.type === 'oauth2' || scheme.type === 'openIdConnect') && enforceScopeDeclarations) {
-                const declaredScopes = new Set((scheme.availableScopes ?? []).filter((scope) => scope.length > 0));
+                const declaredScopes = collectDeclaredScopes(scheme);
                 for (const requiredScope of requiredScopes) {
                     if (!declaredScopes.has(requiredScope)) {
                         diagnostics.push({
@@ -260,6 +263,34 @@ function collectRequirementDiagnostics(
     }
 
     return diagnostics;
+}
+
+function collectDeclaredScopes(scheme: OpenApiSecuritySchemeMetadata): Set<string> {
+    const declaredScopes = new Set<string>();
+
+    if (scheme.type === 'oauth2') {
+        for (const flow of Object.values(scheme.flows)) {
+            if (!flow) {
+                continue;
+            }
+
+            for (const scope of Object.keys(flow.scopes)) {
+                if (scope.length > 0) {
+                    declaredScopes.add(scope);
+                }
+            }
+        }
+    }
+
+    if (scheme.type === 'oauth2' || scheme.type === 'openIdConnect') {
+        for (const scope of scheme.availableScopes ?? []) {
+            if (scope.length > 0) {
+                declaredScopes.add(scope);
+            }
+        }
+    }
+
+    return declaredScopes;
 }
 
 function evaluateScheme(
@@ -427,7 +458,7 @@ function evaluateScheme(
         }
         default: {
             const neverScheme: never = scheme;
-            throw new Error(`Unknown OpenAPI security scheme type: ${String(neverScheme)}`);
+            throw new Error(`Unknown OpenAPI security scheme type for "${schemeName}": ${String(neverScheme)}`);
         }
     }
 }

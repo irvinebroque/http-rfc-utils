@@ -83,10 +83,7 @@ describe('RFC 8785 JSON Canonicalization Scheme (§3.2)', () => {
     // RFC 8785 Section 3.2.2.2 and 3.2.2.3: reject lone surrogates and non-finite numbers.
     describe('validateCanonicalJson', () => {
         it('throws on lone surrogate string data', () => {
-            assert.throws(
-                () => validateCanonicalJson('bad\ud800' as CanonicalJsonValue),
-                /lone surrogate/
-            );
+            assert.throws(() => validateCanonicalJson('bad\ud800'), /lone surrogate/);
 
             assert.throws(
                 () => formatCanonicalJson({ '\ud800': 'bad' } as unknown as CanonicalJsonValue),
@@ -95,13 +92,26 @@ describe('RFC 8785 JSON Canonicalization Scheme (§3.2)', () => {
         });
 
         it('throws on NaN and Infinity values', () => {
-            assert.throws(
-                () => validateCanonicalJson(Number.NaN as CanonicalJsonValue),
-                /finite JSON numbers/
-            );
+            assert.throws(() => validateCanonicalJson(Number.NaN), /finite JSON numbers/);
             assert.throws(
                 () => formatCanonicalJson(Number.POSITIVE_INFINITY as CanonicalJsonValue),
                 /finite JSON numbers/
+            );
+        });
+
+        it('throws deterministic errors for cyclic arrays and objects', () => {
+            const cyclicArray: unknown[] = [];
+            cyclicArray.push(cyclicArray);
+            assert.throws(
+                () => validateCanonicalJson(cyclicArray),
+                { message: '$[0] contains a cyclic reference' }
+            );
+
+            const cyclicObject: Record<string, unknown> = {};
+            cyclicObject.self = cyclicObject;
+            assert.throws(
+                () => formatCanonicalJson(cyclicObject as CanonicalJsonValue),
+                { message: '$."self" contains a cyclic reference' }
             );
         });
     });
@@ -125,11 +135,15 @@ describe('RFC 8785 JSON Canonicalization Scheme (§3.2)', () => {
 
     // RFC 8785 Section 3.2.1-3.2.3: parser accepts only canonical JSON text.
     describe('parseCanonicalJson', () => {
-        it('returns null for invalid JSON or non-canonical JSON text', () => {
+        it('returns null for invalid JSON text', () => {
             assert.equal(parseCanonicalJson('{'), null);
+        });
+
+        it('returns null for non-canonical text forms', () => {
             assert.equal(parseCanonicalJson('{"b":1,"a":2}'), null);
             assert.equal(parseCanonicalJson('{"a":1, "b":2}'), null);
             assert.equal(parseCanonicalJson('{"a":"\\/"}'), null);
+            assert.equal(parseCanonicalJson('{"a":1,"a":2}'), null);
             assert.equal(parseCanonicalJson('"\\ud800"'), null);
         });
 

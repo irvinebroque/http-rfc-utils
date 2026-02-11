@@ -7,7 +7,7 @@
 
 const DEFAULT_WEBAUTHN_COSE_ALGORITHM_IDS = [-7, -257, -8] as const;
 
-export const WEBAUTHN_COSE_ALGORITHM_IDS: readonly number[] = DEFAULT_WEBAUTHN_COSE_ALGORITHM_IDS;
+export const WEBAUTHN_COSE_ALGORITHM_IDS: readonly number[] = Object.freeze([...DEFAULT_WEBAUTHN_COSE_ALGORITHM_IDS]);
 
 /**
  * Validate a COSE algorithm identifier against an allowlist.

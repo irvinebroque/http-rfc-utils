@@ -26,6 +26,76 @@ const NI_HASH_SUITES: Record<string, HashSuite> = {
 
 const UNRESERVED_PATTERN = /^[A-Za-z0-9._~-]+$/;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
+const REG_NAME_PATTERN = /^[A-Za-z0-9.-]+$/;
+const IPV6_REFERENCE_PATTERN = /^[0-9A-Fa-f:.]+$/;
+
+function isValidPort(portText: string): boolean {
+    if (!/^\d+$/.test(portText)) {
+        return false;
+    }
+
+    const port = Number(portText);
+    return Number.isInteger(port) && port >= 0 && port <= 65535;
+}
+
+function isValidNiAuthority(authority: string): boolean {
+    if (!authority) {
+        return false;
+    }
+
+    for (const char of authority) {
+        const code = char.charCodeAt(0);
+        if (code <= 0x20 || code === 0x7f) {
+            return false;
+        }
+    }
+
+    if (authority.includes('@') || authority.includes('/') || authority.includes('?') || authority.includes('#') || authority.includes('\\')) {
+        return false;
+    }
+
+    if (authority.startsWith('[')) {
+        const closingBracketIndex = authority.indexOf(']');
+        if (closingBracketIndex <= 1) {
+            return false;
+        }
+
+        const host = authority.slice(1, closingBracketIndex);
+        if (!IPV6_REFERENCE_PATTERN.test(host)) {
+            return false;
+        }
+
+        const remainder = authority.slice(closingBracketIndex + 1);
+        if (!remainder) {
+            return true;
+        }
+
+        if (!remainder.startsWith(':')) {
+            return false;
+        }
+
+        return isValidPort(remainder.slice(1));
+    }
+
+    const separatorIndex = authority.indexOf(':');
+    const hasPort = separatorIndex !== -1;
+    const host = hasPort ? authority.slice(0, separatorIndex) : authority;
+    const portText = hasPort ? authority.slice(separatorIndex + 1) : '';
+
+    if (!host || !REG_NAME_PATTERN.test(host) || host.includes('..')) {
+        return false;
+    }
+
+    if (!hasPort) {
+        return true;
+    }
+
+    if (portText.includes(':')) {
+        return false;
+    }
+
+    return isValidPort(portText);
+}
 
 /**
  * RFC 6920 §3 and §5: Parse the `alg;val` production.
@@ -151,6 +221,9 @@ export function parseNiUri(uri: string): NiUri | null {
 export function formatNiUri(uri: NiUri): string {
     const segment = formatNiUrlSegment(uri);
     const authority = uri.authority ?? '';
+    if (authority && !isValidNiAuthority(authority)) {
+        throw new Error(`Invalid NI authority: ${authority}`);
+    }
     const query = formatNiQuery(uri.query);
     return `ni://${authority}/${segment}${query}`;
 }
@@ -207,6 +280,9 @@ export function toWellKnownNiUrl(
 
     const authority = parsed.authority || options?.authority;
     if (!authority) {
+        return null;
+    }
+    if (!isValidNiAuthority(authority)) {
         return null;
     }
 

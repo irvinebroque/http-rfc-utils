@@ -81,11 +81,18 @@ describe('response helpers', () => {
         assert.equal(response.headers.get('Allow'), 'GET, HEAD, OPTIONS');
     });
 
-    // RFC 9110 §5.6.2: method names are tokens.
-    it('rejects invalid method tokens in optionsResponse', () => {
+    // RFC 9110 §5.5: serialized field values reject CR/LF and CTLs.
+    it('rejects control bytes in method names in optionsResponse', () => {
         assert.throws(() => {
             optionsResponse(['GET', 'BAD\nMETHOD']);
-        }, /control characters|valid header token/);
+        }, /control characters/);
+    });
+
+    // RFC 9110 §5.6.2: method names are tokens.
+    it('rejects non-token method names in optionsResponse', () => {
+        assert.throws(() => {
+            optionsResponse(['GET', 'BAD METHOD']);
+        }, /valid RFC 9110 token/);
     });
 
     // RFC 9110 §9.3.2: HEAD responses send headers without a payload body.

@@ -12,6 +12,7 @@ interface TokenBase<TType extends string, TValue> {
     type: TType;
     value: TValue;
     pos: number;
+    raw?: string;
 }
 
 export type Token =

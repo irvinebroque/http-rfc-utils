@@ -67,6 +67,24 @@ describe('RFC 9309 Robots Exclusion Protocol', () => {
             assert.equal(config.groups.length, 2);
         });
 
+        // RFC 9309 §2.2.1: Blank lines do not terminate a group.
+        it('keeps directives in one group across blank lines', () => {
+            const text = `User-agent: ExampleBot\n\nDisallow: /private\n\nAllow: /private/public\n`;
+            const config = parseRobotsTxt(text);
+            assert.equal(config.groups.length, 1);
+            assert.deepEqual(config.groups[0].disallow, ['/private']);
+            assert.deepEqual(config.groups[0].allow, ['/private/public']);
+        });
+
+        // RFC 9309 §2.2: Blank lines and comments are ignorable separators.
+        it('keeps directives in one group with comments and blank lines interleaved', () => {
+            const text = `User-agent: ExampleBot\n# group comment\n\nDisallow: /alpha\n\n# another comment\nAllow: /alpha/public\n`;
+            const config = parseRobotsTxt(text);
+            assert.equal(config.groups.length, 1);
+            assert.deepEqual(config.groups[0].disallow, ['/alpha']);
+            assert.deepEqual(config.groups[0].allow, ['/alpha/public']);
+        });
+
         it('handles empty input', () => {
             const config = parseRobotsTxt('');
             assert.equal(config.groups.length, 0);
@@ -216,6 +234,28 @@ describe('RFC 9309 Robots Exclusion Protocol', () => {
             assert.deepEqual(group.disallow, ['/b']);
         });
 
+        // RFC 9309 §2.2.1: Matching groups for the same product token MUST be combined.
+        it('combines multiple groups with matching user-agent token', () => {
+            const config = parseRobotsTxt(
+                `User-agent: Googlebot\nDisallow: /first\n\nUser-agent: Googlebot\nDisallow: /second\n`
+            );
+
+            const group = matchUserAgent(config, 'Googlebot/2.1');
+            assert.ok(group);
+            assert.deepEqual(group.disallow, ['/first', '/second']);
+        });
+
+        // RFC 9309 §2.2.1: Wildcard groups are combined when no specific group matches.
+        it('combines wildcard groups when specific match is absent', () => {
+            const config = parseRobotsTxt(
+                `User-agent: *\nDisallow: /a\n\nUser-agent: *\nDisallow: /b\n`
+            );
+
+            const group = matchUserAgent(config, 'OtherBot');
+            assert.ok(group);
+            assert.deepEqual(group.disallow, ['/a', '/b']);
+        });
+
         it('returns null when no match and no wildcard', () => {
             const config = parseRobotsTxt(`User-agent: Googlebot\nDisallow: /\n`);
             const group = matchUserAgent(config, 'Bingbot');
@@ -320,6 +360,43 @@ describe('RFC 9309 Robots Exclusion Protocol', () => {
                 assert.equal(isAllowed(config, 'AnyBot', '/public/page'), true);
                 assert.equal(isAllowed(config, 'AnyBot', '/private/secret'), false);
             }
+        });
+
+        // RFC 9309 §2.2.1 + §2.2.2: Rule evaluation uses directives from combined matching groups.
+        it('applies directives from all matching groups', () => {
+            const config = parseRobotsTxt(
+                `User-agent: Googlebot\nAllow: /shared/public\n\nUser-agent: Googlebot\nDisallow: /shared\n`
+            );
+
+            assert.equal(isAllowed(config, 'Googlebot', '/shared/private'), false);
+            assert.equal(isAllowed(config, 'Googlebot', '/shared/public/page'), true);
+        });
+
+        // RFC 9309 §2.2.2 + RFC 3986 §2.1/§2.3: Unreserved percent-encoding normalizes for matching.
+        it('matches equivalent unreserved percent-encoding in rules and request paths', () => {
+            const config = parseRobotsTxt(`User-agent: *\nDisallow: /~user\n`);
+            assert.equal(isAllowed(config, 'AnyBot', '/%7euser/profile'), false);
+        });
+
+        // RFC 9309 §2.2.2 + RFC 3986 §2.2: Reserved and encoded reserved octets remain distinct.
+        it('keeps encoded reserved characters distinct from literal reserved characters', () => {
+            const config = parseRobotsTxt(`User-agent: *\nDisallow: /a%2Fb\n`);
+            assert.equal(isAllowed(config, 'AnyBot', '/a/b'), true);
+            assert.equal(isAllowed(config, 'AnyBot', '/a%2Fb'), false);
+        });
+
+        // RFC 3986 §2.1: Hex digits in percent-encoding are case-insensitive.
+        it('treats mixed-case percent-encoding hex digits equivalently', () => {
+            const config = parseRobotsTxt(`User-agent: *\nDisallow: /~\n`);
+            assert.equal(isAllowed(config, 'AnyBot', '/%7Eprofile'), false);
+            assert.equal(isAllowed(config, 'AnyBot', '/%7eprofile'), false);
+        });
+
+        // RFC 9309 §2.2.2: Matching must not double-decode percent-encoded octets.
+        it('does not double-decode percent-encoded percent signs', () => {
+            const config = parseRobotsTxt(`User-agent: *\nDisallow: /a%252Fb\n`);
+            assert.equal(isAllowed(config, 'AnyBot', '/a%2Fb'), true);
+            assert.equal(isAllowed(config, 'AnyBot', '/a%252Fb'), false);
         });
     });
 });

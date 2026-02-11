@@ -7,6 +7,7 @@
 
 import type {
     WebauthnClientData,
+    WebauthnClientDataFormatOptions,
     WebauthnClientDataValidationOptions,
 } from '../types/auth.js';
 import {
@@ -29,45 +30,56 @@ export function parseWebauthnClientDataJson(value: string | Uint8Array | ArrayBu
         return null;
     }
 
-    let parsed: unknown;
+    let parsedValue: unknown;
     try {
-        parsed = JSON.parse(jsonText);
+        parsedValue = JSON.parse(jsonText);
     } catch {
         return null;
     }
 
-    if (!isRecord(parsed)) {
+    if (!isRecord(parsedValue)) {
         return null;
     }
 
-    if (typeof parsed.type !== 'string' || typeof parsed.challenge !== 'string' || typeof parsed.origin !== 'string') {
+    if (typeof parsedValue.type !== 'string' || typeof parsedValue.challenge !== 'string' || typeof parsedValue.origin !== 'string') {
         return null;
     }
 
-    if (parsed.crossOrigin !== undefined && typeof parsed.crossOrigin !== 'boolean') {
+    if (parsedValue.crossOrigin !== undefined && typeof parsedValue.crossOrigin !== 'boolean') {
         return null;
     }
 
-    if (parsed.topOrigin !== undefined && typeof parsed.topOrigin !== 'string') {
+    if (parsedValue.topOrigin !== undefined && typeof parsedValue.topOrigin !== 'string') {
         return null;
     }
 
-    return {
-        type: parsed.type,
-        challenge: parsed.challenge,
-        origin: parsed.origin,
-        crossOrigin: parsed.crossOrigin,
-        topOrigin: parsed.topOrigin,
+    const result: WebauthnClientData = {
+        type: parsedValue.type,
+        challenge: parsedValue.challenge,
+        origin: parsedValue.origin,
     };
+
+    if (typeof parsedValue.crossOrigin === 'boolean') {
+        result.crossOrigin = parsedValue.crossOrigin;
+    }
+    if (typeof parsedValue.topOrigin === 'string') {
+        result.topOrigin = parsedValue.topOrigin;
+    }
+
+    return result;
 }
 
 /**
  * Format a client data object as UTF-8 encoded clientDataJSON bytes.
  * Throws Error on semantic-invalid input.
  */
-export function formatWebauthnClientDataJson(value: WebauthnClientData): Uint8Array {
+export function formatWebauthnClientDataJson(
+    value: WebauthnClientData,
+    options: WebauthnClientDataFormatOptions = {},
+): Uint8Array {
     validateWebauthnClientData(value, {
-        requireHttpsOrigin: false,
+        requireHttpsOrigin: options.requireHttpsOrigin ?? true,
+        allowHttpLoopbackOrigin: options.allowHttpLoopbackOrigin ?? false,
     });
 
     return UTF8_ENCODER.encode(JSON.stringify(value));

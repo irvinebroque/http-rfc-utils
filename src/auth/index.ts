@@ -1,7 +1,8 @@
 /**
  * Authorization and WWW-Authenticate utilities for Basic, Bearer, and Digest,
- * plus OAuth PKCE helpers.
- * RFC 7617 §2, §2.1; RFC 6750 §2.1, §3; RFC 7616 §3.3-3.5; RFC 7636 §4-§7.
+ * plus OAuth PKCE and WebAuthn helpers.
+ * RFC 7617 §2, §2.1; RFC 6750 §2.1, §3; RFC 7616 §3.3-3.5; RFC 7636 §4-§7;
+ * W3C WebAuthn Level 3.
  * @see https://www.rfc-editor.org/rfc/rfc7617.html
  */
 
@@ -51,3 +52,22 @@ export {
     parsePkceTokenRequestParams,
     formatPkceTokenRequestParams,
 } from './pkce.js';
+
+export {
+    parseWebauthnBase64url,
+    formatWebauthnBase64url,
+    validateWebauthnBase64url,
+    parseWebauthnCreationOptionsFromJson,
+    formatWebauthnCreationOptionsToJson,
+    validateWebauthnCreationOptions,
+    parseWebauthnRequestOptionsFromJson,
+    formatWebauthnRequestOptionsToJson,
+    validateWebauthnRequestOptions,
+    parseWebauthnClientDataJson,
+    formatWebauthnClientDataJson,
+    validateWebauthnClientData,
+    parseWebauthnAuthenticatorData,
+    validateWebauthnAuthenticatorData,
+    validateWebauthnCoseAlgorithm,
+    WEBAUTHN_COSE_ALGORITHM_IDS,
+} from './webauthn.js';

@@ -120,7 +120,7 @@ export function parseSecurityTxt(text: string): SecurityTxt {
  */
 export function formatSecurityTxt(config: SecurityTxt): string {
     if (!config.contact || config.contact.every((contact) => contact.trim() === '')) {
-        throw new Error('Contact field is required');
+        throw new Error('security.txt config.contact must include at least one non-empty Contact value');
     }
 
     const lines: string[] = [];
@@ -186,7 +186,11 @@ export function formatSecurityTxt(config: SecurityTxt): string {
  */
 export function isSecurityTxtExpired(config: SecurityTxt, now?: Date): boolean {
     const currentTime = now ?? new Date();
-    return config.expires.getTime() <= currentTime.getTime();
+    const expiresTime = config.expires.getTime();
+    if (Number.isNaN(expiresTime)) {
+        return true;
+    }
+    return expiresTime <= currentTime.getTime();
 }
 
 /**

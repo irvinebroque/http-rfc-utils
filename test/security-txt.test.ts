@@ -91,6 +91,15 @@ describe('RFC 9116 security.txt', () => {
             // Falls back to epoch.
             assert.equal(config.expires.getTime(), 0);
         });
+
+        // RFC 9116 §2.5.3: invalid Expires must not be treated as fresh.
+        it('treats invalid Expires values as expired', () => {
+            const config = parseSecurityTxt(
+                'Contact: mailto:test@example.com\nExpires: definitely-not-a-date\n'
+            );
+            assert.equal(Number.isNaN(config.expires.getTime()), true);
+            assert.equal(isSecurityTxtExpired(config, new Date('2026-01-01T00:00:00.000Z')), true);
+        });
     });
 
     // RFC 9116 §2.3: CRLF line endings.
@@ -102,7 +111,7 @@ describe('RFC 9116 security.txt', () => {
                     contact: [],
                     expires: new Date('2027-01-31T23:59:59.000Z'),
                 });
-            }, /Contact field is required/);
+            }, /config\.contact/);
         });
 
         it('formats with CRLF line endings', () => {
@@ -186,6 +195,15 @@ describe('RFC 9116 security.txt', () => {
             };
             assert.equal(isSecurityTxtExpired(config, new Date('2025-01-01T00:00:00.000Z')), false);
             assert.equal(isSecurityTxtExpired(config, new Date('2025-12-01T00:00:00.000Z')), true);
+        });
+
+        // RFC 9116 §2.5.3: consumers must fail closed on invalid or expired Expires values.
+        it('returns true for invalid Expires dates', () => {
+            const config = {
+                contact: ['mailto:test@example.com'],
+                expires: new Date('invalid-date'),
+            };
+            assert.equal(isSecurityTxtExpired(config), true);
         });
     });
 

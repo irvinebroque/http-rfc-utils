@@ -16,8 +16,49 @@ import {
     parseWWWAuthenticate,
 } from './shared.js';
 import { createObjectMap } from '../object-map.js';
+import {
+    AUTH_PARAM_SCHEMA_SKIP,
+    buildAuthParamsBySchema,
+    createAuthParamSchemaEntry,
+    parseAuthParamsBySchema,
+} from './internal-auth-param-schema.js';
 
 const BEARER_ERRORS: BearerError[] = ['invalid_request', 'invalid_token', 'insufficient_scope'];
+
+interface BearerChallengeSchema {
+    realm?: string;
+    scope?: string;
+    error?: BearerError;
+    errorDescription?: string;
+    errorUri?: string;
+    params?: Record<string, string>;
+}
+
+const BEARER_CHALLENGE_SCHEMA = [
+    createAuthParamSchemaEntry<BearerChallengeSchema>({
+        key: 'realm',
+        property: 'realm',
+    }),
+    createAuthParamSchemaEntry<BearerChallengeSchema>({
+        key: 'scope',
+        property: 'scope',
+    }),
+    createAuthParamSchemaEntry<BearerChallengeSchema>({
+        key: 'error',
+        property: 'error',
+        parse: (value) => BEARER_ERRORS.includes(value as BearerError)
+            ? value as BearerError
+            : AUTH_PARAM_SCHEMA_SKIP,
+    }),
+    createAuthParamSchemaEntry<BearerChallengeSchema>({
+        key: 'error_description',
+        property: 'errorDescription',
+    }),
+    createAuthParamSchemaEntry<BearerChallengeSchema>({
+        key: 'error_uri',
+        property: 'errorUri',
+    }),
+] as const;
 /**
  * Parse Bearer Authorization header.
  */
@@ -55,46 +96,20 @@ export function parseBearerChallenge(header: string): BearerChallenge | null {
         return null;
     }
 
-    const seen = new Set<string>();
-    const extensions = createObjectMap<string>();
-    const result: BearerChallenge = {};
-
-    for (const param of challenge.params) {
-        const name = param.name.toLowerCase();
-        if (seen.has(name)) {
-            return null;
-        }
-        seen.add(name);
-
-        switch (name) {
-            case 'realm':
-                result.realm = param.value;
-                break;
-            case 'scope':
-                result.scope = param.value;
-                break;
-            case 'error':
-                if (BEARER_ERRORS.includes(param.value as BearerError)) {
-                    result.error = param.value as BearerError;
+    const parsed = parseAuthParamsBySchema<BearerChallengeSchema>(
+        challenge.params,
+        BEARER_CHALLENGE_SCHEMA,
+        {
+            assignUnknown: (target, name, value) => {
+                if (!target.params) {
+                    target.params = createObjectMap<string>();
                 }
-                break;
-            case 'error_description':
-                result.errorDescription = param.value;
-                break;
-            case 'error_uri':
-                result.errorUri = param.value;
-                break;
-            default:
-                extensions[name] = param.value;
-                break;
+                target.params[name] = value;
+            },
         }
-    }
+    );
 
-    if (Object.keys(extensions).length > 0) {
-        result.params = extensions;
-    }
-
-    return result;
+    return parsed as BearerChallenge | null;
 }
 
 /**
@@ -102,28 +117,20 @@ export function parseBearerChallenge(header: string): BearerChallenge | null {
  */
 // RFC 6750 §3: Bearer challenge formatting.
 export function formatBearerChallenge(params: BearerChallenge): string {
-    const parts: AuthParam[] = [];
-
-    if (params.realm) {
-        parts.push({ name: 'realm', value: params.realm });
-    }
-    if (params.scope) {
-        parts.push({ name: 'scope', value: params.scope });
-    }
-    if (params.error) {
-        parts.push({ name: 'error', value: params.error });
-    }
-    if (params.errorDescription) {
-        parts.push({ name: 'error_description', value: params.errorDescription });
-    }
-    if (params.errorUri) {
-        parts.push({ name: 'error_uri', value: params.errorUri });
-    }
-    if (params.params) {
-        for (const [name, value] of Object.entries(params.params)) {
-            parts.push({ name, value });
+    const parts: AuthParam[] = buildAuthParamsBySchema<BearerChallengeSchema>(
+        params,
+        BEARER_CHALLENGE_SCHEMA,
+        {
+            appendUnknown: (source, append) => {
+                if (!source.params) {
+                    return;
+                }
+                for (const [name, value] of Object.entries(source.params)) {
+                    append({ name, value });
+                }
+            },
         }
-    }
+    );
 
     if (parts.length === 0) {
         return 'Bearer';

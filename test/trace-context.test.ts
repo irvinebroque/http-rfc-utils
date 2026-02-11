@@ -49,7 +49,7 @@ describe('traceparent parsing/formatting (W3C Trace Context Section 3.2)', () =>
         assert.ok(result.errors.length > 0);
     });
 
-    it('accepts higher traceparent versions with compatible layout', () => {
+    it('accepts higher traceparent versions and ignores opaque fields with valid prefix', () => {
         assert.deepEqual(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'), {
             version: '01',
             traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
@@ -57,12 +57,18 @@ describe('traceparent parsing/formatting (W3C Trace Context Section 3.2)', () =>
             traceFlags: '01',
         });
 
-        assert.deepEqual(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra-data'), {
+        assert.deepEqual(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-ab-extra-data'), {
             version: '01',
             traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
             parentId: '00f067aa0ba902b7',
             traceFlags: '01',
         });
+    });
+
+    // W3C Trace Context §3.2.4: future-version extra fields must keep delimiter/hex prefix compatibility.
+    it('rejects higher-version malformed additional field prefixes', () => {
+        assert.equal(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-'), null);
+        assert.equal(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra-data'), null);
     });
 
     it('rejects invalid versions and malformed field counts/layout', () => {

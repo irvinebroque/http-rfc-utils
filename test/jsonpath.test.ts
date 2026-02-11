@@ -12,6 +12,7 @@ import {
     formatNormalizedPath,
     compileJsonPath,
 } from '../src/jsonpath.js';
+import { Lexer } from '../src/jsonpath/lexer.js';
 
 // RFC 9535 §1.5: Example JSON value (bookstore)
 const bookstore = {
@@ -168,6 +169,61 @@ describe('RFC 9535 JSONPath', () => {
             assert.ok(ast !== null);
             const selector = ast.segments[0].selectors[0];
             assert.equal(selector.type, 'wildcard');
+        });
+
+        // RFC 9535 §2.5.1.1: Dot shorthand does not allow whitespace after ".".
+        it('rejects whitespace in dot shorthand', () => {
+            assert.equal(parseJsonPath('$. foo'), null);
+            assert.equal(parseJsonPath('$.\nfoo'), null);
+            assert.equal(parseJsonPath('$.. foo'), null);
+            assert.equal(parseJsonPath('$..\t*'), null);
+        });
+
+        // RFC 9535 §2.5.1.1: Bracket notation still allows surrounding whitespace.
+        it('keeps bracket-notation whitespace tolerance', () => {
+            assert.ok(parseJsonPath('$ [ "store" ]') !== null);
+            assert.ok(parseJsonPath('$ [ 0 ]') !== null);
+        });
+
+        // RFC 9535 §2.3.1.1: control characters in string literals must be escaped.
+        it('rejects raw control characters inside strings', () => {
+            const rawNewline = "$['line" + String.fromCharCode(0x0A) + "break']";
+            const rawTab = "$['tab" + String.fromCharCode(0x09) + "char']";
+            const rawCarriageReturn = "$['carriage" + String.fromCharCode(0x0D) + "return']";
+
+            assert.equal(parseJsonPath(rawNewline), null);
+            assert.equal(parseJsonPath(rawTab), null);
+            assert.equal(parseJsonPath(rawCarriageReturn), null);
+        });
+
+        it('accepts escaped control characters inside strings', () => {
+            assert.ok(parseJsonPath(`$['line\\nbreak']`) !== null);
+            assert.ok(parseJsonPath(`$['tab\\tchar']`) !== null);
+            assert.ok(parseJsonPath(`$['carriage\\rreturn']`) !== null);
+            assert.ok(parseJsonPath(`$['nul\\u0000']`) !== null);
+            assert.ok(parseJsonPath(`$['unit\\u001F']`) !== null);
+        });
+
+        it('reports control-character lexer failure near offending position', () => {
+            const rawNewline = "$['bad" + String.fromCharCode(0x0A) + "line']";
+            assert.throws(
+                () => new Lexer(rawNewline),
+                /Invalid string at position [0-9]+/
+            );
+        });
+
+        // RFC 9535 §2.3.5.1 + resilience hardening: parser must reject pathological expression nesting.
+        it('rejects deeply nested parenthesized filter expressions', () => {
+            const depth = 80;
+            const query = `$[?${'('.repeat(depth)}@.a == 1${')'.repeat(depth)}]`;
+            assert.equal(parseJsonPath(query), null);
+        });
+
+        // RFC 9535 §2.4 + resilience hardening: parser must bound nested function-expression depth.
+        it('rejects deeply nested function expressions', () => {
+            const depth = 80;
+            const query = `$[?${'length('.repeat(depth)}@${')'.repeat(depth)} == 0]`;
+            assert.equal(parseJsonPath(query), null);
         });
     });
 
@@ -564,6 +620,49 @@ describe('RFC 9535 JSONPath', () => {
             assert.deepEqual(queryJsonPath('$[?@.a == true]', data), [{ a: true }]);
             assert.deepEqual(queryJsonPath('$[?@.a == false]', data), [{ a: false }]);
         });
+
+        // RFC 9535 §2.3.5.1 + RFC 8259 §6: JSON numeric literals in filters.
+        it('supports fraction and exponent number literals in comparisons', () => {
+            const data = [{ n: 1.5 }, { n: -0.001 }, { n: 6.02e23 }];
+            assert.deepEqual(queryJsonPath('$[?@.n == 1.5]', data), [{ n: 1.5 }]);
+            assert.deepEqual(queryJsonPath('$[?@.n == -0.1E-2]', data), [{ n: -0.001 }]);
+            assert.deepEqual(queryJsonPath('$[?@.n == 6.02e23]', data), [{ n: 6.02e23 }]);
+        });
+
+        it('rejects malformed numeric literals in filters', () => {
+            assert.equal(parseJsonPath('$[?@.n == 01]'), null);
+            assert.equal(parseJsonPath('$[?@.n == 1.]'), null);
+            assert.equal(parseJsonPath('$[?@.n == .5]'), null);
+            assert.equal(parseJsonPath('$[?@.n == 1e]'), null);
+            assert.equal(parseJsonPath('$[?@.n == 1e+]'), null);
+            assert.equal(parseJsonPath('$[?@.n == +1]'), null);
+        });
+
+        it('keeps integer index grammar strict while widening filter numbers', () => {
+            assert.equal(parseJsonPath('$[1e2]'), null);
+            assert.equal(parseJsonPath('$[1.5]'), null);
+            assert.ok(parseJsonPath('$[?@.n == 1e2]') !== null);
+        });
+
+        // RFC 9535 §2.3.5.1: comparable uses singular-query, not general filter-query.
+        it('rejects non-singular queries in comparison positions', () => {
+            assert.equal(parseJsonPath('$[?@.* == 1]'), null);
+            assert.equal(parseJsonPath('$[?@..a == 1]'), null);
+            assert.equal(parseJsonPath('$[?@[0,1] == 1]'), null);
+            assert.equal(parseJsonPath('$[?@[:2] == 1]'), null);
+        });
+
+        it('allows the same non-singular queries in existence tests', () => {
+            assert.ok(parseJsonPath('$[?@.*]') !== null);
+            assert.ok(parseJsonPath('$[?@..a]') !== null);
+            assert.ok(parseJsonPath('$[?@[0,1]]') !== null);
+            assert.ok(parseJsonPath('$[?@[:2]]') !== null);
+        });
+
+        it('does not coerce multi-node query results into singular comparisons', () => {
+            const data = [{ a: [1, 2] }, { a: [1] }];
+            assert.equal(queryJsonPath('$[?@.a[*] == 1]', data), null);
+        });
     });
 
     // RFC 9535 §2.4: Function extensions
@@ -584,6 +683,10 @@ describe('RFC 9535 JSONPath', () => {
                 const data = [{ obj: { a: 1, b: 2 } }, { obj: { a: 1 } }];
                 assert.deepEqual(queryJsonPath('$[?length(@.obj) == 2]', data), [{ obj: { a: 1, b: 2 } }]);
             });
+
+            it('rejects length() with node-list argument', () => {
+                assert.equal(parseJsonPath('$[?length(@.obj[*]) == 2]'), null);
+            });
         });
 
         // RFC 9535 §2.4.5: count()
@@ -596,6 +699,10 @@ describe('RFC 9535 JSONPath', () => {
             it('returns 0 for empty nodelist', () => {
                 const data = { items: [] };
                 assert.deepEqual(queryJsonPath('$[?count(@.items[*]) == 0]', [data]), [data]);
+            });
+
+            it('rejects count() with value-typed argument', () => {
+                assert.equal(parseJsonPath('$[?count("items") > 0]'), null);
             });
         });
 
@@ -628,6 +735,11 @@ describe('RFC 9535 JSONPath', () => {
                 const data = [{ s: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }];
                 const result = queryJsonPath('$[?match(@.s, "(a|aa)+$")]', data);
                 assert.equal(result, null);
+            });
+
+            it('rejects match() with node-list arguments', () => {
+                assert.equal(parseJsonPath('$[?match(@.s[*], "foo")]'), null);
+                assert.equal(parseJsonPath('$[?match(@.s, @.p[*])]'), null);
             });
         });
 
@@ -666,6 +778,10 @@ describe('RFC 9535 JSONPath', () => {
                     [{ s: 'catdog' }, { s: 'cat' }]
                 );
             });
+
+            it('rejects search() with node-list arguments', () => {
+                assert.equal(parseJsonPath('$[?search(@.s[*], "foo")]'), null);
+            });
         });
 
         // RFC 9535 §2.4.8: value()
@@ -674,6 +790,17 @@ describe('RFC 9535 JSONPath', () => {
                 const data = [{ a: { b: 1 } }, { a: { b: 2 } }];
                 assert.deepEqual(queryJsonPath('$[?value(@.a.b) == 1]', data), [{ a: { b: 1 } }]);
             });
+
+            it('accepts node-list argument and returns null when non-singular', () => {
+                const data = [{ a: [1, 2] }, { a: [1] }];
+                assert.deepEqual(queryJsonPath('$[?value(@.a[*]) == 1]', data), [{ a: [1] }]);
+            });
+        });
+
+        it('rejects non-logical function expressions as filter test-expr', () => {
+            assert.equal(parseJsonPath('$[?length(@.name)]'), null);
+            assert.equal(parseJsonPath('$[?count(@.items[*])]'), null);
+            assert.equal(parseJsonPath('$[?value(@.name)]'), null);
         });
     });
 
@@ -738,6 +865,24 @@ describe('RFC 9535 JSONPath', () => {
 
         it('escapes backslashes', () => {
             assert.equal(formatNormalizedPath(['a\\b']), "$['a\\\\b']");
+        });
+
+        it('escapes all control character classes', () => {
+            assert.equal(formatNormalizedPath(['x\n\r\t']), "$['x\\n\\r\\t']");
+            assert.equal(formatNormalizedPath(['\u0000\u001F']), "$['\\u0000\\u001F']");
+            assert.equal(formatNormalizedPath(['\b\f']), "$['\\b\\f']");
+        });
+
+        it('escapes mixed quotes, slashes, and controls deterministically', () => {
+            assert.equal(
+                formatNormalizedPath(["a'b\\c\n\u0001"]),
+                "$['a\\'b\\\\c\\n\\u0001']"
+            );
+        });
+
+        it('is stable for already escaped-looking input values', () => {
+            assert.equal(formatNormalizedPath(['\\n']), "$['\\\\n']");
+            assert.equal(formatNormalizedPath(["\\'"]), "$['\\\\\\'']");
         });
 
         it('returns paths with nodes', () => {
@@ -829,6 +974,26 @@ describe('RFC 9535 JSONPath', () => {
             assert.deepEqual(result, ['root']);
         });
 
+        // RFC 9535 §2.3.5.2.2 + resilience hardening: equality must be cycle-safe.
+        it('compares cyclic objects without recursion overflow', () => {
+            const left: Record<string, unknown> = { a: 1 };
+            left.self = left;
+
+            const right: Record<string, unknown> = { a: 1 };
+            right.self = right;
+
+            const nonEqualRight: Record<string, unknown> = { a: 2 };
+            nonEqualRight.self = nonEqualRight;
+
+            const data = [
+                { left, right },
+                { left, right: nonEqualRight },
+            ];
+
+            const result = queryJsonPath('$[?@.left == @.right]', data);
+            assert.deepEqual(result, [{ left, right }]);
+        });
+
         // RFC 9535 §2.5.2 + implementation limits: bounded traversal depth.
         it('returns null when maxDepth is exceeded', () => {
             const doc = { a: { b: { c: 1 } } };
@@ -870,6 +1035,37 @@ describe('RFC 9535 JSONPath', () => {
                     throwOnError: true,
                 });
             }, /maxNodesVisited/);
+        });
+
+        it('fails closed on comparison limit breaches and throws in throw mode', () => {
+            const mkCycle = (value: number): Record<string, unknown> => {
+                const root: Record<string, unknown> = { value };
+                root.self = root;
+                return root;
+            };
+
+            const data = [{ left: mkCycle(1), right: mkCycle(1) }];
+            const query = '$[?@.left == @.right]';
+
+            assert.equal(
+                queryJsonPath(query, data, { maxNodesVisited: 4 }),
+                null
+            );
+
+            assert.throws(() => {
+                queryJsonPath(query, data, {
+                    maxNodesVisited: 4,
+                    throwOnError: true,
+                });
+            }, /maxNodesVisited/);
+        });
+
+        it('treats parser depth-limit invalid queries as throwOnError parse failures', () => {
+            const depth = 80;
+            const query = `$[?${'('.repeat(depth)}@.a == 1${')'.repeat(depth)}]`;
+            assert.throws(() => {
+                queryJsonPath(query, [{ a: 1 }], { throwOnError: true });
+            }, /Invalid JSONPath query/);
         });
     });
 });

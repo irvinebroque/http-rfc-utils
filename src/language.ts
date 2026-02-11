@@ -7,6 +7,20 @@
 import type { LanguageRange } from './types.js';
 import { parseWeightedTokenList } from './header-utils.js';
 
+const BASIC_LANGUAGE_RANGE_REGEX = /^[A-Za-z]{1,8}(?:-[A-Za-z0-9]{1,8})*$/;
+
+function normalizeLanguageRange(token: string): string {
+    if (token === '*') {
+        return token;
+    }
+
+    if (!BASIC_LANGUAGE_RANGE_REGEX.test(token)) {
+        return '';
+    }
+
+    return token.toLowerCase();
+}
+
 function languageSpecificity(tag: string): number {
     if (tag === '*') {
         return 0;
@@ -28,7 +42,7 @@ function languageSpecificity(tag: string): number {
 // RFC 9110 §12.5.4: Accept-Language field-value parsing.
 export function parseAcceptLanguage(header: string): LanguageRange[] {
     const ranges = parseWeightedTokenList(header, {
-        tokenNormalizer: tag => tag.toLowerCase(),
+        tokenNormalizer: normalizeLanguageRange,
         sort: 'q-then-specificity',
         specificity: languageSpecificity,
     });

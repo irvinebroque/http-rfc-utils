@@ -255,6 +255,13 @@ describe('ETag Formatting', () => {
             const result = formatETag({ weak: false, value: 'abc123-def456' });
             assert.equal(result, '"abc123-def456"');
         });
+
+        // RFC 9110 §8.8.3: formatter must only emit etagc characters.
+        it('rejects invalid etagc values during formatting', () => {
+            assert.throws(() => formatETag({ weak: false, value: 'bad"quote' }), /Invalid ETag value/);
+            assert.throws(() => formatETag({ weak: false, value: 'bad\nctl' }), /Invalid ETag value/);
+            assert.throws(() => formatETag({ weak: false, value: 'bad\u0100' }), /Invalid ETag value/);
+        });
     });
 
     describe('round-trip', () => {

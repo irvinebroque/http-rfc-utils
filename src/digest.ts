@@ -370,8 +370,8 @@ function constantTimeEqualBytes(expected: Uint8Array, actual: Uint8Array): boole
     const maxLength = Math.max(expected.length, actual.length);
 
     for (let i = 0; i < maxLength; i++) {
-        const expectedByte = i < expected.length ? expected[i] : 0;
-        const actualByte = i < actual.length ? actual[i] : 0;
+        const expectedByte = i < expected.length ? (expected[i] ?? 0) : 0;
+        const actualByte = i < actual.length ? (actual[i] ?? 0) : 0;
         diff |= expectedByte ^ actualByte;
     }
 

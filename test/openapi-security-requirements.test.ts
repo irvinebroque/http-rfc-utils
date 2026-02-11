@@ -14,6 +14,50 @@ import {
     tryParseOpenApiSecurityRequirements,
     validateOpenApiSecurityRequirements,
 } from '../src/openapi.js';
+import type { OpenApiSecuritySchemeMetadata } from '../src/types.js';
+
+const OAUTH_FLOWS = {
+    authorizationCode: {
+        authorizationUrl: 'https://idp.example.test/oauth/authorize',
+        tokenUrl: 'https://idp.example.test/oauth/token',
+        scopes: {
+            read: 'Read access',
+            write: 'Write access',
+        },
+    },
+} as const;
+
+const OIDC_URL = 'https://idp.example.test/.well-known/openid-configuration';
+
+// OpenAPI 3.1.1 Security Scheme Object typing requirements.
+function assertValidScheme(_value: OpenApiSecuritySchemeMetadata): void {
+}
+
+assertValidScheme({ type: 'apiKey', in: 'query', name: 'api_key' });
+assertValidScheme({ type: 'apiKey', in: 'header', name: 'X-API-Key' });
+assertValidScheme({ type: 'apiKey', in: 'cookie', name: 'session_id' });
+
+// @ts-expect-error - OpenAPI apiKey security schemes require a name field.
+assertValidScheme({ type: 'apiKey', in: 'header' });
+// @ts-expect-error - OpenAPI apiKey security schemes require an in field.
+assertValidScheme({ type: 'apiKey', name: 'X-API-Key' });
+// @ts-expect-error - OpenAPI apiKey security schemes only allow query/header/cookie locations.
+assertValidScheme({ type: 'apiKey', in: 'path', name: 'id' });
+
+// @ts-expect-error - OpenAPI oauth2 security schemes require flows.
+assertValidScheme({ type: 'oauth2' });
+assertValidScheme({
+    type: 'oauth2',
+    flows: {
+        // @ts-expect-error - OpenAPI oauth2 flow objects require scopes maps.
+        clientCredentials: {
+            tokenUrl: 'https://idp.example.test/oauth/token',
+        },
+    },
+});
+
+// @ts-expect-error - OpenAPI openIdConnect security schemes require openIdConnectUrl.
+assertValidScheme({ type: 'openIdConnect' });
 
 describe('OpenAPI security requirement parser', () => {
     it('parses valid requirement arrays and preserves empty-object alternatives', () => {
@@ -51,9 +95,13 @@ describe('OpenAPI security requirement evaluator', () => {
     const schemeRegistry = {
         apiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' },
         mtls: { type: 'mutualTLS' },
-        oauth: { type: 'oauth2', availableScopes: ['read', 'write'] },
+        oauth: { type: 'oauth2', flows: OAUTH_FLOWS },
         bearer: { type: 'http', scheme: 'bearer' },
-        oidc: { type: 'openIdConnect', availableScopes: ['profile', 'email'] },
+        oidc: {
+            type: 'openIdConnect',
+            openIdConnectUrl: OIDC_URL,
+            availableScopes: ['profile', 'email'],
+        },
     } as const;
 
     it('applies AND inside an object and OR across array entries', () => {

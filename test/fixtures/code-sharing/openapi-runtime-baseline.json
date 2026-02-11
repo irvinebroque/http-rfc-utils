@@ -1,0 +1,96 @@
+{
+    "context": {
+        "request": {
+            "url": "https://api.example.test/orders/42?expand=items",
+            "method": "POST",
+            "path": {
+                "orderId": "42"
+            },
+            "query": {
+                "expand": "items",
+                "callbackUrl": "https://hooks.example.test/from-query"
+            },
+            "headers": {
+                "X-Trace-Id": "trace-123"
+            },
+            "body": {
+                "payload": {
+                    "customerId": "c-100"
+                },
+                "callbackHost": "callbacks.example.test"
+            }
+        },
+        "response": {
+            "status": 202,
+            "body": {
+                "id": "response-9"
+            }
+        }
+    },
+    "materialize": {
+        "link": {
+            "parameters": {
+                "malformed": "$request.body#missing-leading-slash",
+                "missing": "$request.query.unknown"
+            },
+            "requestBody": "$response.body#/missing"
+        },
+        "expected": {
+            "parameters": {},
+            "requestBody": null,
+            "issues": [
+                {
+                    "code": "invalid-runtime-expression",
+                    "path": "parameters.malformed",
+                    "message": "Runtime expression \"$request.body#missing-leading-slash\" is malformed.",
+                    "expression": "$request.body#missing-leading-slash"
+                },
+                {
+                    "code": "unresolved-runtime-expression",
+                    "path": "parameters.missing",
+                    "message": "Runtime expression \"$request.query.unknown\" did not resolve in context.",
+                    "expression": "$request.query.unknown"
+                },
+                {
+                    "code": "unresolved-runtime-expression",
+                    "path": "requestBody",
+                    "message": "Runtime expression \"$response.body#/missing\" did not resolve in context.",
+                    "expression": "$response.body#/missing"
+                }
+            ]
+        }
+    },
+    "materializeStrictError": {
+        "link": {
+            "parameters": {
+                "zeta": "$request.query.unknown",
+                "alpha": "$request.body#missing-leading-slash"
+            }
+        },
+        "expectedMessage": "Runtime expression \"$request.body#missing-leading-slash\" is malformed."
+    },
+    "callback": {
+        "malformedTemplate": {
+            "key": "https://hooks.example.test/{request.path.orderId}",
+            "issues": [
+                {
+                    "code": "invalid-callback-expression",
+                    "path": "callbackKey[27]",
+                    "message": "Callback expression \"request.path.orderId\" is malformed.",
+                    "expression": "request.path.orderId"
+                }
+            ]
+        },
+        "unresolvedDirectExpression": {
+            "key": "$request.query.missing",
+            "issues": [
+                {
+                    "code": "unresolved-callback-expression",
+                    "path": "callbackKey",
+                    "message": "Callback expression \"$request.query.missing\" did not resolve in context.",
+                    "expression": "$request.query.missing"
+                }
+            ]
+        }
+    }
+}

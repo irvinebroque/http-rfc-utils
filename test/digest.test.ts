@@ -127,6 +127,11 @@ describe('RFC 9530 Digest Fields (§2-§5, Appendix D)', () => {
             assert.equal(result[0].algorithm, 'sha-512');
         });
 
+        it('stays aligned with Content-Digest parsing for equivalent inputs', () => {
+            const input = `sha-256=:${HELLO_WORLD_SHA256_BASE64}:`;
+            assert.deepEqual(parseReprDigest(input), parseContentDigest(input));
+        });
+
         it('parses multiple algorithms', () => {
             const result = parseReprDigest(
                 `sha-256=:${HELLO_WORLD_SHA256_BASE64}:, sha-512=:${HELLO_WORLD_SHA512_BASE64}:`

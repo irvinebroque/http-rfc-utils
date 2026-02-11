@@ -66,7 +66,7 @@ export function formatAcceptCH(hints: ClientHintList): string {
     const list = hints.map((hint) => {
         const token = hint.toLowerCase();
         if (!isSfKeyText(token)) {
-            throw new Error('Invalid client hint token');
+            throw new Error(`Accept-CH hint must be a valid RFC 8941 key token; received ${String(hint)}`);
         }
         return { value: new SfToken(token) };
     });

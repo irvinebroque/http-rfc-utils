@@ -54,4 +54,18 @@ describe('Strict-Transport-Security (RFC 6797 Section 6.1)', () => {
         const formatted = formatStrictTransportSecurity({ maxAge: 10800, includeSubDomains: true });
         assert.equal(formatted, 'max-age=10800; includeSubDomains');
     });
+
+    it('round-trips parse -> format -> parse for canonical directives', () => {
+        const options = { maxAge: 31536000, includeSubDomains: true };
+        const reparsed = parseStrictTransportSecurity(formatStrictTransportSecurity(options));
+        assert.deepEqual(reparsed, options);
+    });
+
+    // RFC 6797 §6.1.1: max-age-value is delta-seconds (digits), not fractional/negative/non-finite.
+    it('rejects non-integer or non-finite max-age during formatting', () => {
+        assert.throws(() => formatStrictTransportSecurity({ maxAge: Number.NaN }), /finite non-negative integer/);
+        assert.throws(() => formatStrictTransportSecurity({ maxAge: Number.POSITIVE_INFINITY }), /finite non-negative integer/);
+        assert.throws(() => formatStrictTransportSecurity({ maxAge: 60.5 }), /finite non-negative integer/);
+        assert.throws(() => formatStrictTransportSecurity({ maxAge: -1 }), /finite non-negative integer/);
+    });
 });

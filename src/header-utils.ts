@@ -5,6 +5,11 @@
  * @see https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6
  */
 
+import {
+    parseParameterizedSegment,
+    splitAndParseParameterizedSegments,
+} from './internal-parameterized-members.js';
+
 /**
  * RFC 9110 §5.6.2: token characters.
  * token = 1*tchar
@@ -37,7 +42,7 @@ const DISALLOWED_CTL_REGEX = /[\u0000-\u0008\u000A-\u001F\u007F]/;
  */
 export function assertNoCtl(value: string, context: string): void {
     if (DISALLOWED_CTL_REGEX.test(value)) {
-        throw new Error(`${context} must not contain control characters`);
+        throw new Error(`${context} must not contain control characters; received ${JSON.stringify(value)}`);
     }
 }
 
@@ -50,7 +55,7 @@ export function assertNoCtl(value: string, context: string): void {
 export function assertHeaderToken(value: string, context: string): void {
     assertNoCtl(value, context);
     if (!TOKEN_CHARS.test(value)) {
-        throw new Error(`${context} must be a valid header token`);
+        throw new Error(`${context} must be a valid RFC 9110 token; received ${JSON.stringify(value)}`);
     }
 }
 
@@ -131,38 +136,11 @@ export interface ParsedKeyValueSegment {
 }
 
 export function parseKeyValueSegment(segment: string): ParsedKeyValueSegment | null {
-    const trimmed = segment.trim();
-    if (!trimmed) {
-        return null;
-    }
-
-    const eqIndex = trimmed.indexOf('=');
-    if (eqIndex === -1) {
-        return {
-            key: trimmed,
-            value: undefined,
-            hasEquals: false,
-        };
-    }
-
-    return {
-        key: trimmed.slice(0, eqIndex).trim(),
-        value: trimmed.slice(eqIndex + 1).trim(),
-        hasEquals: true,
-    };
+    return parseParameterizedSegment(segment);
 }
 
 export function splitAndParseKeyValueSegments(value: string, delimiter: string): ParsedKeyValueSegment[] {
-    const parsed: ParsedKeyValueSegment[] = [];
-
-    for (const segment of splitQuotedValue(value, delimiter)) {
-        const item = parseKeyValueSegment(segment);
-        if (item) {
-            parsed.push(item);
-        }
-    }
-
-    return parsed;
+    return splitAndParseParameterizedSegments(value, delimiter);
 }
 
 /**
@@ -626,13 +604,17 @@ export function formatMediaType(type: string, subtype: string, parameters: reado
     const normalizedType = type.trim().toLowerCase();
     const normalizedSubtype = subtype.trim().toLowerCase();
     if (!TOKEN_CHARS.test(normalizedType) || !TOKEN_CHARS.test(normalizedSubtype)) {
-        throw new Error('Invalid media type token');
+        throw new Error(
+            `Media type "${normalizedType}/${normalizedSubtype}" must use valid HTTP tokens for type and subtype`,
+        );
     }
 
     const serializedParameters = parameters.map((parameter) => {
         const normalizedName = parameter.name.trim().toLowerCase();
         if (!TOKEN_CHARS.test(normalizedName)) {
-            throw new Error('Invalid media type parameter name');
+            throw new Error(
+                `Media type parameter name "${parameter.name}" must be a valid HTTP token`,
+            );
         }
         return `${normalizedName}=${quoteIfNeeded(parameter.value)}`;
     });

@@ -264,7 +264,9 @@ export function buildAuthorizationServerMetadataUrl(
     const issuerUrl = parseIssuerUrl(issuer);
 
     if (!validateWellKnownSuffix(wellKnownSuffix)) {
-        throw new Error('Invalid well-known suffix: expected a single non-empty RFC 3986 segment');
+        throw new Error(
+            `Invalid well-known suffix "${wellKnownSuffix}": expected a single non-empty RFC 3986 segment`,
+        );
     }
 
     const normalizedIssuerPath = normalizeIssuerPath(issuerUrl.pathname);
@@ -407,7 +409,9 @@ function validateIssuer(issuer: unknown, expectedIssuer: string | undefined): vo
     }
 
     if (expectedIssuer !== undefined && issuer !== expectedIssuer) {
-        throw new Error('Metadata field "issuer" does not exactly match expected issuer');
+        throw new Error(
+            `Metadata field "issuer" must exactly match expected issuer "${expectedIssuer}"; received "${issuer}"`,
+        );
     }
 }
 
@@ -420,11 +424,11 @@ function validateAbsoluteUrl(fieldName: string, value: unknown): void {
     try {
         parsed = new URL(value);
     } catch {
-        throw new Error(`Metadata field "${fieldName}" must be an absolute URL`);
+        throw new Error(`Metadata field "${fieldName}" must be an absolute URL string; received ${String(value)}`);
     }
 
     if (!parsed.protocol) {
-        throw new Error(`Metadata field "${fieldName}" must be an absolute URL`);
+        throw new Error(`Metadata field "${fieldName}" must include a URL scheme; received ${String(value)}`);
     }
 }
 

@@ -51,6 +51,9 @@ describe('OpenAPI runtime expression parser and formatter', () => {
             formatOpenApiRuntimeExpression({ type: 'request.query', name: 'petId' }),
             '$request.query.petId',
         );
+        assert.throws(() => {
+            formatOpenApiRuntimeExpression({ type: 'request.header', name: 'bad name' });
+        }, /valid RFC 9110 token name/);
         assert.equal(isOpenApiRuntimeExpression('$response.header.Content-Type'), true);
         assert.equal(isOpenApiRuntimeExpression({ type: 'request.path', name: 'id' }), true);
         assert.equal(isOpenApiRuntimeExpression({ type: 'request.body', pointer: 'invalid' }), false);

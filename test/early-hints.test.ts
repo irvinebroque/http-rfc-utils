@@ -96,7 +96,7 @@ describe('validateEarlyHintsLinks (RFC 8297 Section 2)', () => {
 
         assert.throws(() => {
             validateEarlyHintsLinks([{ href: 'https://cdn.example/app.css', rel: 'preload', 'bad key': 'x' }]);
-        }, /valid header token/);
+        }, /valid RFC 9110 token/);
     });
 
     it('supports preload-only strict validation', () => {

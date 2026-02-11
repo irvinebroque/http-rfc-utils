@@ -266,7 +266,7 @@ describe('formatLink', () => {
                 rel: 'next',
                 'bad key': 'value',
             });
-        }, /valid header token/);
+        }, /valid RFC 9110 token/);
     });
 });
 
@@ -456,6 +456,22 @@ describe('parseLinkHeader', () => {
             assert.equal(result.length, 2);
             assert.equal(result[0].title, 'A, B');
             assert.equal(result[1].rel, 'prev');
+        });
+
+        // RFC 8288 §3.2: malformed unterminated quoted-string must not be salvaged.
+        it('drops only the malformed current link-value at EOF and preserves prior valid links', () => {
+            const result = parseLinkHeader(
+                '<https://example.com/ok>; rel="self", <https://example.com/bad>; rel="next"; title="unterminated'
+            );
+            assert.equal(result.length, 1);
+            assert.equal(result[0].href, 'https://example.com/ok');
+            assert.equal(result[0].rel, 'self');
+        });
+
+        // RFC 8288 §3.2: do not fail-open on a lone malformed link-value.
+        it('returns no link-values for a single unterminated quoted-string link', () => {
+            const result = parseLinkHeader('<https://example.com/bad>; rel="next"; title="unterminated');
+            assert.deepEqual(result, []);
         });
     });
 

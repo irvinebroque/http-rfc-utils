@@ -264,6 +264,7 @@ class Parser {
             }
 
             let value: SfBareItem = true;
+            const beforeOptionalEquals = this.index;
             this.skipOWS();
             if (this.peek() === '=') {
                 this.consume();
@@ -273,6 +274,8 @@ class Parser {
                     return null;
                 }
                 value = bare;
+            } else {
+                this.index = beforeOptionalEquals;
             }
 
             params[key] = value;
@@ -605,20 +608,24 @@ function serializeBareItem(value: SfBareItem): string {
 
     if (typeof value === 'number') {
         if (!Number.isFinite(value)) {
-            throw new Error('Invalid numeric structured field value');
+            throw new Error(`Structured field numeric value must be finite; received ${String(value)}`);
         }
 
         if (Number.isInteger(value)) {
             // RFC 8941 §4.1.4: Integer range check.
             if (value < -999_999_999_999_999 || value > 999_999_999_999_999) {
-                throw new Error('Integer out of range for structured field');
+                throw new Error(
+                    `Structured field integer must be in range -999999999999999 to 999999999999999; received ${String(value)}`,
+                );
             }
             return String(value);
         }
 
         // RFC 8941 §4.1.5: Decimal range check.
         if (value < -999_999_999_999.999 || value > 999_999_999_999.999) {
-            throw new Error('Decimal out of range for structured field');
+            throw new Error(
+                `Structured field decimal must be in range -999999999999.999 to 999999999999.999; received ${String(value)}`,
+            );
         }
 
         let encoded = value.toFixed(3);
@@ -629,7 +636,9 @@ function serializeBareItem(value: SfBareItem): string {
 
         const [wholePart] = encoded.startsWith('-') ? encoded.slice(1).split('.') : encoded.split('.');
         if (!wholePart || wholePart.length > 12) {
-            throw new Error('Decimal out of range for structured field');
+            throw new Error(
+                `Structured field decimal integer part must be at most 12 digits; received ${encoded}`,
+            );
         }
 
         return encoded;
@@ -641,13 +650,16 @@ function serializeBareItem(value: SfBareItem): string {
     }
 
     if (value instanceof SfToken) {
+        if (!SF_TOKEN_TEXT_RE.test(value.value)) {
+            throw new Error(`Invalid Structured Field token value: ${value.value}`);
+        }
         return value.value;
     }
 
     // RFC 9651 §4.1.11: Display String serialization.
     if (value instanceof SfDisplayString) {
         if (hasLoneSurrogate(value.value)) {
-            throw new Error('Invalid display string value for structured field');
+            throw new Error('Structured field display string must not contain lone surrogate code units');
         }
 
         const bytes = encodeUtf8(value.value);
@@ -665,7 +677,9 @@ function serializeBareItem(value: SfBareItem): string {
     for (let i = 0; i < value.length; i++) {
         const code = value.charCodeAt(i);
         if (code < 0x20 || code > 0x7E) {
-            throw new Error('Invalid string character for structured field');
+            throw new Error(
+                `Structured field string must contain only visible ASCII characters; found code point 0x${code.toString(16).toUpperCase().padStart(2, '0')} at index ${i}`,
+            );
         }
     }
 
@@ -682,6 +696,9 @@ function serializeParams(params?: Record<string, SfBareItem>): string {
     for (const key in params) {
         if (!Object.prototype.hasOwnProperty.call(params, key)) {
             continue;
+        }
+        if (!SF_KEY_TEXT_RE.test(key)) {
+            throw new Error(`Invalid Structured Field parameter key: ${key}`);
         }
         const value = params[key]!;
         if (value === true) {
@@ -744,6 +761,9 @@ export function serializeSfDict(dict: SfDictionary): string {
     for (const key in dict) {
         if (!Object.prototype.hasOwnProperty.call(dict, key)) {
             continue;
+        }
+        if (!SF_KEY_TEXT_RE.test(key)) {
+            throw new Error(`Invalid Structured Field dictionary key: ${key}`);
         }
         const value = dict[key]!;
 

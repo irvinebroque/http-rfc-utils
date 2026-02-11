@@ -95,7 +95,7 @@ export function validateReferrerPolicy(value: string): ReferrerPolicyToken {
     }
 
     if (!TOKEN_CHARS.test(token)) {
-        throw new Error('Referrer policy token must be a valid header token');
+        throw new Error('Referrer policy token must be a valid RFC 9110 token');
     }
 
     if (!REFERRER_POLICY_TOKEN_SET.has(token as ReferrerPolicyToken)) {

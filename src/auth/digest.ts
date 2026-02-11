@@ -17,9 +17,16 @@ import type {
 } from '../types/auth.js';
 import { decodeExtValue, encodeExtValue } from '../ext-value.js';
 import {
+    formatAuthParamsWithBareValues,
     parseAuthParamsList,
-    quoteAuthParamValue,
 } from './shared.js';
+import {
+    AUTH_PARAM_SCHEMA_INVALID,
+    AUTH_PARAM_SCHEMA_SKIP,
+    buildAuthParamsBySchema,
+    createAuthParamSchemaEntry,
+    parseAuthParamsBySchema,
+} from './internal-auth-param-schema.js';
 /**
  * Supported Digest authentication algorithms.
  * RFC 7616 §3.3: SHA-256 MUST be supported; MD5 for backward compatibility.
@@ -34,6 +41,261 @@ export const DIGEST_AUTH_ALGORITHMS: DigestAuthAlgorithm[] = [
 ];
 
 const NC_REGEX = /^[0-9a-fA-F]{8}$/;
+const DIGEST_CHALLENGE_BARE_VALUE_NAMES = new Set(['algorithm', 'charset', 'stale', 'userhash']);
+const DIGEST_AUTHORIZATION_BARE_VALUE_NAMES = new Set(['algorithm', 'nc', 'qop', 'userhash', 'username*']);
+const DIGEST_AUTHENTICATION_INFO_BARE_VALUE_NAMES = new Set(['nc', 'qop']);
+
+interface DigestChallengeSchema {
+    realm?: string;
+    domain?: string[];
+    nonce?: string;
+    opaque?: string;
+    stale?: boolean;
+    algorithm?: DigestAuthAlgorithm;
+    qop?: DigestAuthQop[];
+    charset?: 'UTF-8';
+    userhash?: boolean;
+}
+
+interface DigestCredentialsSchema {
+    username?: string;
+    usernameEncoded?: boolean;
+    realm?: string;
+    uri?: string;
+    response?: string;
+    algorithm?: DigestAuthAlgorithm;
+    cnonce?: string;
+    opaque?: string;
+    qop?: DigestAuthQop;
+    nc?: string;
+    userhash?: boolean;
+}
+
+interface DigestAuthenticationInfoSchema {
+    nextnonce?: string;
+    qop?: DigestAuthQop;
+    rspauth?: string;
+    cnonce?: string;
+    nc?: string;
+}
+
+const DIGEST_CHALLENGE_SCHEMA = [
+    createAuthParamSchemaEntry<DigestChallengeSchema>({
+        key: 'realm',
+        property: 'realm',
+    }),
+    createAuthParamSchemaEntry<DigestChallengeSchema>({
+        key: 'domain',
+        property: 'domain',
+        parse: (value) => {
+            if (value.length === 0) {
+                return AUTH_PARAM_SCHEMA_SKIP;
+            }
+            const domains = value.split(/\s+/).filter(Boolean);
+            return domains.length > 0 ? domains : AUTH_PARAM_SCHEMA_SKIP;
+        },
+        format: (value) => {
+            const domain = value as string[];
+            return domain.length > 0 ? domain.join(' ') : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestChallengeSchema>({
+        key: 'nonce',
+        property: 'nonce',
+    }),
+    createAuthParamSchemaEntry<DigestChallengeSchema>({
+        key: 'opaque',
+        property: 'opaque',
+        format: (value) => {
+            const opaque = value as string;
+            return opaque.length > 0 ? opaque : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestChallengeSchema>({
+        key: 'stale',
+        property: 'stale',
+        parse: (value) => value.toLowerCase() === 'true' ? true : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => value ? 'true' : AUTH_PARAM_SCHEMA_SKIP,
+    }),
+    createAuthParamSchemaEntry<DigestChallengeSchema>({
+        key: 'algorithm',
+        property: 'algorithm',
+        parse: (value) => (value.length > 0 && isDigestAlgorithm(value)) ? value : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => {
+            const algorithm = value as string;
+            return algorithm.length > 0 ? algorithm : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestChallengeSchema>({
+        key: 'qop',
+        property: 'qop',
+        parse: (value) => {
+            const qopValues = value.split(',').map(v => v.trim()).filter(isDigestQop);
+            return qopValues.length > 0 ? qopValues : AUTH_PARAM_SCHEMA_SKIP;
+        },
+        format: (value) => {
+            const qopValues = value as string[];
+            return qopValues.length > 0 ? qopValues.join(', ') : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestChallengeSchema>({
+        key: 'charset',
+        property: 'charset',
+        parse: (value) => value.toLowerCase() === 'utf-8' ? 'UTF-8' : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => {
+            const charset = value as string;
+            return charset.length > 0 ? charset : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestChallengeSchema>({
+        key: 'userhash',
+        property: 'userhash',
+        parse: (value) => value.toLowerCase() === 'true' ? true : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => value ? 'true' : AUTH_PARAM_SCHEMA_SKIP,
+    }),
+] as const;
+
+const DIGEST_CREDENTIALS_SCHEMA = [
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'username',
+        property: 'username',
+        format: (value, source) => {
+            const username = value as string;
+            return source.usernameEncoded ? AUTH_PARAM_SCHEMA_SKIP : username;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'username*',
+        property: 'username',
+        parse: (value) => {
+            if (value.length === 0) {
+                return AUTH_PARAM_SCHEMA_INVALID;
+            }
+            const decoded = decodeExtValue(value);
+            if (!decoded) {
+                return AUTH_PARAM_SCHEMA_INVALID;
+            }
+            return decoded.value;
+        },
+        format: (value, source) => {
+            const username = value as string;
+            return source.usernameEncoded ? encodeExtValue(username) : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'realm',
+        property: 'realm',
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'uri',
+        property: 'uri',
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'response',
+        property: 'response',
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'algorithm',
+        property: 'algorithm',
+        parse: (value) => (value.length > 0 && isDigestAlgorithm(value)) ? value : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => {
+            const algorithm = value as string;
+            return algorithm.length > 0 ? algorithm : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'cnonce',
+        property: 'cnonce',
+        parse: (value) => value.length > 0 ? value : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => {
+            const cnonce = value as string;
+            return cnonce.length > 0 ? cnonce : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'opaque',
+        property: 'opaque',
+        parse: (value) => value.length > 0 ? value : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => {
+            const opaque = value as string;
+            return opaque.length > 0 ? opaque : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'qop',
+        property: 'qop',
+        parse: (value) => {
+            if (value.length === 0) {
+                return AUTH_PARAM_SCHEMA_SKIP;
+            }
+            return isDigestQop(value) ? value : AUTH_PARAM_SCHEMA_INVALID;
+        },
+        format: (value) => {
+            const qop = value as string;
+            return qop.length > 0 ? qop : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'nc',
+        property: 'nc',
+        parse: (value) => value.length > 0 ? value : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => {
+            const nc = value as string;
+            return nc.length > 0 ? nc : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestCredentialsSchema>({
+        key: 'userhash',
+        property: 'userhash',
+        parse: (value) => value.toLowerCase() === 'true' ? true : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => value ? 'true' : AUTH_PARAM_SCHEMA_SKIP,
+    }),
+] as const;
+
+const DIGEST_AUTHENTICATION_INFO_SCHEMA = [
+    createAuthParamSchemaEntry<DigestAuthenticationInfoSchema>({
+        key: 'nextnonce',
+        property: 'nextnonce',
+        format: (value) => {
+            const nextnonce = value as string;
+            return nextnonce.length > 0 ? nextnonce : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestAuthenticationInfoSchema>({
+        key: 'qop',
+        property: 'qop',
+        parse: (value) => isDigestQop(value) ? value : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => {
+            const qop = value as string;
+            return qop.length > 0 ? qop : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestAuthenticationInfoSchema>({
+        key: 'rspauth',
+        property: 'rspauth',
+        format: (value) => {
+            const rspauth = value as string;
+            return rspauth.length > 0 ? rspauth : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestAuthenticationInfoSchema>({
+        key: 'cnonce',
+        property: 'cnonce',
+        format: (value) => {
+            const cnonce = value as string;
+            return cnonce.length > 0 ? cnonce : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+    createAuthParamSchemaEntry<DigestAuthenticationInfoSchema>({
+        key: 'nc',
+        property: 'nc',
+        parse: (value) => NC_REGEX.test(value) ? value : AUTH_PARAM_SCHEMA_SKIP,
+        format: (value) => {
+            const nc = value as string;
+            return nc.length > 0 ? nc : AUTH_PARAM_SCHEMA_SKIP;
+        },
+    }),
+] as const;
 
 /**
  * Check if value is a valid Digest algorithm.
@@ -85,70 +347,42 @@ export function parseDigestChallenge(challenge: AuthChallenge): DigestChallenge 
         return null;
     }
 
-    const seen = new Map<string, string>();
-    for (const param of challenge.params) {
-        const name = param.name.toLowerCase();
-        if (seen.has(name)) {
-            return null;
+    const parsed = parseAuthParamsBySchema<DigestChallengeSchema>(
+        challenge.params,
+        DIGEST_CHALLENGE_SCHEMA,
+        {
+            validate: (params) => Boolean(params.realm && params.nonce),
         }
-        seen.set(name, param.value);
-    }
-
-    const realm = seen.get('realm');
-    const nonce = seen.get('nonce');
-
-    // RFC 7616 §3.3: realm and nonce are required
-    if (!realm || !nonce) {
+    );
+    if (!parsed || !parsed.realm || !parsed.nonce) {
         return null;
     }
 
     const result: DigestChallenge = {
         scheme: 'Digest',
-        realm,
-        nonce,
+        realm: parsed.realm,
+        nonce: parsed.nonce,
     };
 
-    // domain: space-separated list of URIs
-    const domain = seen.get('domain');
-    if (domain) {
-        result.domain = domain.split(/\s+/).filter(Boolean);
+    if (parsed.domain) {
+        result.domain = parsed.domain;
     }
-
-    const opaque = seen.get('opaque');
-    if (opaque) {
-        result.opaque = opaque;
+    if (parsed.opaque) {
+        result.opaque = parsed.opaque;
     }
-
-    // RFC 7616 §3.3: stale is a flag (not quoted-string)
-    const stale = seen.get('stale');
-    if (stale && stale.toLowerCase() === 'true') {
+    if (parsed.stale) {
         result.stale = true;
     }
-
-    // RFC 7616 §3.3: algorithm is a token (not quoted-string)
-    const algorithm = seen.get('algorithm');
-    if (algorithm && isDigestAlgorithm(algorithm)) {
-        result.algorithm = algorithm;
+    if (parsed.algorithm) {
+        result.algorithm = parsed.algorithm;
     }
-
-    // RFC 7616 §3.3: qop-options is quoted-string with comma-separated values
-    const qop = seen.get('qop');
-    if (qop) {
-        const qopValues = qop.split(',').map(v => v.trim()).filter(isDigestQop);
-        if (qopValues.length > 0) {
-            result.qop = qopValues;
-        }
+    if (parsed.qop) {
+        result.qop = parsed.qop;
     }
-
-    // RFC 7616 §3.3: charset is "UTF-8" (case-insensitive)
-    const charset = seen.get('charset');
-    if (charset && charset.toLowerCase() === 'utf-8') {
-        result.charset = 'UTF-8';
+    if (parsed.charset) {
+        result.charset = parsed.charset;
     }
-
-    // RFC 7616 §3.3: userhash is a flag
-    const userhash = seen.get('userhash');
-    if (userhash && userhash.toLowerCase() === 'true') {
+    if (parsed.userhash) {
         result.userhash = true;
     }
 
@@ -161,50 +395,11 @@ export function parseDigestChallenge(challenge: AuthChallenge): DigestChallenge 
  */
 // RFC 7616 §3.3: Digest challenge formatting.
 export function formatDigestChallenge(challenge: DigestChallenge): string {
-    const parts: string[] = [];
-
-    // RFC 7616 §3.3: realm MUST be quoted-string
-    parts.push(`realm=${quoteAuthParamValue(challenge.realm)}`);
-
-    // RFC 7616 §3.3: domain is quoted-string with space-separated URIs
-    if (challenge.domain && challenge.domain.length > 0) {
-        parts.push(`domain=${quoteAuthParamValue(challenge.domain.join(' '))}`);
-    }
-
-    // RFC 7616 §3.3: nonce MUST be quoted-string
-    parts.push(`nonce=${quoteAuthParamValue(challenge.nonce)}`);
-
-    // RFC 7616 §3.3: opaque is quoted-string
-    if (challenge.opaque) {
-        parts.push(`opaque=${quoteAuthParamValue(challenge.opaque)}`);
-    }
-
-    // RFC 7616 §3.3: stale is token (not quoted)
-    if (challenge.stale) {
-        parts.push('stale=true');
-    }
-
-    // RFC 7616 §3.3: algorithm is token (not quoted)
-    if (challenge.algorithm) {
-        parts.push(`algorithm=${challenge.algorithm}`);
-    }
-
-    // RFC 7616 §3.3: qop-options is quoted-string
-    if (challenge.qop && challenge.qop.length > 0) {
-        parts.push(`qop=${quoteAuthParamValue(challenge.qop.join(', '))}`);
-    }
-
-    // RFC 7616 §3.3: charset is token
-    if (challenge.charset) {
-        parts.push(`charset=${challenge.charset}`);
-    }
-
-    // RFC 7616 §3.3: userhash is token
-    if (challenge.userhash) {
-        parts.push('userhash=true');
-    }
-
-    return `Digest ${parts.join(', ')}`;
+    const params = buildAuthParamsBySchema<DigestChallengeSchema>(
+        challenge,
+        DIGEST_CHALLENGE_SCHEMA
+    );
+    return `Digest ${formatAuthParamsWithBareValues(params, DIGEST_CHALLENGE_BARE_VALUE_NAMES)}`;
 }
 
 /**
@@ -217,118 +412,79 @@ export function parseDigestAuthorization(credentials: AuthCredentials): DigestCr
         return null;
     }
 
-    const seen = new Map<string, string>();
-    let hasUsername = false;
-    let hasUsernameStar = false;
+    const parsed = parseAuthParamsBySchema<DigestCredentialsSchema>(
+        credentials.params,
+        DIGEST_CREDENTIALS_SCHEMA,
+        {
+            validate: (params, context) => {
+                const hasUsername = context.has('username');
+                const hasUsernameStar = context.has('username*');
+                if (hasUsername && hasUsernameStar) {
+                    return false;
+                }
 
-    for (const param of credentials.params) {
-        const name = param.name.toLowerCase();
-        if (name === 'username') {
-            hasUsername = true;
-        } else if (name === 'username*') {
-            hasUsernameStar = true;
+                const username = params.username;
+                const realm = params.realm;
+                const uri = params.uri;
+                const response = params.response;
+                if (!username || !realm || !uri || !response) {
+                    return false;
+                }
+
+                const qop = params.qop;
+                const cnonce = params.cnonce;
+                const nc = params.nc;
+
+                if (qop) {
+                    if (!cnonce || cnonce.length === 0) {
+                        return false;
+                    }
+                    if (!nc || !NC_REGEX.test(nc)) {
+                        return false;
+                    }
+                    return true;
+                }
+
+                if (nc && !NC_REGEX.test(nc)) {
+                    return false;
+                }
+
+                return true;
+            },
         }
-        if (!seen.has(name)) {
-            seen.set(name, param.value);
-        }
-    }
-
-    // RFC 7616 §3.4: MUST NOT have both username and username*
-    if (hasUsername && hasUsernameStar) {
-        return null;
-    }
-
-    let username: string;
-    let usernameEncoded = false;
-
-    if (hasUsernameStar) {
-        // RFC 7616 §3.4: username* uses RFC 8187 encoding
-        const encoded = seen.get('username*');
-        if (!encoded) {
-            return null;
-        }
-        const decoded = decodeExtValue(encoded);
-        if (!decoded) {
-            return null;
-        }
-        username = decoded.value;
-        usernameEncoded = true;
-    } else {
-        const u = seen.get('username');
-        if (!u) {
-            return null;
-        }
-        username = u;
-    }
-
-    const realm = seen.get('realm');
-    const uri = seen.get('uri');
-    const response = seen.get('response');
-
-    // RFC 7616 §3.4: realm, uri, and response are required
-    if (!realm || !uri || !response) {
+    );
+    if (!parsed || !parsed.username || !parsed.realm || !parsed.uri || !parsed.response) {
         return null;
     }
 
     const result: DigestCredentials = {
         scheme: 'Digest',
-        username,
-        realm,
-        uri,
-        response,
+        username: parsed.username,
+        realm: parsed.realm,
+        uri: parsed.uri,
+        response: parsed.response,
     };
 
-    if (usernameEncoded) {
+    if (credentials.params.some((param) => param.name.toLowerCase() === 'username*')) {
         result.usernameEncoded = true;
     }
 
-    // RFC 7616 §3.4: algorithm is token (not quoted)
-    const algorithm = seen.get('algorithm');
-    if (algorithm && isDigestAlgorithm(algorithm)) {
-        result.algorithm = algorithm;
+    if (parsed.algorithm) {
+        result.algorithm = parsed.algorithm;
     }
-
-    const cnonce = seen.get('cnonce');
-    const opaque = seen.get('opaque');
-    const qop = seen.get('qop');
-    const nc = seen.get('nc');
-
-    if (cnonce) {
-        result.cnonce = cnonce;
+    if (parsed.cnonce) {
+        result.cnonce = parsed.cnonce;
     }
-
-    if (opaque) {
-        result.opaque = opaque;
+    if (parsed.opaque) {
+        result.opaque = parsed.opaque;
     }
-
-    // RFC 7616 §3.4: qop is token (not quoted)
-    if (qop) {
-        if (!isDigestQop(qop)) {
-            return null;
-        }
-        result.qop = qop;
-
-        // RFC 7616 §3.4: cnonce and nc are required when qop is present.
-        if (!cnonce || cnonce.length === 0) {
-            return null;
-        }
-
-        if (!nc || !NC_REGEX.test(nc)) {
-            return null;
-        }
-
-        result.nc = nc;
-    } else if (nc) {
-        // RFC 7616 §3.4: nc is exactly 8 hex digits when present.
-        if (!NC_REGEX.test(nc)) {
-            return null;
-        }
-        result.nc = nc;
+    if (parsed.qop) {
+        result.qop = parsed.qop;
     }
-
-    // RFC 7616 §3.4: userhash is token
-    const userhash = seen.get('userhash');
-    if (userhash && userhash.toLowerCase() === 'true') {
+    if (parsed.nc) {
+        result.nc = parsed.nc;
+    }
+    if (parsed.userhash) {
         result.userhash = true;
     }
 
@@ -341,57 +497,11 @@ export function parseDigestAuthorization(credentials: AuthCredentials): DigestCr
  */
 // RFC 7616 §3.4: Digest credentials formatting.
 export function formatDigestAuthorization(credentials: DigestCredentials): string {
-    const parts: string[] = [];
-
-    // RFC 7616 §3.4: username or username* (quoted-string)
-    if (credentials.usernameEncoded) {
-        // RFC 8187 encoding
-        const encoded = encodeExtValue(credentials.username);
-        parts.push(`username*=${encoded}`);
-    } else {
-        parts.push(`username=${quoteAuthParamValue(credentials.username)}`);
-    }
-
-    // RFC 7616 §3.4: realm is quoted-string
-    parts.push(`realm=${quoteAuthParamValue(credentials.realm)}`);
-
-    // RFC 7616 §3.4: uri is quoted-string
-    parts.push(`uri=${quoteAuthParamValue(credentials.uri)}`);
-
-    // RFC 7616 §3.4: response is quoted-string
-    parts.push(`response=${quoteAuthParamValue(credentials.response)}`);
-
-    // RFC 7616 §3.4: algorithm is token (not quoted)
-    if (credentials.algorithm) {
-        parts.push(`algorithm=${credentials.algorithm}`);
-    }
-
-    // RFC 7616 §3.4: cnonce is quoted-string
-    if (credentials.cnonce) {
-        parts.push(`cnonce=${quoteAuthParamValue(credentials.cnonce)}`);
-    }
-
-    // RFC 7616 §3.4: opaque is quoted-string
-    if (credentials.opaque) {
-        parts.push(`opaque=${quoteAuthParamValue(credentials.opaque)}`);
-    }
-
-    // RFC 7616 §3.4: qop is token (not quoted)
-    if (credentials.qop) {
-        parts.push(`qop=${credentials.qop}`);
-    }
-
-    // RFC 7616 §3.4: nc is exactly 8 hex digits (not quoted)
-    if (credentials.nc) {
-        parts.push(`nc=${credentials.nc}`);
-    }
-
-    // RFC 7616 §3.4: userhash is token
-    if (credentials.userhash) {
-        parts.push('userhash=true');
-    }
-
-    return `Digest ${parts.join(', ')}`;
+    const params = buildAuthParamsBySchema<DigestCredentialsSchema>(
+        credentials,
+        DIGEST_CREDENTIALS_SCHEMA
+    );
+    return `Digest ${formatAuthParamsWithBareValues(params, DIGEST_AUTHORIZATION_BARE_VALUE_NAMES)}`;
 }
 
 /**
@@ -409,37 +519,29 @@ export function parseDigestAuthenticationInfo(value: string): DigestAuthenticati
         return null;
     }
 
+    const parsed = parseAuthParamsBySchema<DigestAuthenticationInfoSchema>(
+        params,
+        DIGEST_AUTHENTICATION_INFO_SCHEMA
+    );
+    if (!parsed) {
+        return null;
+    }
+
     const result: DigestAuthenticationInfo = {};
-    const seen = new Set<string>();
-
-    for (const param of params) {
-        const name = param.name.toLowerCase();
-        if (seen.has(name)) {
-            continue;
-        }
-        seen.add(name);
-
-        switch (name) {
-            case 'nextnonce':
-                result.nextnonce = param.value;
-                break;
-            case 'qop':
-                if (isDigestQop(param.value)) {
-                    result.qop = param.value;
-                }
-                break;
-            case 'rspauth':
-                result.rspauth = param.value;
-                break;
-            case 'cnonce':
-                result.cnonce = param.value;
-                break;
-            case 'nc':
-                if (NC_REGEX.test(param.value)) {
-                    result.nc = param.value;
-                }
-                break;
-        }
+    if (parsed.nextnonce !== undefined) {
+        result.nextnonce = parsed.nextnonce;
+    }
+    if (parsed.qop) {
+        result.qop = parsed.qop;
+    }
+    if (parsed.rspauth !== undefined) {
+        result.rspauth = parsed.rspauth;
+    }
+    if (parsed.cnonce !== undefined) {
+        result.cnonce = parsed.cnonce;
+    }
+    if (parsed.nc) {
+        result.nc = parsed.nc;
     }
 
     return result;
@@ -451,34 +553,11 @@ export function parseDigestAuthenticationInfo(value: string): DigestAuthenticati
  */
 // RFC 7616 §3.5: Authentication-Info formatting.
 export function formatDigestAuthenticationInfo(info: DigestAuthenticationInfo): string {
-    const parts: string[] = [];
-
-    // RFC 7616 §3.5: nextnonce is quoted-string
-    if (info.nextnonce) {
-        parts.push(`nextnonce=${quoteAuthParamValue(info.nextnonce)}`);
-    }
-
-    // RFC 7616 §3.5: qop is token
-    if (info.qop) {
-        parts.push(`qop=${info.qop}`);
-    }
-
-    // RFC 7616 §3.5: rspauth is quoted-string
-    if (info.rspauth) {
-        parts.push(`rspauth=${quoteAuthParamValue(info.rspauth)}`);
-    }
-
-    // RFC 7616 §3.5: cnonce is quoted-string
-    if (info.cnonce) {
-        parts.push(`cnonce=${quoteAuthParamValue(info.cnonce)}`);
-    }
-
-    // RFC 7616 §3.5: nc is token (8 hex digits)
-    if (info.nc) {
-        parts.push(`nc=${info.nc}`);
-    }
-
-    return parts.join(', ');
+    const params = buildAuthParamsBySchema<DigestAuthenticationInfoSchema>(
+        info,
+        DIGEST_AUTHENTICATION_INFO_SCHEMA
+    );
+    return formatAuthParamsWithBareValues(params, DIGEST_AUTHENTICATION_INFO_BARE_VALUE_NAMES);
 }
 
 /**
@@ -512,7 +591,9 @@ export async function computeA1(
         // RFC 7616 §3.4.2: For -sess algorithms:
         // A1 = H(username ":" realm ":" passwd) ":" nonce ":" cnonce
         if (!nonce || !cnonce) {
-            throw new Error('nonce and cnonce are required for session algorithms');
+            throw new Error(
+                `Digest algorithm "${algorithm}" requires both nonce and cnonce; received nonce=${String(nonce)} cnonce=${String(cnonce)}`,
+            );
         }
         const h = await computeHash(hashAlg, a1Base);
         return `${h}:${nonce}:${cnonce}`;
@@ -542,7 +623,7 @@ export function computeA2(
     // RFC 7616 §3.4.3: qop=auth-int: A2 = Method ":" request-uri ":" H(entity-body)
     // Note: auth-int is out of scope for this implementation
     if (qop === 'auth-int') {
-        throw new Error('auth-int is not supported');
+        throw new Error('Digest qop "auth-int" is not supported; use qop "auth" or omit qop');
     }
     return `${method}:${uri}`;
 }
@@ -586,7 +667,9 @@ export async function computeDigestResponse(options: DigestComputeOptions): Prom
         // response = KD(H(A1), unq(nonce) ":" nc ":" unq(cnonce) ":" unq(qop) ":" H(A2))
         // KD(secret, data) = H(secret ":" data)
         if (!cnonce || !nc) {
-            throw new Error('cnonce and nc are required when qop is specified');
+            throw new Error(
+                `Digest response with qop "${qop}" requires both cnonce and nc; received cnonce=${String(cnonce)} nc=${String(nc)}`,
+            );
         }
         responseData = `${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`;
     } else {

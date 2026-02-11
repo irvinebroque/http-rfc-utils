@@ -10,10 +10,13 @@ import {
     assertNoCtl,
     escapeQuotedString,
     parseDeltaSeconds,
-    parseKeyValueSegment,
     parseQuotedStringStrict,
-    splitQuotedValue,
 } from './header-utils.js';
+import {
+    parseParameterizedMember,
+    parseParameterizedMembers,
+    type InternalParsedKeyValueSegment,
+} from './internal-parameterized-members.js';
 
 /**
  * Parse an Alt-Svc header field value.
@@ -28,9 +31,10 @@ export function parseAltSvc(value: string | string[]): AltSvcRecord | null {
             continue;
         }
 
-        for (const member of splitQuotedValue(headerValue, ',')) {
-            members.push(member.trim());
-        }
+        members.push(...parseParameterizedMembers(headerValue, {
+            memberDelimiter: ',',
+            hasBaseSegment: false,
+        }).map(member => member.raw));
     }
 
     if (members.length === 1 && members[0] === 'clear') {
@@ -69,13 +73,15 @@ export function parseAltSvc(value: string | string[]): AltSvcRecord | null {
 export function formatAltSvc(record: AltSvcRecord): string {
     if (record.clear) {
         if (record.alternatives.length > 0) {
-            throw new Error('Alt-Svc clear value cannot include alternatives');
+            throw new Error(
+                `Alt-Svc with clear=true must not include alternatives; received ${record.alternatives.length} alternative(s)`,
+            );
         }
         return 'clear';
     }
 
     if (record.alternatives.length === 0) {
-        throw new Error('Alt-Svc requires at least one alternative unless clear is set');
+        throw new Error('Alt-Svc must include at least one alternative when clear is false');
     }
 
     return record.alternatives.map((alternative) => formatAlternative(alternative)).join(', ');
@@ -144,7 +150,9 @@ export function parseAltUsed(value: string): AltUsed | null {
 export function formatAltUsed(altUsed: AltUsed): string {
     const host = altUsed.host.trim();
     if (!isValidAltUsedHost(host) && !isValidBracketedIpv6Host(host)) {
-        throw new Error('Invalid Alt-Used host');
+        throw new Error(
+            `Alt-Used host must be a valid host token or bracketed IPv6 literal; received ${String(altUsed.host)}`,
+        );
     }
 
     let serializedHost = host;
@@ -157,26 +165,28 @@ export function formatAltUsed(altUsed: AltUsed): string {
     }
 
     if (!isValidPort(altUsed.port)) {
-        throw new Error('Invalid Alt-Used port');
+        throw new Error(`Alt-Used port must be an integer in range 0-65535; received ${String(altUsed.port)}`);
     }
 
     return `${serializedHost}:${altUsed.port}`;
 }
 
 function parseAlternative(member: string): AltSvcAlternative | null {
-    const eqIndex = member.indexOf('=');
-    if (eqIndex <= 0) {
+    const parsedMember = parseParameterizedMember(member, {
+        parameterDelimiter: ';',
+        hasBaseSegment: true,
+        baseFromFirstSegment: true,
+    });
+    if (!parsedMember.base || !parsedMember.base.hasEquals) {
         return null;
     }
 
-    const protocolId = member.slice(0, eqIndex).trim();
+    const protocolId = parsedMember.base.key.trim();
     if (!TOKEN_CHARS.test(protocolId)) {
         return null;
     }
 
-    const remainder = member.slice(eqIndex + 1);
-    const parts = splitQuotedValue(remainder, ';');
-    const authority = parseQuotedStringStrict(parts[0]?.trim() ?? '');
+    const authority = parseQuotedStringStrict(parsedMember.base.value ?? '');
     if (authority === null) {
         return null;
     }
@@ -186,8 +196,8 @@ function parseAlternative(member: string): AltSvcAlternative | null {
         authority,
     };
 
-    for (let i = 1; i < parts.length; i++) {
-        const parameter = parseParameter(parts[i]?.trim() ?? '');
+    for (const segment of parsedMember.parameters) {
+        const parameter = parseParameterSegment(segment);
         if (!parameter) {
             continue;
         }
@@ -213,7 +223,9 @@ function parseAlternative(member: string): AltSvcAlternative | null {
 
 function formatAlternative(alternative: AltSvcAlternative): string {
     if (!TOKEN_CHARS.test(alternative.protocolId)) {
-        throw new Error('Invalid Alt-Svc protocol-id');
+        throw new Error(
+            `Alt-Svc protocol-id must be a valid HTTP token; received ${String(alternative.protocolId)}`,
+        );
     }
 
     assertNoCtl(alternative.authority, 'Alt-Svc alt-authority');
@@ -226,14 +238,18 @@ function formatAlternative(alternative: AltSvcAlternative): string {
 
     if (alternative.ma !== undefined) {
         if (!Number.isInteger(alternative.ma) || alternative.ma < 0) {
-            throw new Error('Invalid Alt-Svc ma parameter; expected non-negative integer');
+            throw new Error(
+                `Alt-Svc parameter "ma" must be a non-negative integer; received ${String(alternative.ma)}`,
+            );
         }
         parts.push(`ma=${alternative.ma}`);
     }
 
     if (alternative.persist !== undefined) {
         if (alternative.persist !== true) {
-            throw new Error('Invalid Alt-Svc persist parameter; only true can be serialized');
+            throw new Error(
+                `Alt-Svc parameter "persist" can only be serialized as true; received ${String(alternative.persist)}`,
+            );
         }
         parts.push('persist=1');
     }
@@ -241,18 +257,17 @@ function formatAlternative(alternative: AltSvcAlternative): string {
     return parts.join('; ');
 }
 
-function parseParameter(parameter: string): { name: string; value: string } | null {
-    const parsedParameter = parseKeyValueSegment(parameter);
-    if (!parsedParameter || !parsedParameter.hasEquals) {
+function parseParameterSegment(parameter: InternalParsedKeyValueSegment): { name: string; value: string } | null {
+    if (!parameter.hasEquals) {
         return null;
     }
 
-    const name = parsedParameter.key.trim().toLowerCase();
+    const name = parameter.key.trim().toLowerCase();
     if (!TOKEN_CHARS.test(name)) {
         return null;
     }
 
-    const rawValue = (parsedParameter.value ?? '').trim();
+    const rawValue = (parameter.value ?? '').trim();
     if (!rawValue) {
         return null;
     }

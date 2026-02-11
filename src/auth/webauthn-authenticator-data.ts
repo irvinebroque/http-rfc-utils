@@ -7,6 +7,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { isIP } from 'node:net';
 import type {
     WebauthnAuthenticatorData,
     WebauthnAuthenticatorDataValidationOptions,
@@ -66,7 +67,7 @@ export function parseWebauthnAuthenticatorData(
             return null;
         }
 
-        const credentialPublicKeyEnd = readCborItemEnd(bytes, offset);
+        const credentialPublicKeyEnd = readRequiredCborMapItemEnd(bytes, offset);
         if (credentialPublicKeyEnd === null) {
             return null;
         }
@@ -86,7 +87,7 @@ export function parseWebauthnAuthenticatorData(
             return null;
         }
 
-        const extensionEnd = readCborItemEnd(bytes, offset);
+        const extensionEnd = readRequiredCborMapItemEnd(bytes, offset);
         if (extensionEnd === null || extensionEnd !== bytes.length) {
             return null;
         }
@@ -103,14 +104,21 @@ export function parseWebauthnAuthenticatorData(
         return null;
     }
 
-    return {
+    const parsed: WebauthnAuthenticatorData = {
         rpIdHash,
         flagsByte,
         flags,
         signCount,
-        attestedCredentialData,
-        extensions,
     };
+
+    if (attestedCredentialData !== undefined) {
+        parsed.attestedCredentialData = attestedCredentialData;
+    }
+    if (extensions !== undefined) {
+        parsed.extensions = extensions;
+    }
+
+    return parsed;
 }
 
 /**
@@ -134,13 +142,18 @@ export function validateWebauthnAuthenticatorData(
     }
 
     validateFlags(value.flags);
+    const effectiveFlags = parseFlags(value.flagsByte);
+
+    if (!flagsEqual(value.flags, effectiveFlags)) {
+        throw new Error('WebAuthn authenticatorData flagsByte/flags inconsistent.');
+    }
 
     if (!Number.isInteger(value.signCount) || value.signCount < 0 || value.signCount > 0xffffffff) {
         throw new Error('WebAuthn authenticatorData.signCount must be a uint32.');
     }
 
     if (options.expectedRpId !== undefined) {
-        validateRpId(options.expectedRpId, 'expectedRpId');
+        validateRpId(options.expectedRpId, 'expectedRpId', options.allowIpRpId ?? false);
         const expectedRpIdHash = createHash('sha256').update(options.expectedRpId, 'utf8').digest();
         if (!bytesEqual(value.rpIdHash, new Uint8Array(expectedRpIdHash))) {
             throw new Error('WebAuthn authenticatorData rpIdHash does not match expectedRpId.');
@@ -148,22 +161,22 @@ export function validateWebauthnAuthenticatorData(
     }
 
     if (options.requireUserPresence ?? true) {
-        if (!value.flags.userPresent) {
+        if (!effectiveFlags.userPresent) {
             throw new Error('WebAuthn authenticatorData requires user presence (UP=true).');
         }
     }
 
     if (options.requireUserVerification ?? false) {
-        if (!value.flags.userVerified) {
+        if (!effectiveFlags.userVerified) {
             throw new Error('WebAuthn authenticatorData requires user verification (UV=true).');
         }
     }
 
-    if (value.flags.backupState && !value.flags.backupEligible) {
+    if (effectiveFlags.backupState && !effectiveFlags.backupEligible) {
         throw new Error('WebAuthn authenticatorData has invalid backup flags: BS=true requires BE=true.');
     }
 
-    if (value.flags.attestedCredentialData) {
+    if (effectiveFlags.attestedCredentialData) {
         if (!value.attestedCredentialData) {
             throw new Error('WebAuthn authenticatorData flag AT=true requires attestedCredentialData.');
         }
@@ -172,9 +185,13 @@ export function validateWebauthnAuthenticatorData(
         throw new Error('WebAuthn authenticatorData attestedCredentialData must be absent when AT=false.');
     }
 
-    if (value.flags.extensionData) {
+    if (effectiveFlags.extensionData) {
         if (!(value.extensions instanceof Uint8Array) || value.extensions.length === 0) {
             throw new Error('WebAuthn authenticatorData flag ED=true requires non-empty extension bytes.');
+        }
+        const extensionEnd = readRequiredCborMapItemEnd(value.extensions, 0);
+        if (extensionEnd === null || extensionEnd !== value.extensions.length) {
+            throw new Error('WebAuthn authenticatorData.extensions must contain a single CBOR map item.');
         }
     } else if (value.extensions !== undefined) {
         throw new Error('WebAuthn authenticatorData extensions must be absent when ED=false.');
@@ -229,6 +246,23 @@ function validateAttestedCredentialData(value: WebauthnAttestedCredentialData): 
     if (!(value.credentialPublicKey instanceof Uint8Array) || value.credentialPublicKey.length === 0) {
         throw new Error('WebAuthn attestedCredentialData.credentialPublicKey must be non-empty bytes.');
     }
+
+    const credentialPublicKeyEnd = readRequiredCborMapItemEnd(value.credentialPublicKey, 0);
+    if (credentialPublicKeyEnd === null || credentialPublicKeyEnd !== value.credentialPublicKey.length) {
+        throw new Error('WebAuthn attestedCredentialData.credentialPublicKey must contain a single CBOR map item.');
+    }
+}
+
+function readRequiredCborMapItemEnd(bytes: Uint8Array, offset: number): number | null {
+    if (offset >= bytes.length) {
+        return null;
+    }
+    const initial = bytes[offset] ?? 0;
+    const majorType = initial >> 5;
+    if (majorType !== 5) {
+        return null;
+    }
+    return readCborItemEnd(bytes, offset);
 }
 
 function readCborItemEnd(bytes: Uint8Array, offset: number): number | null {
@@ -240,7 +274,7 @@ function readCborItemEnd(bytes: Uint8Array, offset: number): number | null {
     const majorType = initial >> 5;
     const additionalInfo = initial & 0x1f;
 
-    const header = readCborLengthArgument(bytes, offset, additionalInfo);
+    const header = readCborLengthArgument(bytes, offset, majorType, additionalInfo);
     if (!header) {
         return null;
     }
@@ -311,6 +345,7 @@ function readCborItemEnd(bytes: Uint8Array, offset: number): number | null {
 function readCborLengthArgument(
     bytes: Uint8Array,
     offset: number,
+    majorType: number,
     additionalInfo: number,
 ): { length: number; nextOffset: number; indefinite: boolean } | null {
     if (additionalInfo < 24) {
@@ -366,6 +401,9 @@ function readCborLengthArgument(
     }
 
     if (additionalInfo === 31) {
+        if (majorType === 0 || majorType === 1 || majorType === 6 || majorType === 7) {
+            return null;
+        }
         return {
             length: 0,
             nextOffset: offset + 1,
@@ -390,7 +428,7 @@ function readIndefiniteStringLike(bytes: Uint8Array, offset: number, expectedMaj
             return null;
         }
 
-        const header = readCborLengthArgument(bytes, cursor, additionalInfo);
+        const header = readCborLengthArgument(bytes, cursor, majorType, additionalInfo);
         if (!header || header.indefinite) {
             return null;
         }
@@ -466,7 +504,7 @@ function toUint8Array(value: Uint8Array | ArrayBuffer | ArrayBufferView): Uint8A
     return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
 }
 
-function validateRpId(value: string, context: string): void {
+function validateRpId(value: string, context: string, allowIpLiteral: boolean): void {
     if (typeof value !== 'string' || value.length === 0) {
         throw new Error(`WebAuthn ${context} must be a non-empty string.`);
     }
@@ -484,6 +522,19 @@ function validateRpId(value: string, context: string): void {
     if (labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
         throw new Error(`WebAuthn ${context} must be a valid DNS label sequence.`);
     }
+
+    if (!allowIpLiteral && isIP(value) !== 0) {
+        throw new Error(`WebAuthn ${context} must be a registrable domain name, not an IP literal.`);
+    }
+}
+
+function flagsEqual(left: WebauthnAuthenticatorFlags, right: WebauthnAuthenticatorFlags): boolean {
+    return left.userPresent === right.userPresent
+        && left.userVerified === right.userVerified
+        && left.backupEligible === right.backupEligible
+        && left.backupState === right.backupState
+        && left.attestedCredentialData === right.attestedCredentialData
+        && left.extensionData === right.extensionData;
 }
 
 function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {

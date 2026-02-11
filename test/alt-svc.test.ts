@@ -24,6 +24,10 @@ describe('parseAltSvc (RFC 7838 Section 3)', () => {
         assert.equal(parseAltSvc('Clear'), null);
     });
 
+    it('rejects members with a missing protocol-id segment', () => {
+        assert.equal(parseAltSvc(';h2=":443"'), null);
+    });
+
     // RFC 7838 §3: parse alternatives as ordered 1# list members.
     it('parses h2 and host+port alternatives preserving preference order', () => {
         const parsed = parseAltSvc('h2=":8000"; ma=60, h3="alt.example.test:443"; persist=1');
@@ -100,7 +104,7 @@ describe('formatAltSvc (RFC 7838 Section 3)', () => {
                 clear: true,
                 alternatives: [{ protocolId: 'h2', authority: ':443' }],
             });
-        }, /clear value/);
+        }, /clear=true/);
     });
 
     it('formats ordered alternatives with ma and persist', () => {
@@ -122,6 +126,14 @@ describe('formatAltSvc (RFC 7838 Section 3)', () => {
         });
 
         assert.equal(value, 'h2="alt\\\\\\"svc:443"');
+    });
+
+    it('round-trips parse -> format -> parse for alternatives', () => {
+        const input = 'h2=":8000"; ma=60, h3="alt.example.test:443"; persist=1';
+        const parsed = parseAltSvc(input);
+        assert.ok(parsed);
+        const reparsed = parseAltSvc(formatAltSvc(parsed));
+        assert.deepEqual(reparsed, parsed);
     });
 });
 

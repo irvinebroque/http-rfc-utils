@@ -100,8 +100,8 @@ describe('assertHeaderToken', () => {
     });
 
     it('rejects invalid token names', () => {
-        assert.throws(() => assertHeaderToken('bad key', 'token'), /valid header token/);
-        assert.throws(() => assertHeaderToken('bad=key', 'token'), /valid header token/);
+        assert.throws(() => assertHeaderToken('bad key', 'token'), /valid RFC 9110 token/);
+        assert.throws(() => assertHeaderToken('bad=key', 'token'), /valid RFC 9110 token/);
     });
 });
 
@@ -229,6 +229,13 @@ describe('splitAndParseKeyValueSegments', () => {
             { key: 'a', value: '1', hasEquals: true },
             { key: 'b', value: undefined, hasEquals: false },
             { key: 'c', value: '3', hasEquals: true },
+        ]);
+    });
+
+    it('preserves delimiters inside quoted values', () => {
+        assert.deepEqual(splitAndParseKeyValueSegments('a="x;y"; b=2', ';'), [
+            { key: 'a', value: '"x;y"', hasEquals: true },
+            { key: 'b', value: '2', hasEquals: true },
         ]);
     });
 });

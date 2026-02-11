@@ -54,7 +54,7 @@ describe('Cookie header (RFC 6265 Section 4.2.1)', () => {
 
     // RFC 6265 §4.1.1 + RFC 9110 §5.6.2: cookie-name uses token syntax.
     it('rejects invalid cookie names in formatting', () => {
-        assert.throws(() => formatCookie({ 'bad key': 'value' }), /valid header token/);
+        assert.throws(() => formatCookie({ 'bad key': 'value' }), /valid RFC 9110 token/);
     });
 });
 
@@ -108,6 +108,40 @@ describe('Set-Cookie header (RFC 6265 Section 4.1.1)', () => {
     it('ignores invalid Max-Age values', () => {
         const parsed = parseSetCookie('id=abc; Max-Age=abc');
         assert.equal(parsed?.attributes?.maxAge, undefined);
+    });
+
+    // RFC 6265 §4.1.1: Set-Cookie attributes are ';'-delimited and values must not inject delimiters.
+    it('rejects semicolon delimiter injection in Domain and Path attributes', () => {
+        assert.throws(() => {
+            formatSetCookie({
+                name: 'id',
+                value: 'abc',
+                attributes: { domain: 'example.com;Secure' },
+            });
+        }, /must not contain ';' delimiter/);
+
+        assert.throws(() => {
+            formatSetCookie({
+                name: 'id',
+                value: 'abc',
+                attributes: { path: '/app;HttpOnly' },
+            });
+        }, /must not contain ';' delimiter/);
+    });
+
+    // RFC 6265 §4.1.1: Extension attribute values also share the Set-Cookie ';' delimiter space.
+    it('rejects semicolon delimiter injection in extension values', () => {
+        assert.throws(() => {
+            formatSetCookie({
+                name: 'id',
+                value: 'abc',
+                attributes: {
+                    extensions: {
+                        note: 'ok;Secure',
+                    },
+                },
+            });
+        }, /must not contain ';' delimiter/);
     });
 });
 

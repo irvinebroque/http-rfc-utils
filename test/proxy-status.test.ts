@@ -533,14 +533,14 @@ describe('Proxy-Status formatting (RFC 9209 Section 2)', () => {
                 proxy: 'ExampleCDN',
                 params: { details: 123 as unknown as string },
             }]);
-        }, /Invalid Proxy-Status details value/);
+        }, /Proxy-Status param "details" must be a string/);
 
         assert.throws(() => {
             formatProxyStatus([{
                 proxy: 'ExampleCDN',
                 params: { details: true as unknown as string },
             }]);
-        }, /Invalid Proxy-Status details value/);
+        }, /Proxy-Status param "details" must be a string/);
     });
 });
 

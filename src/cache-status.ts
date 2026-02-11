@@ -30,10 +30,10 @@ const CACHE_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<CacheStatusParams>[
         parse: (value) => value instanceof SfToken ? value.value : undefined,
         format: (value) => {
             if (typeof value !== 'string') {
-                throw new Error('Invalid Cache-Status fwd token');
+                throw new Error(`Cache-Status param "fwd" must be a string token; received type ${typeof value}`);
             }
             if (!isSfKeyText(value)) {
-                throw new Error('Invalid Cache-Status fwd token');
+                throw new Error(`Cache-Status param "fwd" must be an RFC 8941 key token; received ${String(value)}`);
             }
             return new SfToken(value);
         },
@@ -44,10 +44,10 @@ const CACHE_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<CacheStatusParams>[
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
             if (typeof value !== 'number') {
-                throw new Error('Invalid Cache-Status fwd-status value');
+                throw new Error(`Cache-Status param "fwd-status" must be a number; received type ${typeof value}`);
             }
             if (!isSfInteger(value)) {
-                throw new Error('Invalid Cache-Status fwd-status value');
+                throw new Error(`Cache-Status param "fwd-status" must be an RFC 8941 integer; received ${String(value)}`);
             }
             return value;
         },
@@ -58,10 +58,10 @@ const CACHE_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<CacheStatusParams>[
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
             if (typeof value !== 'number') {
-                throw new Error('Invalid Cache-Status ttl value');
+                throw new Error(`Cache-Status param "ttl" must be a number; received type ${typeof value}`);
             }
             if (!isSfInteger(value)) {
-                throw new Error('Invalid Cache-Status ttl value');
+                throw new Error(`Cache-Status param "ttl" must be an RFC 8941 integer; received ${String(value)}`);
             }
             return value;
         },

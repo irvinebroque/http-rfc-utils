@@ -19,6 +19,12 @@ function formatCookieValue(value: string): string {
     return quoteString(value);
 }
 
+function assertNoSetCookieAttributeDelimiter(value: string, context: string): void {
+    if (value.includes(';')) {
+        throw new Error(`${context} must not contain ';' delimiter`);
+    }
+}
+
 function isDelimiter(char: string): boolean {
     const code = char.charCodeAt(0);
     return code === 0x09
@@ -297,10 +303,12 @@ export function formatSetCookie(value: SetCookie): string {
     }
     if (attributes.domain) {
         assertNoCtl(attributes.domain, 'Set-Cookie Domain attribute');
+        assertNoSetCookieAttributeDelimiter(attributes.domain, 'Set-Cookie Domain attribute');
         parts.push(`Domain=${attributes.domain}`);
     }
     if (attributes.path) {
         assertNoCtl(attributes.path, 'Set-Cookie Path attribute');
+        assertNoSetCookieAttributeDelimiter(attributes.path, 'Set-Cookie Path attribute');
         parts.push(`Path=${attributes.path}`);
     }
     if (attributes.secure) {
@@ -316,6 +324,7 @@ export function formatSetCookie(value: SetCookie): string {
                 parts.push(key);
             } else {
                 assertNoCtl(extValue, `Set-Cookie extension attribute "${key}" value`);
+                assertNoSetCookieAttributeDelimiter(extValue, `Set-Cookie extension attribute "${key}" value`);
                 parts.push(`${key}=${extValue}`);
             }
         }

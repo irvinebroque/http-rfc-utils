@@ -174,14 +174,56 @@ export function formatNormalizedPath(segments: (string | number)[]): string {
         if (typeof seg === 'number') {
             pathParts.push(`[${seg}]`);
         } else {
-            // Escape single quotes and backslashes
-            const escaped = seg
-                .replace(/\\/g, '\\\\')
-                .replace(/'/g, "\\'");
+            const escaped = escapeNormalizedPathString(seg);
             pathParts.push(`['${escaped}']`);
         }
     }
     return pathParts.join('');
+}
+
+function escapeNormalizedPathString(value: string): string {
+    let escaped = '';
+
+    for (let i = 0; i < value.length; i++) {
+        const ch = value[i]!;
+        const code = ch.charCodeAt(0);
+
+        if (ch === '\\') {
+            escaped += '\\\\';
+            continue;
+        }
+        if (ch === '\'') {
+            escaped += "\\'";
+            continue;
+        }
+
+        if (code <= 0x1F) {
+            switch (code) {
+                case 0x08:
+                    escaped += '\\b';
+                    continue;
+                case 0x09:
+                    escaped += '\\t';
+                    continue;
+                case 0x0A:
+                    escaped += '\\n';
+                    continue;
+                case 0x0C:
+                    escaped += '\\f';
+                    continue;
+                case 0x0D:
+                    escaped += '\\r';
+                    continue;
+                default:
+                    escaped += `\\u${code.toString(16).padStart(4, '0').toUpperCase()}`;
+                    continue;
+            }
+        }
+
+        escaped += ch;
+    }
+
+    return escaped;
 }
 
 /**
@@ -694,7 +736,7 @@ function evaluateNotExpr(expr: JsonPathNotExpr, ctx: EvalContext): boolean {
 function evaluateComparisonExpr(expr: JsonPathComparisonExpr, ctx: EvalContext): boolean {
     const left = evaluateComparable(expr.left, ctx);
     const right = evaluateComparable(expr.right, ctx);
-    return compare(left, expr.operator, right);
+    return compare(left, expr.operator, right, ctx);
 }
 
 function evaluateTestExpr(expr: JsonPathTestExpr, ctx: EvalContext): boolean {
@@ -766,14 +808,14 @@ function evaluateFilterQuery(query: JsonPathQuery, ctx: EvalContext): EvalNode[]
 // Comparison
 // =============================================================================
 
-function compare(left: unknown, op: JsonPathComparisonOp, right: unknown): boolean {
+function compare(left: unknown, op: JsonPathComparisonOp, right: unknown, ctx: EvalContext): boolean {
     // RFC 9535 §2.3.5.2.2: Comparison semantics
 
     switch (op) {
         case '==':
-            return deepEqual(left, right);
+            return deepEqual(left, right, ctx);
         case '!=':
-            return !deepEqual(left, right);
+            return !deepEqual(left, right, ctx);
         case '<':
             return compareLessThan(left, right);
         case '<=':
@@ -785,37 +827,100 @@ function compare(left: unknown, op: JsonPathComparisonOp, right: unknown): boole
     }
 }
 
-function deepEqual(a: unknown, b: unknown): boolean {
-    if (a === b) return true;
+interface DeepEqualFrame {
+    left: unknown;
+    right: unknown;
+    depth: number;
+}
 
-    if (typeof a !== typeof b) return false;
+function deepEqual(a: unknown, b: unknown, ctx: EvalContext): boolean {
+    const stack: DeepEqualFrame[] = [{ left: a, right: b, depth: 0 }];
+    const seenPairs = new WeakMap<object, WeakSet<object>>();
 
-    if (a === null || b === null) return a === b;
+    while (stack.length > 0) {
+        const frame = stack.pop()!;
+        trackNodeVisit(ctx, frame.depth);
 
-    if (Array.isArray(a) && Array.isArray(b)) {
-        if (a.length !== b.length) return false;
-        for (let i = 0; i < a.length; i++) {
-            if (!deepEqual(a[i], b[i])) return false;
+        const left = frame.left;
+        const right = frame.right;
+
+        if (left === right) {
+            continue;
         }
-        return true;
+
+        if (typeof left !== typeof right) {
+            return false;
+        }
+
+        if (left === null || right === null) {
+            return false;
+        }
+
+        if (typeof left !== 'object' || typeof right !== 'object') {
+            return false;
+        }
+
+        const leftObj = left as object;
+        const rightObj = right as object;
+
+        const seenRights = seenPairs.get(leftObj);
+        if (seenRights?.has(rightObj)) {
+            continue;
+        }
+
+        if (seenRights) {
+            seenRights.add(rightObj);
+        } else {
+            seenPairs.set(leftObj, new WeakSet([rightObj]));
+        }
+
+        const leftIsArray = Array.isArray(leftObj);
+        const rightIsArray = Array.isArray(rightObj);
+        if (leftIsArray !== rightIsArray) {
+            return false;
+        }
+
+        if (leftIsArray && rightIsArray) {
+            const leftArray = leftObj as unknown[];
+            const rightArray = rightObj as unknown[];
+            if (leftArray.length !== rightArray.length) {
+                return false;
+            }
+
+            for (let i = 0; i < leftArray.length; i++) {
+                stack.push({
+                    left: leftArray[i],
+                    right: rightArray[i],
+                    depth: frame.depth + 1,
+                });
+            }
+
+            continue;
+        }
+
+        const leftRecord = leftObj as Record<string, unknown>;
+        const rightRecord = rightObj as Record<string, unknown>;
+        const keysLeft = Object.keys(leftRecord);
+        const keysRight = Object.keys(rightRecord);
+
+        if (keysLeft.length !== keysRight.length) {
+            return false;
+        }
+
+        for (const key of keysLeft) {
+            if (!Object.hasOwn(rightRecord, key)) {
+                return false;
+            }
+
+            stack.push({
+                left: leftRecord[key],
+                right: rightRecord[key],
+                depth: frame.depth + 1,
+            });
+        }
     }
 
-    if (typeof a === 'object' && typeof b === 'object') {
-        const keysA = Object.keys(a as object);
-        const keysB = Object.keys(b as object);
-        if (keysA.length !== keysB.length) return false;
-        const keySetB = new Set(keysB);
-        for (const key of keysA) {
-            if (!keySetB.has(key)) return false;
-            if (!deepEqual(
-                (a as Record<string, unknown>)[key],
-                (b as Record<string, unknown>)[key]
-            )) return false;
-        }
-        return true;
-    }
-
-    return false;
+    return true;
 }
 
 function compareLessThan(left: unknown, right: unknown): boolean {
@@ -915,8 +1020,13 @@ function parseRepeatingQuantifierLength(pattern: string, start: number): number 
 
     let cursor = start + 1;
     let minDigits = '';
-    while (cursor < pattern.length && pattern[cursor] >= '0' && pattern[cursor] <= '9') {
-        minDigits += pattern[cursor];
+    while (cursor < pattern.length) {
+        const digit = pattern[cursor];
+        if (digit === undefined || digit < '0' || digit > '9') {
+            break;
+        }
+
+        minDigits += digit;
         cursor += 1;
     }
 
@@ -936,8 +1046,13 @@ function parseRepeatingQuantifierLength(pattern: string, start: number): number 
 
     cursor += 1;
     let maxDigits = '';
-    while (cursor < pattern.length && pattern[cursor] >= '0' && pattern[cursor] <= '9') {
-        maxDigits += pattern[cursor];
+    while (cursor < pattern.length) {
+        const digit = pattern[cursor];
+        if (digit === undefined || digit < '0' || digit > '9') {
+            break;
+        }
+
+        maxDigits += digit;
         cursor += 1;
     }
 

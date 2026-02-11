@@ -65,8 +65,11 @@ function decodeProxyStatusBinaryValue(value: Uint8Array): string {
 
 function encodeProxyStatusBinaryValue(value: string): Uint8Array {
     for (let index = 0; index < value.length; index++) {
-        if (value.charCodeAt(index) > 0xFF) {
-            throw new Error('Invalid Proxy-Status next-protocol value');
+        const codePoint = value.charCodeAt(index);
+        if (codePoint > 0xFF) {
+            throw new Error(
+                `Proxy-Status param "next-protocol" must contain only Latin-1 bytes; found code point U+${codePoint.toString(16).toUpperCase().padStart(4, '0')} at index ${index}`,
+            );
         }
     }
     return new Uint8Array(Buffer.from(value, 'latin1'));
@@ -120,7 +123,9 @@ const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[
         },
         format: (value) => {
             if (typeof value !== 'string') {
-                throw new Error('Invalid Proxy-Status next-protocol value');
+                throw new Error(
+                    `Proxy-Status param "next-protocol" must be a string; received type ${typeof value}`,
+                );
             }
             if (isSfTokenText(value)) {
                 return new SfToken(value);
@@ -133,8 +138,15 @@ const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[
         property: 'receivedStatus',
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
-            if (typeof value !== 'number' || !isSfInteger(value)) {
-                throw new Error('Invalid Proxy-Status received-status value');
+            if (typeof value !== 'number') {
+                throw new Error(
+                    `Proxy-Status param "received-status" must be a number; received type ${typeof value}`,
+                );
+            }
+            if (!isSfInteger(value)) {
+                throw new Error(
+                    `Proxy-Status param "received-status" must be an RFC 8941 integer; received ${String(value)}`,
+                );
             }
             return value;
         },
@@ -145,7 +157,7 @@ const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[
         parse: (value) => typeof value === 'string' ? value : undefined,
         format: (value) => {
             if (typeof value !== 'string') {
-                throw new Error('Invalid Proxy-Status details value');
+                throw new Error(`Proxy-Status param "details" must be a string; received type ${typeof value}`);
             }
             return value;
         },
@@ -161,8 +173,13 @@ const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[
         property: 'infoCode',
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
-            if (typeof value !== 'number' || !isSfInteger(value)) {
-                throw new Error('Invalid Proxy-Status info-code value');
+            if (typeof value !== 'number') {
+                throw new Error(`Proxy-Status param "info-code" must be a number; received type ${typeof value}`);
+            }
+            if (!isSfInteger(value)) {
+                throw new Error(
+                    `Proxy-Status param "info-code" must be an RFC 8941 integer; received ${String(value)}`,
+                );
             }
             return value;
         },
@@ -172,8 +189,13 @@ const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[
         property: 'alertId',
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
-            if (typeof value !== 'number' || !isSfInteger(value)) {
-                throw new Error('Invalid Proxy-Status alert-id value');
+            if (typeof value !== 'number') {
+                throw new Error(`Proxy-Status param "alert-id" must be a number; received type ${typeof value}`);
+            }
+            if (!isSfInteger(value)) {
+                throw new Error(
+                    `Proxy-Status param "alert-id" must be an RFC 8941 integer; received ${String(value)}`,
+                );
             }
             return value;
         },

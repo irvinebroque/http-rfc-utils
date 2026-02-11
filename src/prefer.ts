@@ -11,10 +11,12 @@ import {
     assertNoCtl,
     isEmptyHeader,
     parseQuotedStringStrict,
-    splitAndParseKeyValueSegments,
-    splitQuotedValue,
     quoteIfNeeded,
 } from './header-utils.js';
+import {
+    parseParameterizedMember,
+    parseParameterizedMembers,
+} from './internal-parameterized-members.js';
 
 const DISALLOWED_CTL_REGEX = /[\u0000-\u0008\u000A-\u001F\u007F]/;
 
@@ -61,18 +63,18 @@ export function parsePrefer(header: string): PreferMap {
         return map;
     }
 
-    const parts = splitQuotedValue(header, ',');
-    for (const part of parts) {
-        const trimmed = part.trim();
-        if (!trimmed) continue;
-
-        const segments = splitAndParseKeyValueSegments(trimmed, ';');
-        if (segments.length === 0) {
+    const members = parseParameterizedMembers(header, {
+        memberDelimiter: ',',
+        parameterDelimiter: ';',
+        hasBaseSegment: true,
+    });
+    for (const member of members) {
+        if (!member.base) {
             continue;
         }
 
-        const [tokenPart, ...paramParts] = segments;
-        if (!tokenPart) continue;
+        const tokenPart = member.base;
+        const paramParts = member.parameters;
 
         // RFC 7240 §2: Token names are case-insensitive.
         const token = tokenPart.key.trim().toLowerCase();
@@ -169,25 +171,24 @@ export function formatPreferenceApplied(preferences: PreferMap | string[]): stri
                 throw new Error('Preference-Applied value must not be empty');
             }
 
-            const segments = splitAndParseKeyValueSegments(raw, ';');
-            if (segments.length !== 1) {
+            const parsed = parseParameterizedMember(raw, {
+                parameterDelimiter: ';',
+                hasBaseSegment: true,
+            });
+            const tokenSegment = parsed.base;
+            if (!tokenSegment || parsed.parameters.length !== 0) {
                 throw new Error('Preference-Applied value must not include parameters');
             }
 
-            const [segment] = segments;
-            if (!segment) {
-                throw new Error('Preference-Applied value must not be empty');
-            }
-
-            const token = segment.key.trim();
+            const token = tokenSegment.key.trim();
             assertHeaderToken(token, `Preference-Applied token "${token}"`);
 
-            if (!segment.hasEquals) {
+            if (!tokenSegment.hasEquals) {
                 validated.push(token);
                 continue;
             }
 
-            const valueRaw = segment.value ?? '';
+            const valueRaw = tokenSegment.value ?? '';
 
             if (valueRaw === '') {
                 throw new Error(`Preference-Applied value "${raw}" must use token[=word] syntax`);

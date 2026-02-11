@@ -28,6 +28,12 @@ describe('Forwarded Header (RFC 7239 Section 4)', () => {
         assert.equal(parsed[1]?.for, '198.51.100.17');
     });
 
+    it('round-trips parse -> format -> parse with quoted values', () => {
+        const input = 'for="[2001:db8:cafe::17]:4711";proto=https;host=example.com';
+        const reparsed = parseForwarded(formatForwarded(parseForwarded(input)));
+        assert.deepEqual(reparsed, parseForwarded(input));
+    });
+
     it('formats Forwarded with quoting when needed (RFC 7239 Section 4)', () => {
         const formatted = formatForwarded([
             { for: '[2001:db8:cafe::17]:4711', proto: 'https' },
@@ -46,6 +52,6 @@ describe('Forwarded Header (RFC 7239 Section 4)', () => {
     it('rejects invalid extension parameter names when formatting', () => {
         assert.throws(() => {
             formatForwarded([{ extensions: { 'bad key': 'value' } }]);
-        }, /valid header token/);
+        }, /valid RFC 9110 token/);
     });
 });

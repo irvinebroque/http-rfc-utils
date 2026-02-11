@@ -140,6 +140,19 @@ describe('RFC 9421 HTTP Message Signatures (§2-§4.2)', () => {
             assert.equal(parseSignatureInput('sig1=("@method");created=1.5'), null);
             assert.equal(parseSignatureInput('sig1=("@method");expires=2.25'), null);
         });
+
+        // RFC 9421 §2.1, RFC 9421 §2.2: Component identifiers are lowercased field names or known derived components.
+        it('returns null for invalid component names', () => {
+            assert.equal(parseSignatureInput('sig1=("Content-Type")'), null);
+            assert.equal(parseSignatureInput('sig1=("@custom")'), null);
+        });
+
+        // RFC 9421 §2.1: Component parameters are constrained and type-specific.
+        it('returns null for unknown or invalid component parameters', () => {
+            assert.equal(parseSignatureInput('sig1=("content-type";unknown)'), null);
+            assert.equal(parseSignatureInput('sig1=("content-type";sf="true")'), null);
+            assert.equal(parseSignatureInput('sig1=("content-type";key=?1)'), null);
+        });
     });
 
     // RFC 9421 §4.1: Signature-Input field formatting
@@ -338,6 +351,21 @@ describe('RFC 9421 HTTP Message Signatures (§2-§4.2)', () => {
         it('returns null for unterminated string', () => {
             assert.equal(parseComponentIdentifier('"content-type'), null);
         });
+
+        // RFC 9421 §2.1, RFC 9110 §5.1: Field components use lowercase field-name token syntax only.
+        it('returns null for invalid component names', () => {
+            assert.equal(parseComponentIdentifier('"Content-Type"'), null);
+            assert.equal(parseComponentIdentifier('"x custom"'), null);
+            assert.equal(parseComponentIdentifier('"@not-derived"'), null);
+        });
+
+        // RFC 9421 §2.1: Reject unknown parameters, duplicates, and invalid parameter value types.
+        it('returns null for unknown, duplicate, or invalid component parameters', () => {
+            assert.equal(parseComponentIdentifier('"content-type";unknown'), null);
+            assert.equal(parseComponentIdentifier('"content-type";sf;sf'), null);
+            assert.equal(parseComponentIdentifier('"content-type";sf="true"'), null);
+            assert.equal(parseComponentIdentifier('"content-type";key'), null);
+        });
     });
 
     // RFC 9421 §2: Component identifier formatting
@@ -368,12 +396,12 @@ describe('RFC 9421 HTTP Message Signatures (§2-§4.2)', () => {
             assert.equal(result, '"example-dict";key="member"');
         });
 
-        it('escapes component names and key parameters as quoted-strings', () => {
+        it('escapes key parameters as quoted-strings', () => {
             const result = formatComponentIdentifier({
-                name: 'example\\"dict',
+                name: 'example-dict',
                 params: { key: 'm\\"ember' },
             });
-            assert.equal(result, '"example\\\\\\"dict";key="m\\\\\\"ember"');
+            assert.equal(result, '"example-dict";key="m\\\\\\"ember"');
         });
 
         it('formats component with multiple parameters', () => {
@@ -396,6 +424,20 @@ describe('RFC 9421 HTTP Message Signatures (§2-§4.2)', () => {
             assert.equal(parsed.name, original.name);
             assert.equal(parsed.params?.key, original.params.key);
             assert.equal(parsed.params?.sf, original.params.sf);
+        });
+
+        // RFC 9421 §2.1 and §2.2: Formatting fails closed for invalid component definitions.
+        it('throws for invalid component definitions', () => {
+            assert.throws(() => formatComponentIdentifier({ name: 'Content-Type' }));
+            assert.throws(() => formatComponentIdentifier({ name: '@custom' }));
+            assert.throws(() => formatComponentIdentifier({
+                name: 'content-type',
+                params: { sf: false } as unknown as SignatureComponent['params'],
+            }));
+            assert.throws(() => formatComponentIdentifier({
+                name: 'content-type',
+                params: { unknown: true } as unknown as SignatureComponent['params'],
+            }));
         });
     });
 
@@ -743,6 +785,20 @@ describe('RFC 9421 HTTP Message Signatures (§2-§4.2)', () => {
             );
 
             assert.equal(result, null);
+        });
+
+        // RFC 9421 §2.5 + RFC 9421 §2.1/§2.2: Validation is canonical and rejects ambiguous component identifiers.
+        it('fails closed for invalid component identifiers before duplicate checks', () => {
+            const message: SignatureMessageContext = {
+                method: 'GET',
+                headers: new Map([['content-type', ['text/plain']]]),
+            };
+
+            assert.equal(createSignatureBase(message, [{ name: '@METHOD' }], {}), null);
+            assert.equal(
+                createSignatureBase(message, [{ name: 'content-type' }, { name: 'Content-Type' }], {}),
+                null
+            );
         });
 
         // RFC 9421 §2.5: Fail for missing required component

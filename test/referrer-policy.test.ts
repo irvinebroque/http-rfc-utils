@@ -81,6 +81,7 @@ describe('validateReferrerPolicy and formatReferrerPolicy (W3C Referrer Policy S
 
     it('throws on invalid policy values', () => {
         assert.throws(() => validateReferrerPolicy(''), /non-empty/);
+        assert.throws(() => validateReferrerPolicy('same origin'), /valid RFC 9110 token/);
         assert.throws(() => validateReferrerPolicy('future-policy'), /Invalid Referrer-Policy token/);
         assert.throws(() => formatReferrerPolicy('future-policy'), /Invalid Referrer-Policy token/);
     });

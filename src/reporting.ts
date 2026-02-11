@@ -205,6 +205,10 @@ export function formatReportsJson(
 
     for (let index = 0; index < reports.length; index++) {
         const report = reports[index];
+        if (report === undefined) {
+            throw new Error(`Report at index ${index} must be an object`);
+        }
+
         validateReport(report, index);
 
         const age = Math.max(0, now - report.timestamp);

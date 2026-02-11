@@ -675,7 +675,12 @@ function isValidLinksetTarget(value: unknown): value is LinksetTarget {
         return false;
     }
 
-    for (const [key, member] of Object.entries(targetRecord)) {
+    for (const key in targetRecord) {
+        if (!Object.prototype.hasOwnProperty.call(targetRecord, key)) {
+            continue;
+        }
+
+        const member = targetRecord[key];
         if (member === undefined) {
             continue;
         }
@@ -726,7 +731,13 @@ function isValidLinksetContext(value: unknown): value is LinksetContext {
         return false;
     }
 
-    for (const [key, member] of Object.entries(value)) {
+    const contextRecord = value as Record<string, unknown>;
+    for (const key in contextRecord) {
+        if (!Object.prototype.hasOwnProperty.call(contextRecord, key)) {
+            continue;
+        }
+
+        const member = contextRecord[key];
         if (key === 'anchor') {
             if (typeof member !== 'string') {
                 return false;

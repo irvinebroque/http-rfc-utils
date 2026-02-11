@@ -5,7 +5,15 @@
  */
 
 import type { EncodingRange } from './types.js';
-import { parseWeightedTokenList } from './header-utils.js';
+import { parseWeightedTokenList, TOKEN_CHARS } from './header-utils.js';
+
+function normalizeEncodingToken(token: string): string {
+    const normalized = token.toLowerCase();
+    if (!TOKEN_CHARS.test(normalized)) {
+        return '';
+    }
+    return normalized;
+}
 
 /**
  * Parse an Accept-Encoding header into ranges.
@@ -13,7 +21,7 @@ import { parseWeightedTokenList } from './header-utils.js';
 // RFC 9110 §12.5.3: Accept-Encoding field-value parsing.
 export function parseAcceptEncoding(header: string): EncodingRange[] {
     const ranges = parseWeightedTokenList(header, {
-        tokenNormalizer: encoding => encoding.toLowerCase(),
+        tokenNormalizer: normalizeEncodingToken,
         sort: 'q-only',
     });
 

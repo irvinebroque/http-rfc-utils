@@ -54,6 +54,10 @@ export const MIME_TO_FORMAT: Record<string, MediaType> = Object.fromEntries(
  */
 // RFC 7231 §5.3.2: Accept header parsing and sorting.
 export function parseAccept(header: string): AcceptEntry[] {
+    return parseAcceptEntries(header, true);
+}
+
+function parseAcceptEntries(header: string, sortByPreference: boolean): AcceptEntry[] {
     if (isEmptyHeader(header)) {
         return [];
     }
@@ -71,23 +75,25 @@ export function parseAccept(header: string): AcceptEntry[] {
         }
     }
 
-    // Sort by preference
-    entries.sort((a, b) => {
-        // 1. Higher q value first
-        if (a.q !== b.q) {
-            return b.q - a.q;
-        }
+    if (sortByPreference) {
+        // Sort by preference
+        entries.sort((a, b) => {
+            // 1. Higher q value first
+            if (a.q !== b.q) {
+                return b.q - a.q;
+            }
 
-        // 2. More specific type beats wildcard
-        const specA = getSpecificity(a);
-        const specB = getSpecificity(b);
-        if (specA !== specB) {
-            return specB - specA;
-        }
+            // 2. More specific type beats wildcard
+            const specA = getSpecificity(a);
+            const specB = getSpecificity(b);
+            if (specA !== specB) {
+                return specB - specA;
+            }
 
-        // 3. More parameters beats fewer
-        return b.params.size - a.params.size;
-    });
+            // 3. More parameters beats fewer
+            return b.params.size - a.params.size;
+        });
+    }
 
     return entries;
 }
@@ -96,8 +102,8 @@ export function parseAccept(header: string): AcceptEntry[] {
  * Parse a single media range with optional parameters.
  */
 function parseMediaRange(range: string): AcceptEntry | null {
-    const parts = splitQuotedValue(range, ';').map(p => p.trim());
-    const parsed = parseHeaderTypeAndSubtype(parts[0], { allowWildcard: true });
+    const parts = splitQuotedValue(range, ';');
+    const parsed = parseHeaderTypeAndSubtype((parts[0] ?? '').trim(), { allowWildcard: true });
     if (!parsed) {
         return null;
     }
@@ -118,7 +124,12 @@ function parseMediaRange(range: string): AcceptEntry | null {
         }
 
         const key = param.key.trim().toLowerCase();
-        const value = unquote(param.value ?? '');
+        const rawValue = param.value ?? '';
+        const trimmedValue = rawValue.trim();
+        const value =
+            trimmedValue.length >= 2 && trimmedValue.charCodeAt(0) === 34
+                ? unquote(trimmedValue)
+                : trimmedValue;
         params.set(key, value);
     }
 
@@ -163,6 +174,18 @@ interface ParsedMimeType {
     params: Map<string, string>;
 }
 
+const PARSED_MIME_TYPE_CACHE = new Map<string, ParsedMimeType | null>();
+
+function getParsedMimeTypeCached(mimeType: string): ParsedMimeType | null {
+    if (PARSED_MIME_TYPE_CACHE.has(mimeType)) {
+        return PARSED_MIME_TYPE_CACHE.get(mimeType) ?? null;
+    }
+
+    const parsed = parseMimeTypeWithParams(mimeType);
+    PARSED_MIME_TYPE_CACHE.set(mimeType, parsed);
+    return parsed;
+}
+
 function matchesParsedMimeType(entry: AcceptEntry, parsed: ParsedMimeType): number {
     const { type, subtype, params } = parsed;
 
@@ -193,7 +216,7 @@ function matchesParsedMimeType(entry: AcceptEntry, parsed: ParsedMimeType): numb
  * Returns specificity score if match, 0 if no match.
  */
 function matchesMimeType(entry: AcceptEntry, mimeType: string): number {
-    const parsed = parseMimeTypeWithParams(mimeType);
+    const parsed = getParsedMimeTypeCached(mimeType);
 
     if (!parsed) {
         return 0;
@@ -203,8 +226,8 @@ function matchesMimeType(entry: AcceptEntry, mimeType: string): number {
 }
 
 function parseMimeTypeWithParams(mimeType: string): ParsedMimeType | null {
-    const parts = splitQuotedValue(mimeType, ';').map(p => p.trim());
-    const parsed = parseHeaderTypeAndSubtype(parts[0], { allowWildcard: true });
+    const parts = splitQuotedValue(mimeType, ';');
+    const parsed = parseHeaderTypeAndSubtype((parts[0] ?? '').trim(), { allowWildcard: true });
     if (!parsed) {
         return null;
     }
@@ -220,7 +243,12 @@ function parseMimeTypeWithParams(mimeType: string): ParsedMimeType | null {
         }
 
         const key = param.key.trim().toLowerCase();
-        const value = unquote(param.value ?? '');
+        const rawValue = param.value ?? '';
+        const trimmedValue = rawValue.trim();
+        const value =
+            trimmedValue.length >= 2 && trimmedValue.charCodeAt(0) === 34
+                ? unquote(trimmedValue)
+                : trimmedValue;
 
         if (key) {
             params.set(key, value);
@@ -240,13 +268,9 @@ function negotiateWithEntries(entries: AcceptEntry[], supported: string[]): stri
     let bestSpecificity = 0;
     let bestQ = 0;
 
-    const parsedSupported = supported.map((mimeType) => ({
-        mimeType,
-        parsed: parseMimeTypeWithParams(mimeType),
-    }));
-
-    for (const candidate of parsedSupported) {
-        if (!candidate.parsed) {
+    for (const mimeType of supported) {
+        const parsed = getParsedMimeTypeCached(mimeType);
+        if (!parsed) {
             continue;
         }
 
@@ -254,7 +278,7 @@ function negotiateWithEntries(entries: AcceptEntry[], supported: string[]): stri
         let candidateQ = 0;
 
         for (const entry of entries) {
-            const specificity = matchesParsedMimeType(entry, candidate.parsed);
+            const specificity = matchesParsedMimeType(entry, parsed);
             if (specificity === 0) {
                 continue;
             }
@@ -271,7 +295,7 @@ function negotiateWithEntries(entries: AcceptEntry[], supported: string[]): stri
 
         // Prefer higher q, then higher precedence specificity.
         if (candidateQ > bestQ || (candidateQ === bestQ && candidateSpecificity > bestSpecificity)) {
-            bestMatch = candidate.mimeType;
+            bestMatch = mimeType;
             bestSpecificity = candidateSpecificity;
             bestQ = candidateQ;
         }
@@ -323,7 +347,7 @@ export function negotiate(input: Request | string | undefined | null, supported:
         return supported[0] ?? null;
     }
 
-    const entries = parseAccept(acceptHeader);
+    const entries = parseAcceptEntries(acceptHeader, false);
 
     // No valid entries means accept anything
     if (entries.length === 0) {
@@ -353,7 +377,7 @@ export function getResponseFormat(input: Request | string | undefined | null): '
         return 'json';
     }
 
-    const entries = parseAccept(acceptHeader);
+    const entries = parseAcceptEntries(acceptHeader, false);
     if (entries.length === 0) {
         return 'json';
     }

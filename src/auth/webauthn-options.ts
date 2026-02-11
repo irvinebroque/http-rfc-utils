@@ -7,6 +7,7 @@
  * @see https://www.w3.org/TR/webauthn-3/#sctn-parseRequestOptionsFromJSON
  */
 
+import { isIP } from 'node:net';
 import type {
     WebauthnAuthenticatorAttachment,
     WebauthnAuthenticatorSelectionCriteria,
@@ -90,17 +91,30 @@ export function parseWebauthnCreationOptionsFromJson(value: unknown): WebauthnPu
         return null;
     }
 
-    return {
+    const parsed: WebauthnPublicKeyCredentialCreationOptions = {
         challenge,
         rp,
         user,
         pubKeyCredParams,
-        timeout: timeout ?? undefined,
-        excludeCredentials: excludeCredentials ?? undefined,
-        authenticatorSelection: authenticatorSelection ?? undefined,
-        attestation: attestation ?? undefined,
-        hints: hints ?? undefined,
     };
+
+    if (timeout !== undefined && timeout !== null) {
+        parsed.timeout = timeout;
+    }
+    if (excludeCredentials !== undefined && excludeCredentials !== null) {
+        parsed.excludeCredentials = excludeCredentials;
+    }
+    if (authenticatorSelection !== undefined && authenticatorSelection !== null) {
+        parsed.authenticatorSelection = authenticatorSelection;
+    }
+    if (attestation !== undefined && attestation !== null) {
+        parsed.attestation = attestation;
+    }
+    if (hints !== undefined && hints !== null) {
+        parsed.hints = hints;
+    }
+
+    return parsed;
 }
 
 /**
@@ -109,13 +123,13 @@ export function parseWebauthnCreationOptionsFromJson(value: unknown): WebauthnPu
  */
 export function formatWebauthnCreationOptionsToJson(
     value: WebauthnPublicKeyCredentialCreationOptions,
+    validationOptions: WebauthnCreationOptionsValidationOptions = {},
 ): WebauthnPublicKeyCredentialCreationOptionsJson {
-    validateWebauthnCreationOptions(value);
+    validateWebauthnCreationOptions(value, validationOptions);
 
-    return {
+    const formatted: WebauthnPublicKeyCredentialCreationOptionsJson = {
         challenge: formatWebauthnBase64url(value.challenge),
         rp: {
-            id: value.rp.id,
             name: value.rp.name,
         },
         user: {
@@ -127,14 +141,28 @@ export function formatWebauthnCreationOptionsToJson(
             type: param.type,
             alg: param.alg,
         })),
-        timeout: value.timeout,
-        excludeCredentials: value.excludeCredentials?.map(formatDescriptorToJson),
-        authenticatorSelection: value.authenticatorSelection
-            ? { ...value.authenticatorSelection }
-            : undefined,
-        attestation: value.attestation,
-        hints: value.hints ? [...value.hints] : undefined,
     };
+
+    if (value.rp.id !== undefined) {
+        formatted.rp.id = value.rp.id;
+    }
+    if (value.timeout !== undefined) {
+        formatted.timeout = value.timeout;
+    }
+    if (value.excludeCredentials !== undefined) {
+        formatted.excludeCredentials = value.excludeCredentials.map(formatDescriptorToJson);
+    }
+    if (value.authenticatorSelection !== undefined) {
+        formatted.authenticatorSelection = { ...value.authenticatorSelection };
+    }
+    if (value.attestation !== undefined) {
+        formatted.attestation = value.attestation;
+    }
+    if (value.hints !== undefined) {
+        formatted.hints = [...value.hints];
+    }
+
+    return formatted;
 }
 
 /**
@@ -147,7 +175,7 @@ export function validateWebauthnCreationOptions(
 ): void {
     validateMinChallengeLength(value.challenge, options.minChallengeLength ?? DEFAULT_MIN_CHALLENGE_LENGTH, 'creation challenge');
 
-    validateRpEntity(value.rp);
+    validateRpEntity(value.rp, options.allowIpRpId ?? false);
     validateUserEntity(value.user);
 
     if (!Array.isArray(value.pubKeyCredParams) || value.pubKeyCredParams.length === 0) {
@@ -226,14 +254,27 @@ export function parseWebauthnRequestOptionsFromJson(value: unknown): WebauthnPub
         return null;
     }
 
-    return {
+    const parsed: WebauthnPublicKeyCredentialRequestOptions = {
         challenge,
-        timeout: timeout ?? undefined,
-        rpId: value.rpId,
-        allowCredentials: allowCredentials ?? undefined,
-        userVerification: userVerification ?? undefined,
-        hints: hints ?? undefined,
     };
+
+    if (timeout !== undefined && timeout !== null) {
+        parsed.timeout = timeout;
+    }
+    if (value.rpId !== undefined) {
+        parsed.rpId = value.rpId;
+    }
+    if (allowCredentials !== undefined && allowCredentials !== null) {
+        parsed.allowCredentials = allowCredentials;
+    }
+    if (userVerification !== undefined && userVerification !== null) {
+        parsed.userVerification = userVerification;
+    }
+    if (hints !== undefined && hints !== null) {
+        parsed.hints = hints;
+    }
+
+    return parsed;
 }
 
 /**
@@ -242,17 +283,31 @@ export function parseWebauthnRequestOptionsFromJson(value: unknown): WebauthnPub
  */
 export function formatWebauthnRequestOptionsToJson(
     value: WebauthnPublicKeyCredentialRequestOptions,
+    validationOptions: WebauthnRequestOptionsValidationOptions = {},
 ): WebauthnPublicKeyCredentialRequestOptionsJson {
-    validateWebauthnRequestOptions(value);
+    validateWebauthnRequestOptions(value, validationOptions);
 
-    return {
+    const formatted: WebauthnPublicKeyCredentialRequestOptionsJson = {
         challenge: formatWebauthnBase64url(value.challenge),
-        timeout: value.timeout,
-        rpId: value.rpId,
-        allowCredentials: value.allowCredentials?.map(formatDescriptorToJson),
-        userVerification: value.userVerification,
-        hints: value.hints ? [...value.hints] : undefined,
     };
+
+    if (value.timeout !== undefined) {
+        formatted.timeout = value.timeout;
+    }
+    if (value.rpId !== undefined) {
+        formatted.rpId = value.rpId;
+    }
+    if (value.allowCredentials !== undefined) {
+        formatted.allowCredentials = value.allowCredentials.map(formatDescriptorToJson);
+    }
+    if (value.userVerification !== undefined) {
+        formatted.userVerification = value.userVerification;
+    }
+    if (value.hints !== undefined) {
+        formatted.hints = [...value.hints];
+    }
+
+    return formatted;
 }
 
 /**
@@ -270,7 +325,7 @@ export function validateWebauthnRequestOptions(
     }
 
     if (value.rpId !== undefined) {
-        validateRpId(value.rpId, 'request rpId');
+        validateRpId(value.rpId, 'request rpId', options.allowIpRpId ?? false);
     }
 
     if (value.allowCredentials !== undefined) {
@@ -310,10 +365,13 @@ function parseRpEntity(value: unknown): WebauthnPublicKeyCredentialRpEntity | nu
         return null;
     }
 
-    return {
-        id: value.id,
+    const rp: WebauthnPublicKeyCredentialRpEntity = {
         name: value.name,
     };
+    if (typeof value.id === 'string') {
+        rp.id = value.id;
+    }
+    return rp;
 }
 
 function parseUserEntity(value: unknown): WebauthnPublicKeyCredentialUserEntity | null {
@@ -390,11 +448,14 @@ function parseDescriptor(value: unknown): WebauthnPublicKeyCredentialDescriptor 
         return null;
     }
 
-    return {
+    const descriptor: WebauthnPublicKeyCredentialDescriptor = {
         type: 'public-key',
         id,
-        transports: transports ?? undefined,
     };
+    if (transports !== undefined && transports !== null) {
+        descriptor.transports = transports;
+    }
+    return descriptor;
 }
 
 function parseOptionalAuthenticatorSelection(value: unknown): WebauthnAuthenticatorSelectionCriteria | null | undefined {
@@ -482,14 +543,17 @@ function parseOptionalTimeout(value: unknown): number | null | undefined {
 }
 
 function formatDescriptorToJson(value: WebauthnPublicKeyCredentialDescriptor): WebauthnPublicKeyCredentialDescriptorJson {
-    return {
+    const formatted: WebauthnPublicKeyCredentialDescriptorJson = {
         type: value.type,
         id: formatWebauthnBase64url(value.id),
-        transports: value.transports ? [...value.transports] : undefined,
     };
+    if (value.transports !== undefined) {
+        formatted.transports = [...value.transports];
+    }
+    return formatted;
 }
 
-function validateRpEntity(value: WebauthnPublicKeyCredentialRpEntity): void {
+function validateRpEntity(value: WebauthnPublicKeyCredentialRpEntity, allowIpLiteral: boolean): void {
     if (!isRecord(value)) {
         throw new Error('WebAuthn RP entity must be an object.');
     }
@@ -497,7 +561,7 @@ function validateRpEntity(value: WebauthnPublicKeyCredentialRpEntity): void {
         throw new Error('WebAuthn RP entity name must be a non-empty string.');
     }
     if (value.id !== undefined) {
-        validateRpId(value.id, 'creation rp.id');
+        validateRpId(value.id, 'creation rp.id', allowIpLiteral);
     }
 }
 
@@ -570,7 +634,7 @@ function validateStringArray(value: string[], context: string): void {
     }
 }
 
-function validateRpId(value: string, context: string): void {
+function validateRpId(value: string, context: string, allowIpLiteral: boolean): void {
     if (typeof value !== 'string' || value.length === 0) {
         throw new Error(`WebAuthn ${context} must be a non-empty string.`);
     }
@@ -590,6 +654,10 @@ function validateRpId(value: string, context: string): void {
     const labels = value.split('.');
     if (labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
         throw new Error(`WebAuthn ${context} must be a valid DNS label sequence.`);
+    }
+
+    if (!allowIpLiteral && isIP(value) !== 0) {
+        throw new Error(`WebAuthn ${context} must be a registrable domain name, not an IP literal.`);
     }
 }
 

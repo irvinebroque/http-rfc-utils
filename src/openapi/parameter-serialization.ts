@@ -110,8 +110,9 @@ export function formatQueryParameter(spec: OpenApiSchemaParameterSpec, value: Op
         const entries = keys.map((key) => {
             const encodedName = encodeQueryNameComponent(normalized.name);
             const encodedKey = encodeQueryNameComponent(key);
+            const keyValue = getObjectMemberValue(normalized, objectValue, key);
             const encodedValue = encodeQueryComponent(
-                primitiveToString(normalized, objectValue[key], `value at key "${key}"`),
+                primitiveToString(normalized, keyValue, `value at key "${key}"`),
                 normalized.allowReserved,
             );
             return `${encodedName}%5B${encodedKey}%5D=${encodedValue}`;
@@ -211,7 +212,8 @@ export function formatCookieParameter(spec: OpenApiSchemaParameterSpec, value: O
             const objectValue = toObjectValue(normalized, value);
             const components: string[] = [];
             for (const key of sortedKeys(objectValue)) {
-                components.push(key, primitiveToString(normalized, objectValue[key], `value at key "${key}"`));
+                const keyValue = getObjectMemberValue(normalized, objectValue, key);
+                components.push(key, primitiveToString(normalized, keyValue, `value at key "${key}"`));
             }
             return `${normalized.name}=${encodeCookieValue(components.join(','))}`;
         }
@@ -318,17 +320,22 @@ function formatFormQueryEntries(
                 return keys.map((key) => [
                     encodeQueryNameComponent(key),
                     encodeQueryComponent(
-                        primitiveToString(normalized, objectValue[key], `value at key "${key}"`),
+                        primitiveToString(
+                            normalized,
+                            getObjectMemberValue(normalized, objectValue, key),
+                            `value at key "${key}"`,
+                        ),
                         normalized.allowReserved,
                     ),
                 ]);
             }
             const serializedParts: string[] = [];
             for (const key of keys) {
+                const keyValue = getObjectMemberValue(normalized, objectValue, key);
                 serializedParts.push(
                     encodeQueryNameComponent(key),
                     encodeQueryComponent(
-                        primitiveToString(normalized, objectValue[key], `value at key "${key}"`),
+                        primitiveToString(normalized, keyValue, `value at key "${key}"`),
                         normalized.allowReserved,
                     ),
                 );
@@ -635,17 +642,22 @@ function formatSimpleValue(
                 return keys
                     .map((key) => (
                         `${encodePathComponent(key)}=${encodePathComponent(
-                            primitiveToString(normalized, objectValue[key], `value at key "${key}"`),
+                            primitiveToString(
+                                normalized,
+                                getObjectMemberValue(normalized, objectValue, key),
+                                `value at key "${key}"`,
+                            ),
                         )}`
                     ))
                     .join(delimiter);
             }
             const parts: string[] = [];
             for (const key of keys) {
+                const keyValue = getObjectMemberValue(normalized, objectValue, key);
                 parts.push(
                     encodePathComponent(key),
                     encodePathComponent(
-                        primitiveToString(normalized, objectValue[key], `value at key "${key}"`),
+                        primitiveToString(normalized, keyValue, `value at key "${key}"`),
                     ),
                 );
             }
@@ -718,7 +730,11 @@ function formatLabelValue(normalized: NormalizedOpenApiSchemaParameterSpec, valu
                 return keys
                     .map((key) => (
                         `${encodePathComponent(key)}=${encodePathComponent(
-                            primitiveToString(normalized, objectValue[key], `value at key "${key}"`),
+                            primitiveToString(
+                                normalized,
+                                getObjectMemberValue(normalized, objectValue, key),
+                                `value at key "${key}"`,
+                            ),
                         )}`
                     ))
                     .join('.');
@@ -726,10 +742,11 @@ function formatLabelValue(normalized: NormalizedOpenApiSchemaParameterSpec, valu
 
             const parts: string[] = [];
             for (const key of keys) {
+                const keyValue = getObjectMemberValue(normalized, objectValue, key);
                 parts.push(
                     encodePathComponent(key),
                     encodePathComponent(
-                        primitiveToString(normalized, objectValue[key], `value at key "${key}"`),
+                        primitiveToString(normalized, keyValue, `value at key "${key}"`),
                     ),
                 );
             }
@@ -816,16 +833,21 @@ function formatMatrixValue(normalized: NormalizedOpenApiSchemaParameterSpec, val
             if (normalized.explode) {
                 return keys.map((key) => (
                     `;${encodePathComponent(key)}=${encodePathComponent(
-                        primitiveToString(normalized, objectValue[key], `value at key "${key}"`),
+                        primitiveToString(
+                            normalized,
+                            getObjectMemberValue(normalized, objectValue, key),
+                            `value at key "${key}"`,
+                        ),
                     )}`
                 )).join('');
             }
             const components: string[] = [];
             for (const key of keys) {
+                const keyValue = getObjectMemberValue(normalized, objectValue, key);
                 components.push(
                     encodePathComponent(key),
                     encodePathComponent(
-                        primitiveToString(normalized, objectValue[key], `value at key "${key}"`),
+                        primitiveToString(normalized, keyValue, `value at key "${key}"`),
                     ),
                 );
             }
@@ -1037,6 +1059,18 @@ function toObjectValue(
         throw new Error(`OpenAPI parameter "${normalized.name}" expects an object value.`);
     }
     return value;
+}
+
+function getObjectMemberValue(
+    normalized: NormalizedOpenApiSchemaParameterSpec,
+    objectValue: Record<string, OpenApiParameterValue>,
+    key: string,
+): OpenApiParameterValue {
+    const memberValue = objectValue[key];
+    if (memberValue === undefined) {
+        throw new Error(`OpenAPI parameter "${normalized.name}" missing value at key "${key}".`);
+    }
+    return memberValue;
 }
 
 function primitiveToString(

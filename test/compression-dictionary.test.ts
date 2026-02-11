@@ -168,7 +168,7 @@ describe('Available-Dictionary (RFC 9842 Section 2.2)', () => {
     it('rejects wrong item type and wrong digest length', () => {
         assert.equal(parseAvailableDictionary('"not-bytes"'), null);
         assert.equal(parseAvailableDictionary(':AQI=:'), null);
-        assert.throws(() => formatAvailableDictionary(new Uint8Array([1, 2, 3])), /32 bytes/);
+        assert.throws(() => formatAvailableDictionary(new Uint8Array([1, 2, 3])), /32-byte SHA-256 digest/);
     });
 });
 

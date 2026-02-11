@@ -38,6 +38,12 @@ describe('Prefer headers (RFC 7240 §2, §3)', () => {
         assert.equal(formatted, 'return=representation, respond-async');
     });
 
+    it('round-trips parse -> format -> parse for valid members', () => {
+        const input = 'return=representation; handling=strict, wait=5';
+        const reparsed = parsePrefer(formatPrefer(Array.from(parsePrefer(input).values())));
+        assert.deepEqual(Array.from(reparsed.values()), Array.from(parsePrefer(input).values()));
+    });
+
     // RFC 7240 §2: Preference names are case-insensitive tokens.
     it('normalizes preference token names to lowercase', () => {
         const parsed = parsePrefer('RETURN=minimal');
@@ -117,7 +123,7 @@ describe('Prefer headers (RFC 7240 §2, §3)', () => {
     it('rejects invalid token names in formatter output', () => {
         assert.throws(() => {
             formatPrefer([{ token: 'bad token', params: [] }]);
-        }, /valid header token/);
+        }, /valid RFC 9110 token/);
     });
 
     // RFC 7240 §3 ABNF: applied-pref = token ["=" word].
@@ -145,7 +151,7 @@ describe('Prefer headers (RFC 7240 §2, §3)', () => {
     it('rejects invalid applied-pref token syntax in string[] entries', () => {
         assert.throws(() => {
             formatPreferenceApplied(['bad token=representation']);
-        }, /valid header token/);
+        }, /valid RFC 9110 token/);
     });
 
     // RFC 7240 §3 ABNF: value must be word (token / quoted-string).

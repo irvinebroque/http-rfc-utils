@@ -26,6 +26,17 @@ describe('Retry-After + Vary (RFC 9110 Sections 10.2.3, 12.5.5)', () => {
         assert.equal(mergeVary('Accept-Encoding', 'Accept-Language'), 'Accept-Encoding, Accept-Language');
         assert.equal(mergeVary('*', 'Accept-Encoding'), '*');
     });
+
+    // RFC 9110 §5.1 + §12.5.5: Vary list members are field-name tokens.
+    it('rejects invalid Vary field-name tokens', () => {
+        assert.throws(() => mergeVary('Accept-Encoding', 'Bad Name'), /Invalid Vary field-name/);
+        assert.throws(() => mergeVary('Accept-Encoding, ', 'Accept-Language'), /Invalid Vary field-name/);
+    });
+
+    // RFC 9110 §12.5.5: wildcard form is a standalone field-value.
+    it('rejects Vary values that mix wildcard with other members', () => {
+        assert.throws(() => mergeVary('Accept-Encoding', ['*', 'Accept-Language']), /must be the only entry/);
+    });
 });
 
 // RFC 8594 §3: The Sunset HTTP Response Header Field

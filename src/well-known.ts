@@ -137,7 +137,9 @@ export function isWellKnownUri(uri: string | URL): boolean {
  */
 export function buildWellKnownPath(suffix: string): string {
     if (!validateWellKnownSuffix(suffix)) {
-        throw new Error('Invalid well-known suffix: expected a single non-empty RFC 3986 segment');
+        throw new Error(
+            `Invalid well-known suffix "${suffix}": expected a single non-empty RFC 3986 segment`,
+        );
     }
 
     return `${WELL_KNOWN_PREFIX}${suffix}`;
@@ -153,11 +155,15 @@ export function buildWellKnownUri(origin: string | URL, suffix: string): string 
     try {
         parsedOrigin = origin instanceof URL ? new URL(origin.toString()) : new URL(origin);
     } catch {
-        throw new Error('Invalid origin for well-known URI builder');
+        throw new Error(
+            `Well-known URI builder origin must be a valid absolute URL; received ${String(origin)}`,
+        );
     }
 
     if (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') {
-        throw new Error('Well-known URI builder supports only http and https origins');
+        throw new Error(
+            `Well-known URI builder origin must use http or https; received protocol ${parsedOrigin.protocol}`,
+        );
     }
 
     return `${parsedOrigin.origin}${path}`;

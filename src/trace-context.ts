@@ -17,6 +17,7 @@ const TRACEPARENT_DELIMITER = '-';
 const TRACE_ID_HEX_RE = /^[0-9a-f]{32}$/;
 const PARENT_ID_HEX_RE = /^[0-9a-f]{16}$/;
 const TRACE_FLAGS_HEX_RE = /^[0-9a-f]{2}$/;
+const FUTURE_VERSION_SUFFIX_PREFIX_RE = /^-[0-9a-f]{2}/;
 
 const SIMPLE_TRACESTATE_KEY_RE = /^[a-z][a-z0-9_\-*/]{0,255}$/;
 const MAX_TRACESTATE_MEMBERS = 32;
@@ -110,6 +111,7 @@ interface ParsedTraceparentParts {
     parentId: string;
     traceFlags: string;
     hasFutureVersionSuffix: boolean;
+    futureVersionSuffixHasValidPrefix: boolean;
 }
 
 function parseTraceparentParts(rawValue: string): ParsedTraceparentParts | null {
@@ -146,6 +148,7 @@ function parseTraceparentParts(rawValue: string): ParsedTraceparentParts | null 
         parentId,
         traceFlags,
         hasFutureVersionSuffix: suffix !== '',
+        futureVersionSuffixHasValidPrefix: suffix === '' || FUTURE_VERSION_SUFFIX_PREFIX_RE.test(suffix),
     };
 }
 
@@ -281,6 +284,7 @@ export function validateTraceparent(value: string): TraceContextValidationResult
         parentId,
         traceFlags,
         hasFutureVersionSuffix,
+        futureVersionSuffixHasValidPrefix,
     } = parts;
 
     if (!TRACE_FLAGS_HEX_RE.test(version)) {
@@ -289,6 +293,8 @@ export function validateTraceparent(value: string): TraceContextValidationResult
         errors.push('version ff is invalid');
     } else if (version === TRACEPARENT_VERSION && hasFutureVersionSuffix) {
         errors.push('traceparent version 00 must not include additional fields');
+    } else if (version !== TRACEPARENT_VERSION && hasFutureVersionSuffix && !futureVersionSuffixHasValidPrefix) {
+        errors.push('higher traceparent versions with additional fields must use a lowercase-hex field prefix');
     }
 
     if (!TRACE_ID_HEX_RE.test(traceId)) {

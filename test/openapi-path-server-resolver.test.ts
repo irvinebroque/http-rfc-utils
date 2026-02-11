@@ -13,6 +13,7 @@ import {
     listOpenApiServerCandidates,
     resolveOpenApiServerUrl,
 } from '../src/openapi.js';
+import type { OpenApiServerObject } from '../src/types.js';
 
 // OpenAPI 3.1.1 Paths Object: concrete templates must win over templated paths.
 describe('compileOpenApiPathMatcher', () => {
@@ -165,6 +166,61 @@ describe('listOpenApiServerCandidates', () => {
         assert.equal(candidates[0]?.level, 'root');
         assert.equal(candidates[0]?.server.url, 'https://root.example.test/v1');
     });
+
+    it('uses OpenAPI default root server when root servers are missing', () => {
+        const withoutRootServers = {
+            paths: document.paths,
+        };
+
+        const candidates = listOpenApiServerCandidates(withoutRootServers, '/orders/{id}', 'GET');
+        assert.equal(candidates.length, 1);
+        assert.equal(candidates[0]?.level, 'root');
+        assert.equal(candidates[0]?.server.url, '/');
+    });
+
+    it('uses OpenAPI default root server when root servers are empty', () => {
+        const withEmptyRootServers = {
+            ...document,
+            servers: [],
+        };
+
+        const candidates = listOpenApiServerCandidates(withEmptyRootServers, '/orders/{id}', 'GET');
+        assert.equal(candidates.length, 1);
+        assert.equal(candidates[0]?.level, 'root');
+        assert.equal(candidates[0]?.server.url, '/');
+    });
+
+    it('uses OpenAPI default root server when root server urls are blank', () => {
+        const withBlankRootServers = {
+            ...document,
+            servers: [
+                { url: '' },
+                { url: '   ' },
+            ],
+        };
+
+        const candidates = listOpenApiServerCandidates(withBlankRootServers, '/orders/{id}', 'GET');
+        assert.equal(candidates.length, 1);
+        assert.equal(candidates[0]?.level, 'root');
+        assert.equal(candidates[0]?.server.url, '/');
+    });
+
+    it('keeps operation and path overrides above root default fallback', () => {
+        const withBlankRootServers = {
+            ...document,
+            servers: [
+                { url: '   ' },
+            ],
+        };
+
+        const operationCandidates = listOpenApiServerCandidates(withBlankRootServers, '/pets/{id}', 'GET');
+        assert.equal(operationCandidates[0]?.level, 'operation');
+        assert.equal(operationCandidates[0]?.server.url, 'https://operation.example.test/v1');
+
+        const pathCandidates = listOpenApiServerCandidates(withBlankRootServers, '/pets/{id}', 'POST');
+        assert.equal(pathCandidates[0]?.level, 'path');
+        assert.equal(pathCandidates[0]?.server.url, 'https://path.example.test/v1');
+    });
 });
 
 // OpenAPI 3.1.1 Server Variables: defaults, overrides, and enum validation.
@@ -225,7 +281,7 @@ describe('resolveOpenApiServerUrl', () => {
                 variables: {
                     region: {},
                 },
-            },
+            } as unknown as OpenApiServerObject,
         });
 
         assert.equal(result.url, 'https://{region}.api.example.test');

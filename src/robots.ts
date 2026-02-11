@@ -24,6 +24,8 @@ interface CompiledRobotsGroup {
 
 const COMPILED_ROBOTS_GROUPS = new WeakMap<RobotsGroup, CompiledRobotsGroup>();
 
+const HEX_DIGIT_REGEX = /^[0-9A-Fa-f]{2}$/;
+
 /**
  * Check if a line exceeds the 500-byte limit per RFC 9309 §2.4.
  */
@@ -69,12 +71,7 @@ export function parseRobotsTxt(text: string): RobotsConfig {
         const line = (commentIdx >= 0 ? rawLine.slice(0, commentIdx) : rawLine).trim();
 
         if (line === '') {
-            // Empty line ends the current group.
-            if (currentGroup) {
-                groups.push(currentGroup);
-                currentGroup = null;
-                expectingRules = false;
-            }
+            // RFC 9309 §2.2: Empty lines are ignored separators.
             continue;
         }
 
@@ -208,25 +205,121 @@ export function matchUserAgent(config: RobotsConfig, userAgent: string): RobotsG
     const ua = userAgent.toLowerCase();
 
     // RFC 9309 §2.3: Find the most specific matching user agent (longest substring match).
-    let bestGroup: RobotsGroup | null = null;
     let bestLength = 0;
-    let wildcardGroup: RobotsGroup | null = null;
+    const matchingGroups: RobotsGroup[] = [];
+    const wildcardGroups: RobotsGroup[] = [];
 
     for (const group of config.groups) {
+        let bestMatchForGroup = 0;
+        let hasWildcard = false;
+
         for (const groupUa of group.userAgents) {
             if (groupUa === '*') {
-                wildcardGroup = group;
+                hasWildcard = true;
                 continue;
             }
+
             const normalizedGroupUa = groupUa.toLowerCase();
-            if (ua.includes(normalizedGroupUa) && normalizedGroupUa.length > bestLength) {
-                bestGroup = group;
-                bestLength = normalizedGroupUa.length;
+            if (!ua.includes(normalizedGroupUa)) {
+                continue;
             }
+
+            if (normalizedGroupUa.length > bestMatchForGroup) {
+                bestMatchForGroup = normalizedGroupUa.length;
+            }
+        }
+
+        if (hasWildcard) {
+            wildcardGroups.push(group);
+        }
+
+        if (bestMatchForGroup === 0) {
+            continue;
+        }
+
+        if (bestMatchForGroup > bestLength) {
+            bestLength = bestMatchForGroup;
+            matchingGroups.length = 0;
+            matchingGroups.push(group);
+            continue;
+        }
+
+        if (bestMatchForGroup === bestLength) {
+            matchingGroups.push(group);
         }
     }
 
-    return bestGroup ?? wildcardGroup ?? null;
+    if (matchingGroups.length > 0) {
+        return mergeMatchingGroups(matchingGroups);
+    }
+
+    if (wildcardGroups.length > 0) {
+        return mergeMatchingGroups(wildcardGroups);
+    }
+
+    return null;
+}
+
+function mergeMatchingGroups(groups: readonly RobotsGroup[]): RobotsGroup {
+    if (groups.length === 1) {
+        return groups[0]!;
+    }
+
+    const merged: RobotsGroup = {
+        userAgents: [],
+        allow: [],
+        disallow: [],
+    };
+
+    for (const group of groups) {
+        merged.userAgents.push(...group.userAgents);
+        merged.allow.push(...group.allow);
+        merged.disallow.push(...group.disallow);
+        if (merged.crawlDelay === undefined && group.crawlDelay !== undefined) {
+            merged.crawlDelay = group.crawlDelay;
+        }
+    }
+
+    return merged;
+}
+
+function isUnreservedByte(byte: number): boolean {
+    return (byte >= 0x41 && byte <= 0x5A)
+        || (byte >= 0x61 && byte <= 0x7A)
+        || (byte >= 0x30 && byte <= 0x39)
+        || byte === 0x2D
+        || byte === 0x2E
+        || byte === 0x5F
+        || byte === 0x7E;
+}
+
+function normalizePercentEncoding(path: string): string {
+    let normalized = '';
+
+    for (let index = 0; index < path.length; index++) {
+        const char = path[index]!;
+        if (char !== '%' || index + 2 >= path.length) {
+            normalized += char;
+            continue;
+        }
+
+        const hex = path.slice(index + 1, index + 3);
+        if (!HEX_DIGIT_REGEX.test(hex)) {
+            normalized += char;
+            continue;
+        }
+
+        const byte = Number.parseInt(hex, 16);
+        if (isUnreservedByte(byte)) {
+            normalized += String.fromCharCode(byte);
+        } else {
+            normalized += `%${hex.toUpperCase()}`;
+        }
+
+        index += 2;
+    }
+
+    return normalized;
 }
 
 /**
@@ -291,14 +384,20 @@ function getCompiledGroup(group: RobotsGroup): CompiledRobotsGroup {
     }
 
     const compiled: CompiledRobotsGroup = {
-        allow: group.allow.map((pattern) => ({
-            glob: compilePathPattern(pattern),
-            length: effectiveLength(pattern),
-        })),
-        disallow: group.disallow.map((pattern) => ({
-            glob: compilePathPattern(pattern),
-            length: effectiveLength(pattern),
-        })),
+        allow: group.allow.map((pattern) => {
+            const normalizedPattern = normalizePercentEncoding(pattern);
+            return {
+                glob: compilePathPattern(normalizedPattern),
+                length: effectiveLength(normalizedPattern),
+            };
+        }),
+        disallow: group.disallow.map((pattern) => {
+            const normalizedPattern = normalizePercentEncoding(pattern);
+            return {
+                glob: compilePathPattern(normalizedPattern),
+                length: effectiveLength(normalizedPattern),
+            };
+        }),
     };
 
     // RFC 9309 §2.2: Only longest matching rule matters.
@@ -330,10 +429,11 @@ export function isAllowed(config: RobotsConfig, userAgent: string, path: string)
     let bestAllow = -1;
     let bestDisallow = -1;
     const compiledGroup = getCompiledGroup(group);
+    const normalizedPath = normalizePercentEncoding(path);
 
     for (let index = 0; index < compiledGroup.allow.length; index++) {
         const rule = compiledGroup.allow[index]!;
-        if (wildcardMatchLinear(rule.glob, path)) {
+        if (wildcardMatchLinear(rule.glob, normalizedPath)) {
             bestAllow = rule.length;
             break;
         }
@@ -341,7 +441,7 @@ export function isAllowed(config: RobotsConfig, userAgent: string, path: string)
 
     for (let index = 0; index < compiledGroup.disallow.length; index++) {
         const rule = compiledGroup.disallow[index]!;
-        if (wildcardMatchLinear(rule.glob, path)) {
+        if (wildcardMatchLinear(rule.glob, normalizedPath)) {
             bestDisallow = rule.length;
             break;
         }

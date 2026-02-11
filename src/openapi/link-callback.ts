@@ -19,6 +19,8 @@ import type {
 
 const MODE_DEFAULT = 'tolerant';
 const UNRESOLVED_RUNTIME_VALUE = Symbol('unresolved-runtime-value');
+const STRICT_FALLBACK_MESSAGE =
+    'OpenAPI runtime resolution failed in strict mode with no diagnostic detail; verify runtime expressions';
 
 export function materializeOpenApiLinkValues(
     link: OpenApiLinkObjectLike,
@@ -348,6 +350,6 @@ function serializeRuntimeValue(value: unknown): string | undefined {
 function enforceResolutionMode(issues: readonly OpenApiRuntimeResolutionIssue[], options: OpenApiRuntimeResolutionOptions): void {
     const mode = options.mode ?? MODE_DEFAULT;
     if (mode === 'strict' && issues.length > 0) {
-        throw new Error(issues[0]?.message ?? 'OpenAPI runtime resolution failed.');
+        throw new Error(issues[0]?.message ?? STRICT_FALLBACK_MESSAGE);
     }
 }

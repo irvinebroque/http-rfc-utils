@@ -40,6 +40,27 @@ describe('RFC 6920 NI URI parsing and formatting', () => {
         assert.equal(formatNiUri(parsed), uri);
     });
 
+    // RFC 3986 §3.2 + RFC 6920 §3: authority must be host[:port] with no userinfo/path delimiters.
+    it('rejects unsafe authority forms during NI URI formatting', () => {
+        assert.throws(() => {
+            formatNiUri({
+                algorithm: 'sha-256',
+                value: HELLO_WORLD_NI_DIGEST,
+                digest: new Uint8Array([0]),
+                authority: 'user@example.com',
+            });
+        }, /Invalid NI authority/);
+
+        assert.throws(() => {
+            formatNiUri({
+                algorithm: 'sha-256',
+                value: HELLO_WORLD_NI_DIGEST,
+                digest: new Uint8Array([0]),
+                authority: 'example.com/path',
+            });
+        }, /Invalid NI authority/);
+    });
+
     // RFC 6920 §5: alg-val URL segment format.
     it('parses and formats URL segment form', () => {
         const segment = `sha-256;${HELLO_WORLD_NI_DIGEST}`;
@@ -167,6 +188,14 @@ describe('RFC 6920 .well-known mapping', () => {
             toWellKnownNiUrl(ni, { scheme: 'https', authority: 'example.com' }),
             `https://example.com/.well-known/ni/sha-256/${HELLO_WORLD_NI_DIGEST}`
         );
+    });
+
+    // RFC 3986 §3.2 + RFC 6920 §4: mapped authority is host[:port] only.
+    it('rejects unsafe mapped authority values for .well-known conversion', () => {
+        const ni = `ni:///sha-256;${HELLO_WORLD_NI_DIGEST}`;
+        assert.equal(toWellKnownNiUrl(ni, { authority: 'user@example.com' }), null);
+        assert.equal(toWellKnownNiUrl(ni, { authority: 'example.com/path' }), null);
+        assert.equal(toWellKnownNiUrl(ni, { authority: 'example.com?x=1' }), null);
     });
 
     it('rejects malformed .well-known URLs', () => {

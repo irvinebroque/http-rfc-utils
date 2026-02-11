@@ -232,6 +232,12 @@ describe('encodeExtValue', () => {
         assert.equal(result, "UTF-8'de'test");
     });
 
+    // RFC 8187 §3.2.1: language field follows language-tag syntax when present.
+    it('rejects invalid language tags during encoding', () => {
+        assert.throws(() => encodeExtValue('test', { language: 'en--US' }), /Invalid RFC 8187 language tag/);
+        assert.throws(() => encodeExtValue('test', { language: '9en' }), /Invalid RFC 8187 language tag/);
+    });
+
     it('uses empty language when not provided', () => {
         const result = encodeExtValue('test');
         assert.equal(result, "UTF-8''test");

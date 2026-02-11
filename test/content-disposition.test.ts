@@ -17,6 +17,7 @@ describe('Content-Disposition (RFC 6266 Section 4, RFC 8187 Section 3.2)', () =>
     it('rejects non-token disposition type values', () => {
         assert.equal(parseContentDisposition('"attachment"; filename="example.txt"'), null);
         assert.equal(parseContentDisposition('bad type; filename="example.txt"'), null);
+        assert.equal(parseContentDisposition('; attachment; filename="example.txt"'), null);
     });
 
     it('parses basic attachment filename (RFC 6266 Section 4)', () => {
@@ -83,6 +84,14 @@ describe('Content-Disposition (RFC 6266 Section 4, RFC 8187 Section 3.2)', () =>
         assert.equal(value, "UTF-8''%E2%82%AC%20rates");
     });
 
+    it('round-trips parse -> format -> parse with filename', () => {
+        const original = 'attachment; filename="report final.txt"';
+        const parsed = parseContentDisposition(original);
+        assert.ok(parsed);
+        const reparsed = parseContentDisposition(formatContentDisposition(parsed.type, parsed.params));
+        assert.deepEqual(reparsed, parsed);
+    });
+
     // RFC 9110 §5.5: reject CR/LF and CTLs in serialized header values.
     it('rejects control bytes when formatting', () => {
         assert.throws(() => {
@@ -94,11 +103,11 @@ describe('Content-Disposition (RFC 6266 Section 4, RFC 8187 Section 3.2)', () =>
     it('rejects invalid token names when formatting', () => {
         assert.throws(() => {
             formatContentDisposition('bad type', { filename: 'ok.txt' });
-        }, /valid header token/);
+        }, /valid RFC 9110 token/);
 
         assert.throws(() => {
             formatContentDisposition('attachment', { 'bad key': 'value' });
-        }, /valid header token/);
+        }, /valid RFC 9110 token/);
     });
 });
 

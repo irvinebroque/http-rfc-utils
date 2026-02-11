@@ -38,9 +38,9 @@ function parseCacheGroupList(value: string): string[] | null {
 }
 
 function formatCacheGroupList(groups: readonly string[]): string {
-    const list = groups.map((group): SfItem => {
+    const list = groups.map((group, index): SfItem => {
         if (typeof group !== 'string') {
-            throw new Error('Cache group members must be strings');
+            throw new Error(`Cache group member at index ${index} must be a string; received ${String(group)}`);
         }
 
         return { value: group };

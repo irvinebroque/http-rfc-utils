@@ -369,8 +369,16 @@ function lintPathTemplateCollisions(context: RuleContext): void {
         const sortedCandidates = [...candidates].sort((left, right) => left.pathTemplate.localeCompare(right.pathTemplate));
         for (let leftIndex = 0; leftIndex < sortedCandidates.length; leftIndex++) {
             const leftCandidate = sortedCandidates[leftIndex];
+            if (leftCandidate === undefined) {
+                continue;
+            }
+
             for (let rightIndex = leftIndex + 1; rightIndex < sortedCandidates.length; rightIndex++) {
                 const rightCandidate = sortedCandidates[rightIndex];
+                if (rightCandidate === undefined) {
+                    continue;
+                }
+
                 if (!haveDifferentParameterNames(leftCandidate.paramNames, rightCandidate.paramNames)) {
                     continue;
                 }

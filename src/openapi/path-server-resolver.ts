@@ -50,6 +50,10 @@ const EXTRACT_PARAMS_DEFAULTS: Required<OpenApiPathTemplateMatchOptions> = {
     ignoreTrailingSlash: true,
 };
 
+const DEFAULT_OPENAPI_ROOT_SERVER: OpenApiServerObject = {
+    url: '/',
+};
+
 export function compileOpenApiPathMatcher(
     paths: Record<string, unknown> | undefined,
     options: OpenApiPathMatcherOptions = {},
@@ -127,9 +131,9 @@ export function compileOpenApiPathMatcher(
             return {
                 requestPath,
                 normalizedRequestPath,
-                method: normalizedMethod,
                 checked,
                 matches,
+                ...(normalizedMethod !== undefined ? { method: normalizedMethod } : {}),
             };
         },
     };
@@ -157,7 +161,7 @@ export function extractOpenApiPathParams(
     for (let index = 0; index < compiled.templateSegments.length; index++) {
         const templateSegment = compiled.templateSegments[index];
         const requestSegment = concreteSegments[index];
-        if (requestSegment === undefined) {
+        if (templateSegment === undefined || requestSegment === undefined) {
             return null;
         }
 
@@ -203,10 +207,17 @@ export function listOpenApiServerCandidates(
 
     const rootServers = options.overrides?.rootServers ?? document.servers;
     if (Array.isArray(rootServers)) {
-        return createServerCandidates(rootServers, 'root', pathTemplate, selectedMethod);
+        const rootCandidates = createServerCandidates(rootServers, 'root', pathTemplate, selectedMethod, {
+            ignoreBlankUrls: true,
+        });
+        if (rootCandidates.length > 0) {
+            return rootCandidates;
+        }
+
+        return createServerCandidates([DEFAULT_OPENAPI_ROOT_SERVER], 'root', pathTemplate, selectedMethod);
     }
 
-    return [];
+    return createServerCandidates([DEFAULT_OPENAPI_ROOT_SERVER], 'root', pathTemplate, selectedMethod);
 }
 
 export function resolveOpenApiServerUrl(
@@ -230,6 +241,7 @@ function createServerCandidates(
     level: OpenApiServerCandidateLevel,
     pathTemplate?: string,
     method?: string,
+    options: { ignoreBlankUrls?: boolean } = {},
 ): OpenApiServerCandidate[] {
     const candidates: OpenApiServerCandidate[] = [];
     for (let index = 0; index < servers.length; index++) {
@@ -238,12 +250,16 @@ function createServerCandidates(
             continue;
         }
 
+        if (options.ignoreBlankUrls && server.url.trim() === '') {
+            continue;
+        }
+
         candidates.push({
             level,
             index,
-            pathTemplate,
-            method,
             server,
+            ...(pathTemplate !== undefined ? { pathTemplate } : {}),
+            ...(method !== undefined ? { method } : {}),
         });
     }
     return candidates;
@@ -425,7 +441,7 @@ function tryMatchCandidate(
     for (let index = 0; index < candidate.templateSegments.length; index++) {
         const templateSegment = candidate.templateSegments[index];
         const requestSegment = requestSegments[index];
-        if (requestSegment === undefined) {
+        if (templateSegment === undefined || requestSegment === undefined) {
             return null;
         }
 
@@ -445,16 +461,23 @@ function tryMatchCandidate(
     }
 
     const operation = method ? readOperation(candidate.pathItem, method) : undefined;
-    return {
+    const result: OpenApiPathMatch = {
         pathTemplate: candidate.pathTemplate,
         normalizedTemplatePath: candidate.normalizedTemplatePath,
         requestPath: `/${requestSegments.join('/')}`,
-        method,
         params,
         patternKind: candidate.patternKind,
-        operation,
         pathItem: candidate.pathItem,
     };
+
+    if (method !== undefined) {
+        result.method = method;
+    }
+    if (operation !== undefined) {
+        result.operation = operation;
+    }
+
+    return result;
 }
 
 function collectOperationMethods(pathItem: Record<string, unknown>): Set<string> {

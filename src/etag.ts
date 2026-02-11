@@ -173,6 +173,9 @@ export function parseETag(etag: string): ETag | null {
  */
 // RFC 9110 §8.8.3: Entity-tag field formatting.
 export function formatETag(etag: ETag): string {
+    if (!isValidETagValue(etag.value)) {
+        throw new Error(`Invalid ETag value: ${etag.value}`);
+    }
     return etag.weak ? `W/"${etag.value}"` : `"${etag.value}"`;
 }
 

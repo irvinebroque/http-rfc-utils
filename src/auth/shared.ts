@@ -15,8 +15,8 @@ import {
     quoteString,
     TOKEN_CHARS,
 } from '../header-utils.js';
-const TOKEN68_RE = /^[A-Za-z0-9\-._~+\/]+={0,}$/;
-const B64TOKEN_RE = /^[A-Za-z0-9\-._~+\/]+={0,}$/;
+const TOKEN68_RE = /^[A-Za-z0-9\-._~+/]+={0,}$/;
+const B64TOKEN_RE = /^[A-Za-z0-9\-._~+/]+={0,}$/;
 
 function isToken(value: string): boolean {
     return TOKEN_CHARS.test(value);
@@ -258,6 +258,19 @@ export function formatAuthParams(params: AuthParam[]): string {
     return params.map((param) => {
         assertHeaderToken(param.name, `Authorization parameter name "${param.name}"`);
         assertNoCtl(param.value, `Authorization parameter "${param.name}" value`);
+        return `${param.name}=${quoteAuthParamValue(param.value)}`;
+    }).join(', ');
+}
+
+export function formatAuthParamsWithBareValues(
+    params: readonly AuthParam[],
+    bareValueNames: ReadonlySet<string>
+): string {
+    return params.map((param) => {
+        const normalizedName = param.name.toLowerCase();
+        if (bareValueNames.has(normalizedName)) {
+            return `${param.name}=${param.value}`;
+        }
         return `${param.name}=${quoteAuthParamValue(param.value)}`;
     }).join(', ');
 }

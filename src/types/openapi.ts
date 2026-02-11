@@ -193,6 +193,8 @@ export interface OpenApiCallbackUrlResolutionResult {
 
 export type OpenApiSecuritySchemeType = 'apiKey' | 'http' | 'mutualTLS' | 'oauth2' | 'openIdConnect';
 
+export type OpenApiApiKeyLocation = 'query' | 'header' | 'cookie';
+
 export interface OpenApiSecurityRequirement {
     [schemeName: string]: string[];
 }
@@ -201,10 +203,51 @@ export type OpenApiSecurityRequirements = OpenApiSecurityRequirement[];
 
 export interface OpenApiApiKeySecurityScheme {
     type: 'apiKey';
-    in?: 'query' | 'header' | 'cookie';
-    name?: string;
+    in: OpenApiApiKeyLocation;
+    name: string;
     description?: string;
 }
+
+export type OpenApiOAuthScopes = Record<string, string>;
+
+export interface OpenApiOAuthImplicitFlowObject {
+    authorizationUrl: string;
+    refreshUrl?: string;
+    scopes: OpenApiOAuthScopes;
+}
+
+export interface OpenApiOAuthPasswordFlowObject {
+    tokenUrl: string;
+    refreshUrl?: string;
+    scopes: OpenApiOAuthScopes;
+}
+
+export interface OpenApiOAuthClientCredentialsFlowObject {
+    tokenUrl: string;
+    refreshUrl?: string;
+    scopes: OpenApiOAuthScopes;
+}
+
+export interface OpenApiOAuthAuthorizationCodeFlowObject {
+    authorizationUrl: string;
+    tokenUrl: string;
+    refreshUrl?: string;
+    scopes: OpenApiOAuthScopes;
+}
+
+interface OpenApiOAuthFlowsObjectShape {
+    implicit?: OpenApiOAuthImplicitFlowObject;
+    password?: OpenApiOAuthPasswordFlowObject;
+    clientCredentials?: OpenApiOAuthClientCredentialsFlowObject;
+    authorizationCode?: OpenApiOAuthAuthorizationCodeFlowObject;
+}
+
+export type OpenApiOAuthFlowsObject = OpenApiOAuthFlowsObjectShape & (
+    { implicit: OpenApiOAuthImplicitFlowObject }
+    | { password: OpenApiOAuthPasswordFlowObject }
+    | { clientCredentials: OpenApiOAuthClientCredentialsFlowObject }
+    | { authorizationCode: OpenApiOAuthAuthorizationCodeFlowObject }
+);
 
 export interface OpenApiHttpSecurityScheme {
     type: 'http';
@@ -215,13 +258,14 @@ export interface OpenApiHttpSecurityScheme {
 
 export interface OpenApiOAuth2SecurityScheme {
     type: 'oauth2';
+    flows: OpenApiOAuthFlowsObject;
     availableScopes?: readonly string[];
     description?: string;
 }
 
 export interface OpenApiOpenIdConnectSecurityScheme {
     type: 'openIdConnect';
-    openIdConnectUrl?: string;
+    openIdConnectUrl: string;
     availableScopes?: readonly string[];
     description?: string;
 }
@@ -347,7 +391,7 @@ export type OpenApiPathItemHttpMethod =
     | 'trace';
 
 export interface OpenApiServerVariableObject {
-    default?: string;
+    default: string;
     enum?: readonly string[];
     description?: string;
 }

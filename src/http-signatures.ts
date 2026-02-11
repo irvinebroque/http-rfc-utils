@@ -11,6 +11,7 @@
 import { Buffer } from 'node:buffer';
 import { escapeQuotedString } from './header-utils.js';
 import { parseSfDict, serializeSfDict } from './structured-fields.js';
+import { SfToken } from './types.js';
 import type {
     SignatureComponent,
     SignatureComponentParams,
@@ -42,6 +43,133 @@ export const DERIVED_COMPONENTS: readonly DerivedComponentName[] = [
 ] as const;
 
 const UTF8_ENCODER = new TextEncoder();
+const COMPONENT_PARAM_NAMES = ['sf', 'key', 'bs', 'req', 'tr'] as const;
+const COMPONENT_PARAM_NAME_SET = new Set<string>(COMPONENT_PARAM_NAMES);
+const FIELD_NAME_TOKEN_RE = /^[!#$%&'*+\-.^_`|~0-9a-z]+$/;
+
+function normalizeComponentName(name: string): string | null {
+    if (name.startsWith('@')) {
+        return isDerivedComponent(name) ? name : null;
+    }
+
+    if (!FIELD_NAME_TOKEN_RE.test(name)) {
+        return null;
+    }
+
+    return name;
+}
+
+function parseComponentParamsFromSf(params?: Record<string, SfBareItem>): SignatureComponentParams | null {
+    if (!params) {
+        return {};
+    }
+
+    const normalized: SignatureComponentParams = {};
+
+    for (const [paramName, paramValue] of Object.entries(params)) {
+        if (!COMPONENT_PARAM_NAME_SET.has(paramName)) {
+            return null;
+        }
+
+        if (paramName === 'key') {
+            if (typeof paramValue === 'string') {
+                normalized.key = paramValue;
+                continue;
+            }
+            if (paramValue instanceof SfToken) {
+                normalized.key = paramValue.value;
+                continue;
+            }
+            return null;
+        }
+
+        if (paramValue !== true) {
+            return null;
+        }
+
+        if (paramName === 'sf') {
+            normalized.sf = true;
+        } else if (paramName === 'bs') {
+            normalized.bs = true;
+        } else if (paramName === 'req') {
+            normalized.req = true;
+        } else if (paramName === 'tr') {
+            normalized.tr = true;
+        }
+    }
+
+    return normalized;
+}
+
+function normalizeComponentParamsForFormat(params: SignatureComponentParams | undefined): SignatureComponentParams {
+    if (!params) {
+        return {};
+    }
+
+    const normalized: SignatureComponentParams = {};
+
+    for (const [paramName, rawParamValue] of Object.entries(params as Record<string, unknown>)) {
+        if (!COMPONENT_PARAM_NAME_SET.has(paramName)) {
+            throw new Error(`Unsupported component parameter: ${paramName}`);
+        }
+
+        if (paramName === 'key') {
+            if (typeof rawParamValue !== 'string') {
+                throw new Error('Component parameter "key" must be a string');
+            }
+            normalized.key = rawParamValue;
+            continue;
+        }
+
+        if (rawParamValue !== undefined && rawParamValue !== true) {
+            throw new Error(`Component parameter "${paramName}" must be true when present`);
+        }
+
+        if (rawParamValue === true) {
+            if (paramName === 'sf') {
+                normalized.sf = true;
+            } else if (paramName === 'bs') {
+                normalized.bs = true;
+            } else if (paramName === 'req') {
+                normalized.req = true;
+            } else if (paramName === 'tr') {
+                normalized.tr = true;
+            }
+        }
+    }
+
+    return normalized;
+}
+
+function normalizeComponentForFormat(component: SignatureComponent): SignatureComponent {
+    const normalizedName = normalizeComponentName(component.name);
+    if (!normalizedName) {
+        throw new Error(`Invalid signature component name: ${component.name}`);
+    }
+
+    const normalizedParams = normalizeComponentParamsForFormat(component.params);
+    return Object.keys(normalizedParams).length > 0
+        ? { name: normalizedName, params: normalizedParams }
+        : { name: normalizedName };
+}
+
+function normalizeComponentForUsage(component: SignatureComponent): SignatureComponent | null {
+    const normalizedName = normalizeComponentName(component.name);
+    if (!normalizedName) {
+        return null;
+    }
+
+    let normalizedParams: SignatureComponentParams;
+    try {
+        normalizedParams = normalizeComponentParamsForFormat(component.params);
+    } catch {
+        return null;
+    }
+
+    return Object.keys(normalizedParams).length > 0
+        ? { name: normalizedName, params: normalizedParams }
+        : { name: normalizedName };
+}
 
 /**
  * Check if a component name is a derived component.
@@ -126,28 +254,17 @@ function parseComponentIdentifierFromItem(item: SfItem): SignatureComponent | nu
         return null;
     }
 
-    const name: string = item.value;
-    const params: SignatureComponentParams = {};
-
-    if (item.params) {
-        if (item.params.sf === true) {
-            params.sf = true;
-        }
-        if (typeof item.params.key === 'string') {
-            params.key = item.params.key;
-        }
-        if (item.params.bs === true) {
-            params.bs = true;
-        }
-        if (item.params.req === true) {
-            params.req = true;
-        }
-        if (item.params.tr === true) {
-            params.tr = true;
-        }
+    const normalizedName = normalizeComponentName(item.value);
+    if (!normalizedName) {
+        return null;
     }
 
-    return Object.keys(params).length > 0 ? { name, params } : { name };
+    const params = parseComponentParamsFromSf(item.params);
+    if (!params) {
+        return null;
+    }
+
+    return Object.keys(params).length > 0 ? { name: normalizedName, params } : { name: normalizedName };
 }
 
 /**
@@ -213,22 +330,23 @@ export function formatSignatureInput(inputs: SignatureInput[]): string {
 
     for (const input of inputs) {
         const items: SfItem[] = input.components.map(component => {
-            const item: SfItem = { value: component.name };
-            if (component.params) {
+            const normalizedComponent = normalizeComponentForFormat(component);
+            const item: SfItem = { value: normalizedComponent.name };
+            if (normalizedComponent.params) {
                 const params: Record<string, SfBareItem> = {};
-                if (component.params.sf) {
+                if (normalizedComponent.params.sf) {
                     params.sf = true;
                 }
-                if (component.params.key !== undefined) {
-                    params.key = component.params.key;
+                if (normalizedComponent.params.key !== undefined) {
+                    params.key = normalizedComponent.params.key;
                 }
-                if (component.params.bs) {
+                if (normalizedComponent.params.bs) {
                     params.bs = true;
                 }
-                if (component.params.req) {
+                if (normalizedComponent.params.req) {
                     params.req = true;
                 }
-                if (component.params.tr) {
+                if (normalizedComponent.params.tr) {
                     params.tr = true;
                 }
                 if (Object.keys(params).length > 0) {
@@ -396,7 +514,13 @@ export function parseComponentIdentifier(value: string): SignatureComponent | nu
         return null; // Unterminated string
     }
 
+    const normalizedName = normalizeComponentName(name);
+    if (!normalizedName) {
+        return null;
+    }
+
     const params: SignatureComponentParams = {};
+    const seenParams = new Set<string>();
 
     // Parse parameters after the quoted string
     while (i < trimmed.length) {
@@ -434,6 +558,10 @@ export function parseComponentIdentifier(value: string): SignatureComponent | nu
         if (!paramName) {
             return null;
         }
+        if (!COMPONENT_PARAM_NAME_SET.has(paramName) || seenParams.has(paramName)) {
+            return null;
+        }
+        seenParams.add(paramName);
 
         // Check for parameter value
         // Skip whitespace
@@ -466,9 +594,10 @@ export function parseComponentIdentifier(value: string): SignatureComponent | nu
                 }
                 i++;
 
-                if (paramName === 'key') {
-                    params.key = paramValue;
+                if (paramName !== 'key') {
+                    return null;
                 }
+                params.key = paramValue;
             } else {
                 // Token value
                 let paramValue = '';
@@ -480,9 +609,13 @@ export function parseComponentIdentifier(value: string): SignatureComponent | nu
                     paramValue += ch;
                     i++;
                 }
-                if (paramName === 'key') {
-                    params.key = paramValue;
+                if (!paramValue) {
+                    return null;
                 }
+                if (paramName !== 'key') {
+                    return null;
+                }
+                params.key = paramValue;
             }
         } else {
             // Boolean parameter
@@ -494,11 +627,13 @@ export function parseComponentIdentifier(value: string): SignatureComponent | nu
                 params.req = true;
             } else if (paramName === 'tr') {
                 params.tr = true;
+            } else {
+                return null;
             }
         }
     }
 
-    return Object.keys(params).length > 0 ? { name, params } : { name };
+    return Object.keys(params).length > 0 ? { name: normalizedName, params } : { name: normalizedName };
 }
 
 /**
@@ -518,25 +653,27 @@ export function parseComponentIdentifier(value: string): SignatureComponent | nu
  * ```
  */
 export function formatComponentIdentifier(component: SignatureComponent): string {
+    const normalizedComponent = normalizeComponentForFormat(component);
+
     // Escape special characters in name
-    const escapedName = escapeQuotedString(component.name);
+    const escapedName = escapeQuotedString(normalizedComponent.name);
     let result = `"${escapedName}"`;
 
-    if (component.params) {
-        if (component.params.sf) {
+    if (normalizedComponent.params) {
+        if (normalizedComponent.params.sf) {
             result += ';sf';
         }
-        if (component.params.key !== undefined) {
-            const escapedKey = escapeQuotedString(component.params.key);
+        if (normalizedComponent.params.key !== undefined) {
+            const escapedKey = escapeQuotedString(normalizedComponent.params.key);
             result += `;key="${escapedKey}"`;
         }
-        if (component.params.bs) {
+        if (normalizedComponent.params.bs) {
             result += ';bs';
         }
-        if (component.params.req) {
+        if (normalizedComponent.params.req) {
             result += ';req';
         }
-        if (component.params.tr) {
+        if (normalizedComponent.params.tr) {
             result += ';tr';
         }
     }
@@ -610,16 +747,21 @@ export function deriveComponentValue(
     message: SignatureMessageContext,
     component: SignatureComponent
 ): string | null {
-    const name = component.name.toLowerCase();
+    const normalizedComponent = normalizeComponentForUsage(component);
+    if (!normalizedComponent) {
+        return null;
+    }
+
+    const name = normalizedComponent.name;
 
     // RFC 9421 §2.1: Field names MUST be lowercased
     // RFC 9421 §2.2: Derived components start with '@'
     if (isDerivedComponent(name)) {
-        return deriveDerivedComponentValue(message, component);
+        return deriveDerivedComponentValue(message, normalizedComponent);
     }
 
     // Regular header field
-    return deriveFieldValue(message, component);
+    return deriveFieldValue(message, normalizedComponent);
 }
 
 /**
@@ -787,15 +929,23 @@ export function createSignatureBase(
     // RFC 9421 §2.5: Each component identifier MUST occur only once
     const seen = new Set<string>();
 
+    const normalizedComponents: SignatureComponent[] = [];
+
     for (const component of components) {
-        const identifier = formatComponentIdentifier(component);
+        const normalizedComponent = normalizeComponentForUsage(component);
+        if (!normalizedComponent) {
+            return null;
+        }
+        normalizedComponents.push(normalizedComponent);
+
+        const identifier = formatComponentIdentifier(normalizedComponent);
 
         if (seen.has(identifier)) {
             return null; // Duplicate component
         }
         seen.add(identifier);
 
-        const value = deriveComponentValue(message, component);
+        const value = deriveComponentValue(message, normalizedComponent);
         if (value === null) {
             return null; // Required component missing
         }
@@ -810,7 +960,7 @@ export function createSignatureBase(
     }
 
     // RFC 9421 §3.1: Build @signature-params as the final line
-    const signatureParams = buildSignatureParamsValue(components, params);
+    const signatureParams = buildSignatureParamsValue(normalizedComponents, params);
     if (signatureParams === null) {
         return null;
     }

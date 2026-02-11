@@ -20,7 +20,7 @@ export type {
  */
 export function formatCanonicalJson(value: CanonicalJsonValue): string {
     validateCanonicalJson(value);
-    return serializeCanonicalJson(value);
+    return serializeCanonicalJson(value, '$', new WeakSet<object>());
 }
 
 /**
@@ -36,7 +36,7 @@ export function formatCanonicalJsonUtf8(value: CanonicalJsonValue): Uint8Array {
  * Throws Error when the value is not compliant.
  */
 export function validateCanonicalJson(value: CanonicalJsonValue): void {
-    const validationError = getValidationError(value, '$');
+    const validationError = getValidationError(value, '$', new WeakSet<object>());
     if (validationError !== null) {
         throw new Error(validationError);
     }
@@ -49,11 +49,11 @@ export function validateCanonicalJson(value: CanonicalJsonValue): void {
 export function parseCanonicalJson(text: string): CanonicalJsonValue | null {
     try {
         const parsed = JSON.parse(text) as CanonicalJsonValue;
-        const validationError = getValidationError(parsed, '$');
+        const validationError = getValidationError(parsed, '$', new WeakSet<object>());
         if (validationError !== null) {
             return null;
         }
-        if (text !== serializeCanonicalJson(parsed)) {
+        if (text !== serializeCanonicalJson(parsed, '$', new WeakSet<object>())) {
             return null;
         }
         return parsed;
@@ -62,7 +62,7 @@ export function parseCanonicalJson(text: string): CanonicalJsonValue | null {
     }
 }
 
-function serializeCanonicalJson(value: CanonicalJsonValue): string {
+function serializeCanonicalJson(value: CanonicalJsonValue, path: string, stack: WeakSet<object>): string {
     if (value === null) {
         return 'null';
     }
@@ -73,19 +73,39 @@ function serializeCanonicalJson(value: CanonicalJsonValue): string {
     }
 
     if (Array.isArray(value)) {
-        const items: string[] = [];
-        for (const item of value) {
-            items.push(serializeCanonicalJson(item));
+        if (stack.has(value)) {
+            throw new Error(`JSON value contains a cyclic reference at path ${path}`);
         }
+        stack.add(value);
+
+        const items: string[] = [];
+        for (let index = 0; index < value.length; index++) {
+            const item = value[index];
+            if (item === undefined) {
+                throw new Error(`JSON value at path ${path}[${index}] must be a valid JSON value`);
+            }
+            items.push(serializeCanonicalJson(item, `${path}[${index}]`, stack));
+        }
+        stack.delete(value);
         return `[${items.join(',')}]`;
     }
 
     const objectValue = value as CanonicalJsonObject;
+    if (stack.has(objectValue)) {
+        throw new Error(`JSON value contains a cyclic reference at path ${path}`);
+    }
+    stack.add(objectValue);
+
     const sortedKeys = Object.keys(objectValue).sort(compareUtf16CodeUnitOrder);
     const members: string[] = [];
     for (const key of sortedKeys) {
-        members.push(`${JSON.stringify(key)}:${serializeCanonicalJson(objectValue[key])}`);
+        const memberValue = objectValue[key];
+        if (memberValue === undefined) {
+            throw new Error(`JSON value at path ${path}[${JSON.stringify(key)}] must be a valid JSON value`);
+        }
+        members.push(`${JSON.stringify(key)}:${serializeCanonicalJson(memberValue, `${path}[${JSON.stringify(key)}]`, stack)}`);
     }
+    stack.delete(objectValue);
     return `{${members.join(',')}}`;
 }
 
@@ -99,7 +119,7 @@ function compareUtf16CodeUnitOrder(left: string, right: string): number {
     return 0;
 }
 
-function getValidationError(value: unknown, path: string): string | null {
+function getValidationError(value: unknown, path: string, stack: WeakSet<object>): string | null {
     if (value === null) {
         return null;
     }
@@ -119,12 +139,19 @@ function getValidationError(value: unknown, path: string): string | null {
             return null;
         case 'object':
             if (Array.isArray(value)) {
+                if (stack.has(value)) {
+                    return `${path} contains a cyclic reference`;
+                }
+                stack.add(value);
+
                 for (let index = 0; index < value.length; index++) {
-                    const itemError = getValidationError(value[index], `${path}[${index}]`);
+                    const itemError = getValidationError(value[index], `${path}[${index}]`, stack);
                     if (itemError !== null) {
+                        stack.delete(value);
                         return itemError;
                     }
                 }
+                stack.delete(value);
                 return null;
             }
 
@@ -132,16 +159,24 @@ function getValidationError(value: unknown, path: string): string | null {
                 return `${path} must be a plain JSON object`;
             }
 
+            if (stack.has(value)) {
+                return `${path} contains a cyclic reference`;
+            }
+            stack.add(value);
+
             for (const [key, entryValue] of Object.entries(value)) {
                 if (hasLoneSurrogate(key)) {
+                    stack.delete(value);
                     return `${path} has a property name with a lone surrogate code unit`;
                 }
                 const nextPath = `${path}.${JSON.stringify(key)}`;
-                const entryError = getValidationError(entryValue, nextPath);
+                const entryError = getValidationError(entryValue, nextPath, stack);
                 if (entryError !== null) {
+                    stack.delete(value);
                     return entryError;
                 }
             }
+            stack.delete(value);
             return null;
         default:
             return `${path} must be a valid JSON value`;

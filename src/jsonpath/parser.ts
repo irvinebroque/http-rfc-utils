@@ -21,9 +21,40 @@ import type {
     JsonPathSingularSelector,
     JsonPathFunctionExpr,
     JsonPathFunctionArg,
+    JsonPathFunctionName,
 } from '../types/jsonpath.js';
 import { isBuiltinFunctionName } from './builtins.js';
 import { Lexer } from './lexer.js';
+
+type FunctionExprType = 'value' | 'logical' | 'nodes';
+
+interface FunctionSignature {
+    args: FunctionExprType[];
+    returns: FunctionExprType;
+}
+
+interface ParserState {
+    expressionDepth: number;
+    maxExpressionDepth: number;
+}
+
+const DEFAULT_MAX_EXPRESSION_DEPTH = 64;
+const PARSER_STATE_BY_LEXER = new WeakMap<Lexer, ParserState>();
+
+class JsonPathParserLimitError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'JsonPathParserLimitError';
+    }
+}
+
+const FUNCTION_SIGNATURES: Record<JsonPathFunctionName, FunctionSignature> = {
+    length: { args: ['value'], returns: 'value' },
+    count: { args: ['nodes'], returns: 'value' },
+    match: { args: ['value', 'value'], returns: 'logical' },
+    search: { args: ['value', 'value'], returns: 'logical' },
+    value: { args: ['nodes'], returns: 'value' },
+};
 
 /**
  * Parse a JSONPath query string into an AST.
@@ -41,6 +72,10 @@ import { Lexer } from './lexer.js';
 export function parseJsonPath(query: string): JsonPathQuery | null {
     try {
         const lexer = new Lexer(query);
+        PARSER_STATE_BY_LEXER.set(lexer, {
+            expressionDepth: 0,
+            maxExpressionDepth: DEFAULT_MAX_EXPRESSION_DEPTH,
+        });
         const ast = parseQuery(lexer, '$');
 
         // Must consume entire input
@@ -51,6 +86,42 @@ export function parseJsonPath(query: string): JsonPathQuery | null {
         return ast;
     } catch {
         return null;
+    }
+}
+
+function getParserState(lexer: Lexer): ParserState {
+    const state = PARSER_STATE_BY_LEXER.get(lexer);
+    if (state) {
+        return state;
+    }
+
+    const fallback: ParserState = {
+        expressionDepth: 0,
+        maxExpressionDepth: DEFAULT_MAX_EXPRESSION_DEPTH,
+    };
+    PARSER_STATE_BY_LEXER.set(lexer, fallback);
+    return fallback;
+}
+
+function enterExpression(lexer: Lexer): void {
+    const state = getParserState(lexer);
+    state.expressionDepth += 1;
+    if (state.expressionDepth > state.maxExpressionDepth) {
+        throw new JsonPathParserLimitError('JSONPath parser maxExpressionDepth limit exceeded');
+    }
+}
+
+function exitExpression(lexer: Lexer): void {
+    const state = getParserState(lexer);
+    state.expressionDepth = Math.max(0, state.expressionDepth - 1);
+}
+
+function withExpressionScope<T>(lexer: Lexer, parse: () => T): T {
+    enterExpression(lexer);
+    try {
+        return parse();
+    } finally {
+        exitExpression(lexer);
     }
 }
 
@@ -228,6 +299,9 @@ function parseIndexOrSlice(lexer: Lexer): JsonPathIndexSelector | JsonPathSliceS
     // Start value
     const startToken = lexer.matchToken('NUMBER');
     if (startToken) {
+        if (!isIntegerNumberToken(startToken.raw, startToken.value)) {
+            return null;
+        }
         start = startToken.value;
     }
 
@@ -238,6 +312,9 @@ function parseIndexOrSlice(lexer: Lexer): JsonPathIndexSelector | JsonPathSliceS
         // End value
         const endToken = lexer.matchToken('NUMBER');
         if (endToken) {
+            if (!isIntegerNumberToken(endToken.raw, endToken.value)) {
+                return null;
+            }
             end = endToken.value;
         }
 
@@ -245,6 +322,9 @@ function parseIndexOrSlice(lexer: Lexer): JsonPathIndexSelector | JsonPathSliceS
         if (lexer.match('COLON')) {
             const stepToken = lexer.matchToken('NUMBER');
             if (stepToken) {
+                if (!isIntegerNumberToken(stepToken.raw, stepToken.value)) {
+                    return null;
+                }
                 step = stepToken.value;
             }
         }
@@ -277,7 +357,7 @@ function parseIndexOrSlice(lexer: Lexer): JsonPathIndexSelector | JsonPathSliceS
 
 function parseLogicalExpr(lexer: Lexer): JsonPathLogicalExpr | null {
     // RFC 9535 §2.3.5.1: logical-expr = logical-or-expr
-    return parseLogicalOrExpr(lexer);
+    return withExpressionScope(lexer, () => parseLogicalOrExpr(lexer));
 }
 
 function parseLogicalOrExpr(lexer: Lexer): JsonPathLogicalExpr | null {
@@ -348,7 +428,7 @@ function parseBasicExpr(lexer: Lexer): JsonPathLogicalExpr | null {
 
     // Negation
     if (lexer.match('NOT')) {
-        const operand = parseBasicExpr(lexer);
+        const operand = withExpressionScope(lexer, () => parseBasicExpr(lexer));
         if (operand === null) {
             return null;
         }
@@ -416,7 +496,11 @@ function parseComparisonOrTest(lexer: Lexer): JsonPathLogicalExpr | null {
             return { type: 'comparison', operator: op, left: func, right };
         }
 
-        // It's a test expression (function returning LogicalType)
+        // It's a test expression (function MUST return LogicalType)
+        if (getFunctionReturnType(func.name) !== 'logical') {
+            return null;
+        }
+
         return func;
     }
 
@@ -467,7 +551,16 @@ function parseComparable(lexer: Lexer): JsonPathComparable | null {
 
     // Function
     if (lexer.check('NAME')) {
-        return parseFunctionExpr(lexer);
+        const func = parseFunctionExpr(lexer);
+        if (func === null) {
+            return null;
+        }
+
+        if (getFunctionReturnType(func.name) !== 'value') {
+            return null;
+        }
+
+        return func;
     }
 
     // Singular query
@@ -520,47 +613,55 @@ function parseLiteral(lexer: Lexer): JsonPathLiteral | null {
 function parseFunctionExpr(lexer: Lexer): JsonPathFunctionExpr | null {
     // RFC 9535 §2.4: function-expr = function-name "(" [function-argument *( "," function-argument )] ")"
 
-    const nameToken = lexer.matchToken('NAME');
-    if (!nameToken) {
-        return null;
-    }
-
-    const name = nameToken.value;
-    if (!isBuiltinFunctionName(name)) {
-        return null;
-    }
-
-    if (!lexer.match('LPAREN')) {
-        return null;
-    }
-
-    const args: JsonPathFunctionArg[] = [];
-
-    if (!lexer.check('RPAREN')) {
-        const first = parseFunctionArg(lexer);
-        if (first === null) {
+    return withExpressionScope(lexer, () => {
+        const nameToken = lexer.matchToken('NAME');
+        if (!nameToken) {
             return null;
         }
-        args.push(first);
 
-        while (lexer.match('COMMA')) {
-            const next = parseFunctionArg(lexer);
-            if (next === null) {
+        const name = nameToken.value;
+        if (!isBuiltinFunctionName(name)) {
+            return null;
+        }
+
+        if (!lexer.match('LPAREN')) {
+            return null;
+        }
+
+        const args: JsonPathFunctionArg[] = [];
+
+        if (!lexer.check('RPAREN')) {
+            const first = parseFunctionArg(lexer);
+            if (first === null) {
                 return null;
             }
-            args.push(next);
+            args.push(first);
+
+            while (lexer.match('COMMA')) {
+                const next = parseFunctionArg(lexer);
+                if (next === null) {
+                    return null;
+                }
+                args.push(next);
+            }
         }
-    }
 
-    if (!lexer.match('RPAREN')) {
-        return null;
-    }
+        if (!lexer.match('RPAREN')) {
+            return null;
+        }
 
-    return {
-        type: 'function',
-        name,
-        args,
-    };
+        const expr: JsonPathFunctionExpr = {
+            type: 'function',
+            name,
+            args,
+        };
+
+        if (!isWellTypedFunctionExpr(expr)) {
+            return null;
+        }
+
+        return expr;
+    });
 }
 
 function parseFunctionArg(lexer: Lexer): JsonPathFunctionArg | null {
@@ -578,6 +679,58 @@ function parseFunctionArg(lexer: Lexer): JsonPathFunctionArg | null {
 
     // Literal
     return parseLiteral(lexer);
+}
+
+function isIntegerNumberToken(raw: string | undefined, value: number): boolean {
+    if (!Number.isInteger(value)) {
+        return false;
+    }
+
+    if (raw === undefined) {
+        return true;
+    }
+
+    return /^-?(?:0|[1-9][0-9]*)$/.test(raw);
+}
+
+function getFunctionReturnType(name: JsonPathFunctionName): FunctionExprType {
+    return FUNCTION_SIGNATURES[name].returns;
+}
+
+function getFunctionArgType(arg: JsonPathFunctionArg): FunctionExprType {
+    switch (arg.type) {
+        case 'literal':
+            return 'value';
+        case 'query':
+            return isSingularQuery(arg) ? 'value' : 'nodes';
+        case 'function':
+            return getFunctionReturnType(arg.name);
+    }
+}
+
+function isArgTypeCompatible(arg: JsonPathFunctionArg, expectedType: FunctionExprType): boolean {
+    if (expectedType === 'nodes') {
+        return arg.type === 'query';
+    }
+
+    return getFunctionArgType(arg) === expectedType;
+}
+
+function isWellTypedFunctionExpr(expr: JsonPathFunctionExpr): boolean {
+    const signature = FUNCTION_SIGNATURES[expr.name];
+    if (expr.args.length !== signature.args.length) {
+        return false;
+    }
+
+    for (let i = 0; i < signature.args.length; i++) {
+        const expectedType = signature.args[i];
+        const arg = expr.args[i];
+        if (!expectedType || !arg || !isArgTypeCompatible(arg, expectedType)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 function toSingularSegments(segments: JsonPathSegment[]): JsonPathSingularSegment[] | null {
@@ -607,4 +760,8 @@ function toSingularSegments(segments: JsonPathSegment[]): JsonPathSingularSegmen
 
 function isSingularSelector(selector: JsonPathSelector): selector is JsonPathSingularSelector {
     return selector.type === 'name' || selector.type === 'index';
+}
+
+function isSingularQuery(query: JsonPathQuery): boolean {
+    return toSingularSegments(query.segments) !== null;
 }

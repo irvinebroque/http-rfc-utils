@@ -51,7 +51,7 @@ export function parseAcceptPatch(value: string | string[]): AcceptPatchMediaType
 // RFC 5789 §3.1: field value is a comma-separated media-type list.
 export function formatAcceptPatch(mediaTypes: AcceptPatchMediaType[]): string {
     if (mediaTypes.length === 0) {
-        throw new Error('Accept-Patch requires at least one media type');
+        throw new Error('Accept-Patch must include at least one media type entry');
     }
 
     return mediaTypes
@@ -123,15 +123,16 @@ function parseMediaTypeMember(member: string): AcceptPatchMediaType | null {
 }
 
 function formatMediaTypeMember(mediaType: AcceptPatchMediaType): string {
-    const type = parseTypeAndSubtype(`${mediaType.type}/${mediaType.subtype}`);
+    const mediaTypeText = `${mediaType.type}/${mediaType.subtype}`;
+    const type = parseTypeAndSubtype(mediaTypeText);
     if (!type) {
-        throw new Error('Invalid media type token in Accept-Patch entry');
+        throw new Error(`Accept-Patch entry "${mediaTypeText}" must use valid HTTP token syntax`);
     }
 
     for (const parameter of mediaType.parameters) {
         const normalizedName = parameter.name.trim().toLowerCase();
         if (!TOKEN_CHARS.test(normalizedName)) {
-            throw new Error('Invalid parameter name in Accept-Patch entry');
+            throw new Error(`Accept-Patch parameter name "${parameter.name}" must be a valid HTTP token`);
         }
     }
 

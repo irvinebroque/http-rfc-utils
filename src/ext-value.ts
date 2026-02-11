@@ -171,6 +171,9 @@ export function decodeExtValue(encoded: string): ExtValue | null {
 // RFC 8187 §3.2: Extended parameter encoding.
 export function encodeExtValue(value: string, options: ExtValueOptions = {}): string {
     const language = options.language ?? '';
+    if (language !== '' && !LANGUAGE_TAG.test(language)) {
+        throw new Error(`Invalid RFC 8187 language tag: ${language}`);
+    }
 
     // Build percent-encoded value, preserving attr-char
     let encoded = '';

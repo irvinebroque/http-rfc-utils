@@ -9,11 +9,10 @@ import {
     assertHeaderToken,
     assertNoCtl,
     isEmptyHeader,
-    splitAndParseKeyValueSegments,
-    splitQuotedValue,
-    unquote,
     quoteIfNeeded,
+    unquote,
 } from './header-utils.js';
+import { parseParameterizedMembers } from './internal-parameterized-members.js';
 import { createObjectMap, hasOwnKey } from './object-map.js';
 
 /**
@@ -26,18 +25,18 @@ export function parseForwarded(header: string): ForwardedElement[] {
     }
 
     const elements: ForwardedElement[] = [];
-    const parts = splitQuotedValue(header, ',');
+    const members = parseParameterizedMembers(header, {
+        memberDelimiter: ',',
+        parameterDelimiter: ';',
+        hasBaseSegment: false,
+    });
 
-    for (const part of parts) {
-        const trimmed = part.trim();
-        if (!trimmed) continue;
-
-        const pairs = splitAndParseKeyValueSegments(trimmed, ';');
+    for (const member of members) {
         const element: ForwardedElement = {};
         const extensions = createObjectMap<string>();
         let hasExtensions = false;
 
-        for (const pair of pairs) {
+        for (const pair of member.parameters) {
             if (!pair.hasEquals) continue;
 
             const key = pair.key.trim().toLowerCase();

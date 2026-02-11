@@ -172,15 +172,21 @@ export function parseUseAsDictionary(header: string): UseAsDictionary | null {
 // RFC 9842 §2.1: serialize known members as a Structured Field Dictionary.
 export function formatUseAsDictionary(value: UseAsDictionary): string {
     if (!value.match || value.match.trim() === '') {
-        throw new Error('Invalid Use-As-Dictionary match value');
+        throw new Error(
+            `Use-As-Dictionary field "match" must be a non-empty string; received ${String(value.match)}`,
+        );
     }
 
     if (!validateDictionaryIdLength(value.id)) {
-        throw new Error('Invalid Use-As-Dictionary id length; expected <=1024 characters');
+        throw new Error(
+            `Use-As-Dictionary field "id" must be at most ${MAX_DICTIONARY_ID_LENGTH} characters; received length ${value.id.length}`,
+        );
     }
 
     if (!isSfTokenText(value.type)) {
-        throw new Error('Invalid Use-As-Dictionary type token');
+        throw new Error(
+            `Use-As-Dictionary field "type" must be an RFC 8941 token; received ${String(value.type)}`,
+        );
     }
 
     const dict: SfDictionary = {
@@ -189,9 +195,11 @@ export function formatUseAsDictionary(value: UseAsDictionary): string {
 
     if (value.matchDest.length > 0) {
         dict['match-dest'] = {
-            items: value.matchDest.map((destination) => {
+            items: value.matchDest.map((destination, index) => {
                 if (destination.length === 0) {
-                    throw new Error('Invalid Use-As-Dictionary match-dest value');
+                    throw new Error(
+                        `Use-As-Dictionary field "match-dest" entry at index ${index} must be a non-empty string`,
+                    );
                 }
                 return { value: destination };
             }),
@@ -273,7 +281,9 @@ export function parseAvailableDictionary(header: string): Uint8Array | null {
 // RFC 9842 §2.2: Available-Dictionary carries a SHA-256 digest byte sequence.
 export function formatAvailableDictionary(hash: Uint8Array): string {
     if (!(hash instanceof Uint8Array) || hash.length !== SHA256_DIGEST_BYTES) {
-        throw new Error('Invalid Available-Dictionary digest; expected 32 bytes');
+        throw new Error(
+            `Available-Dictionary must be a ${SHA256_DIGEST_BYTES}-byte SHA-256 digest; received ${hash instanceof Uint8Array ? hash.length : typeof hash}`,
+        );
     }
 
     return serializeSfItem({ value: hash });
@@ -303,7 +313,9 @@ export function parseDictionaryId(header: string): string | null {
 // RFC 9842 §2.3: Dictionary-ID serialization as SF String.
 export function formatDictionaryId(id: string): string {
     if (!validateDictionaryIdLength(id)) {
-        throw new Error('Invalid Dictionary-ID length; expected <=1024 characters');
+        throw new Error(
+            `Dictionary-ID must be at most ${MAX_DICTIONARY_ID_LENGTH} characters; received length ${id.length}`,
+        );
     }
 
     return serializeSfItem({ value: id });

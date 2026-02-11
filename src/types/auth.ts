@@ -1,6 +1,6 @@
 /**
  * Authentication-related types.
- * RFC 7617, RFC 6750, RFC 7616, RFC 7636.
+ * RFC 7617, RFC 6750, RFC 7616, RFC 7636, W3C WebAuthn Level 3.
  * @see https://www.rfc-editor.org/rfc/rfc7617.html
  */
 
@@ -229,10 +229,12 @@ export interface WebauthnPublicKeyCredentialRequestOptionsJson {
 export interface WebauthnCreationOptionsValidationOptions {
     minChallengeLength?: number;
     allowedCoseAlgorithms?: readonly number[];
+    allowIpRpId?: boolean;
 }
 
 export interface WebauthnRequestOptionsValidationOptions {
     minChallengeLength?: number;
+    allowIpRpId?: boolean;
 }
 
 export interface WebauthnClientData {
@@ -248,6 +250,11 @@ export interface WebauthnClientDataValidationOptions {
     expectedChallenge?: string | Uint8Array;
     expectedOrigin?: string | readonly string[];
     minChallengeLength?: number;
+    requireHttpsOrigin?: boolean;
+    allowHttpLoopbackOrigin?: boolean;
+}
+
+export interface WebauthnClientDataFormatOptions {
     requireHttpsOrigin?: boolean;
     allowHttpLoopbackOrigin?: boolean;
 }
@@ -281,4 +288,5 @@ export interface WebauthnAuthenticatorDataValidationOptions {
     requireUserPresence?: boolean;
     requireUserVerification?: boolean;
     previousSignCount?: number;
+    allowIpRpId?: boolean;
 }

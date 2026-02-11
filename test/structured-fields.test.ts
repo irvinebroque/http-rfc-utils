@@ -72,6 +72,17 @@ describe('Structured Fields (RFC 8941 Section 3)', () => {
         assert.deepEqual(parsed, [{ items: [{ value: 'a' }, { value: 'b' }] }]);
     });
 
+    // RFC 8941 §3.1.1 + §3.1.2: Item parameters must not consume the required member separator SP.
+    it('parses inner-list item boolean parameter followed by another member', () => {
+        const parsed = parseSfList('("content-type";sf "cache-control")');
+        assert.deepEqual(parsed, [{
+            items: [
+                { value: 'content-type', params: { sf: true } },
+                { value: 'cache-control' },
+            ],
+        }]);
+    });
+
     it('parses dictionary values and parameters (RFC 8941 Section 3.2)', () => {
         const parsed = parseSfDict('a=1;foo=bar, b');
         assert.ok(parsed?.a);
@@ -105,6 +116,25 @@ describe('Structured Fields (RFC 8941 Section 3)', () => {
             c: { value: false },
         });
         assert.equal(dict, 'a;foo="bar", b=10, c=?0');
+    });
+
+    // RFC 8941 §3.2 + §4.1.2: dictionary keys serialize only as sf-key.
+    it('rejects invalid dictionary keys during serialization', () => {
+        assert.throws(() => {
+            serializeSfDict({
+                BadKey: { value: true },
+            });
+        }, /Invalid Structured Field dictionary key/);
+    });
+
+    // RFC 8941 §3.1.2 + §4.1.1: parameter keys serialize only as sf-key.
+    it('rejects invalid parameter keys during serialization', () => {
+        assert.throws(() => {
+            serializeSfItem({
+                value: 'token',
+                params: { BadParam: 'x' },
+            });
+        }, /Invalid Structured Field parameter key/);
     });
 
     it('serializes items with parameters (RFC 8941 Section 3.1.2)', () => {
@@ -148,6 +178,11 @@ describe('Structured Fields (RFC 8941 Section 3)', () => {
     it('serializes SfToken values as bare tokens', () => {
         const serialized = serializeSfItem({ value: new SfToken('hello') });
         assert.equal(serialized, 'hello');
+    });
+
+    // RFC 8941 §3.3.4 + §4.1.6: sf-token serialization must validate token grammar.
+    it('rejects invalid SfToken values during serialization', () => {
+        assert.throws(() => serializeSfItem({ value: new SfToken('bad token') }), /Invalid Structured Field token value/);
     });
 
     // RFC 8941 §3.1: Trailing commas are invalid in Lists.
@@ -360,7 +395,7 @@ describe('Structured Fields Display String (RFC 9651 Section 3.3.8)', () => {
     it('rejects lone surrogate Display String input during serialization', () => {
         assert.throws(
             () => serializeSfItem({ value: new SfDisplayString('bad\ud800') }),
-            /Invalid display string value/
+            /display string|Invalid display string value/
         );
     });
 });

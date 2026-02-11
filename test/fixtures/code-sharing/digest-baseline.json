@@ -1,0 +1,80 @@
+{
+    "parseChallenge": [
+        {
+            "name": "accepts standard challenge",
+            "header": "Digest realm=\"testrealm@host.com\", nonce=\"abc123\", qop=\"auth, auth-int\", algorithm=SHA-256, charset=UTF-8, userhash=true",
+            "expected": {
+                "scheme": "Digest",
+                "realm": "testrealm@host.com",
+                "nonce": "abc123",
+                "qop": [
+                    "auth",
+                    "auth-int"
+                ],
+                "algorithm": "SHA-256",
+                "charset": "UTF-8",
+                "userhash": true
+            }
+        },
+        {
+            "name": "rejects duplicate auth-param names",
+            "header": "Digest realm=\"alpha\", nonce=\"n1\", nonce=\"n2\"",
+            "expected": null
+        }
+    ],
+    "formatChallenge": {
+        "input": {
+            "scheme": "Digest",
+            "realm": "api.example.test",
+            "nonce": "nonce-42",
+            "opaque": "opaque-1",
+            "qop": [
+                "auth"
+            ],
+            "algorithm": "SHA-256",
+            "charset": "UTF-8",
+            "stale": true,
+            "userhash": true
+        },
+        "expected": "Digest realm=\"api.example.test\", nonce=\"nonce-42\", opaque=\"opaque-1\", stale=true, algorithm=SHA-256, qop=\"auth\", charset=UTF-8, userhash=true"
+    },
+    "parseAuthorization": [
+        {
+            "name": "decodes username* ext-value",
+            "header": "Digest username*=UTF-8''J%C3%A4s%C3%B8n%20Doe, realm=\"example\", uri=\"/resource\", response=\"deadbeef\"",
+            "expected": {
+                "scheme": "Digest",
+                "username": "J\u00e4s\u00f8n Doe",
+                "usernameEncoded": true,
+                "realm": "example",
+                "uri": "/resource",
+                "response": "deadbeef"
+            }
+        },
+        {
+            "name": "rejects qop without paired cnonce and nc",
+            "header": "Digest username=\"user\", realm=\"example\", uri=\"/resource\", response=\"deadbeef\", qop=auth",
+            "expected": null
+        }
+    ],
+    "formatAuthorization": {
+        "input": {
+            "scheme": "Digest",
+            "username": "J\u00e4s\u00f8n Doe",
+            "usernameEncoded": true,
+            "realm": "example",
+            "uri": "/resource",
+            "response": "deadbeef",
+            "algorithm": "SHA-256",
+            "qop": "auth",
+            "nc": "00000001",
+            "cnonce": "c-1"
+        },
+        "expected": "Digest username*=UTF-8''J%C3%A4s%C3%B8n%20Doe, realm=\"example\", uri=\"/resource\", response=\"deadbeef\", algorithm=SHA-256, cnonce=\"c-1\", qop=auth, nc=00000001"
+    },
+    "errorMessages": {
+        "computeA1MissingSessionInputs": "Digest algorithm \"MD5-sess\" requires both nonce and cnonce; received nonce=undefined cnonce=undefined",
+        "computeA2AuthIntUnsupported": "Digest qop \"auth-int\" is not supported; use qop \"auth\" or omit qop",
+        "computeDigestResponseMissingQopCoupling": "Digest response with qop \"auth\" requires both cnonce and nc; received cnonce=undefined nc=undefined"
+    }
+}

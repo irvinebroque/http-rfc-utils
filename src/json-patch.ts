@@ -92,7 +92,11 @@ export function validateJsonPatch(document: JsonPatchDocument): void {
     }
 
     for (let index = 0; index < document.length; index++) {
-        validateOperation(document[index], index);
+        const operation = document[index];
+        if (operation === undefined) {
+            throw new Error(`Operation at index ${index} must be an object`);
+        }
+        validateOperation(operation, index);
     }
 }
 
@@ -119,7 +123,11 @@ export function applyJsonPatch(target: unknown, document: JsonPatchDocument): Js
 
     let working = cloneJsonValue(target);
     for (let index = 0; index < document.length; index++) {
-        working = applyOperation(working, document[index], index);
+        const operation = document[index];
+        if (operation === undefined) {
+            throw new Error(`Operation at index ${index} must be an object`);
+        }
+        working = applyOperation(working, operation, index);
     }
 
     return working;
@@ -234,7 +242,7 @@ function applyAdd(target: JsonPatchValue, operation: JsonPatchAddOperation, inde
     }
 
     const parent = resolveParent(target, pathTokens, index, 'add');
-    const token = pathTokens[pathTokens.length - 1];
+    const token = getLastPathToken(pathTokens, index, 'path');
 
     if (Array.isArray(parent)) {
         if (token === '-') {
@@ -262,7 +270,7 @@ function applyRemove(target: JsonPatchValue, operation: JsonPatchRemoveOperation
     }
 
     const parent = resolveParent(target, pathTokens, index, 'remove');
-    const token = pathTokens[pathTokens.length - 1];
+    const token = getLastPathToken(pathTokens, index, 'path');
 
     if (Array.isArray(parent)) {
         const position = parseArrayIndex(token);
@@ -289,7 +297,7 @@ function applyReplace(target: JsonPatchValue, operation: JsonPatchReplaceOperati
     }
 
     const parent = resolveParent(target, pathTokens, index, 'replace');
-    const token = pathTokens[pathTokens.length - 1];
+    const token = getLastPathToken(pathTokens, index, 'path');
 
     if (Array.isArray(parent)) {
         const position = parseArrayIndex(token);
@@ -337,7 +345,7 @@ function addAtPath(target: JsonPatchValue, path: string, value: JsonPatchValue, 
     }
 
     const parent = resolveParent(target, pathTokens, index, 'add');
-    const token = pathTokens[pathTokens.length - 1];
+    const token = getLastPathToken(pathTokens, index, 'path');
 
     if (Array.isArray(parent)) {
         if (token === '-') {
@@ -370,7 +378,7 @@ function removeAtPath(
     }
 
     const parent = resolveParent(target, tokens, index, 'remove');
-    const token = tokens[tokens.length - 1];
+    const token = getLastPathToken(tokens, index, pointerMember);
 
     if (Array.isArray(parent)) {
         const position = parseArrayIndex(token);
@@ -390,6 +398,9 @@ function removeAtPath(
     }
 
     const removed = parent[token];
+    if (removed === undefined) {
+        throw new Error(`Operation at index ${index} has missing ${pointerMember} value`);
+    }
     delete parent[token];
     return { value: removed, nextTarget: target };
 }
@@ -409,14 +420,22 @@ function getAtPath(
             if (position === null || position >= current.length) {
                 throw new Error(`Operation at index ${index} has missing ${pointerMember} array index "${token}"`);
             }
-            current = current[position] as JsonPatchValue;
+            const nextValue = current[position];
+            if (nextValue === undefined) {
+                throw new Error(`Operation at index ${index} has missing ${pointerMember} value`);
+            }
+            current = nextValue;
             continue;
         }
 
         if (!isJsonObject(current) || !hasOwnKey(current, token)) {
             throw new Error(`Operation at index ${index} has missing ${pointerMember} object member "${token}"`);
         }
-        current = current[token];
+        const nextValue = current[token];
+        if (nextValue === undefined) {
+            throw new Error(`Operation at index ${index} has missing ${pointerMember} value`);
+        }
+        current = nextValue;
     }
 
     return current;
@@ -432,13 +451,20 @@ function resolveParent(
 
     for (let tokenIndex = 0; tokenIndex < pathTokens.length - 1; tokenIndex++) {
         const token = pathTokens[tokenIndex];
+        if (token === undefined) {
+            throw new Error(`Operation at index ${index} cannot resolve parent path for "${operation}"`);
+        }
 
         if (Array.isArray(current)) {
             const position = parseArrayIndex(token);
             if (position === null || position >= current.length) {
                 throw new Error(`Operation at index ${index} cannot resolve parent path for "${operation}"`);
             }
-            current = current[position] as JsonPatchValue;
+            const nextValue = current[position];
+            if (nextValue === undefined) {
+                throw new Error(`Operation at index ${index} cannot resolve parent path for "${operation}"`);
+            }
+            current = nextValue;
             continue;
         }
 
@@ -446,7 +472,12 @@ function resolveParent(
             throw new Error(`Operation at index ${index} cannot resolve parent path for "${operation}"`);
         }
 
-        current = current[token];
+        const nextValue = current[token];
+        if (nextValue === undefined) {
+            throw new Error(`Operation at index ${index} cannot resolve parent path for "${operation}"`);
+        }
+
+        current = nextValue;
     }
 
     if (Array.isArray(current) || isJsonObject(current)) {
@@ -462,6 +493,14 @@ function parsePointerTokens(pointer: string, member: 'path' | 'from', index: num
         throw new Error(`Operation at index ${index} has invalid "${member}" JSON Pointer`);
     }
     return tokens;
+}
+
+function getLastPathToken(tokens: readonly string[], index: number, member: 'path' | 'from'): string {
+    const token = tokens[tokens.length - 1];
+    if (token === undefined) {
+        throw new Error(`Operation at index ${index} has invalid "${member}" JSON Pointer`);
+    }
+    return token;
 }
 
 function parseArrayIndex(token: string): number | null {
@@ -667,7 +706,16 @@ function deepEqual(
 
         try {
             for (let i = 0; i < a.length; i++) {
-                if (!deepEqual(a[i], b[i], depth + 1, nextPairs)) {
+                const leftEntry = a[i];
+                const rightEntry = b[i];
+                if (leftEntry === undefined || rightEntry === undefined) {
+                    if (leftEntry !== rightEntry) {
+                        return false;
+                    }
+                    continue;
+                }
+
+                if (!deepEqual(leftEntry, rightEntry, depth + 1, nextPairs)) {
                     return false;
                 }
             }
@@ -697,7 +745,16 @@ function deepEqual(
                 if (!keysBSet.has(key)) {
                     return false;
                 }
-                if (!deepEqual(a[key], b[key], depth + 1, nextPairs)) {
+                const leftValue = a[key];
+                const rightValue = b[key];
+                if (leftValue === undefined || rightValue === undefined) {
+                    if (leftValue !== rightValue) {
+                        return false;
+                    }
+                    continue;
+                }
+
+                if (!deepEqual(leftValue, rightValue, depth + 1, nextPairs)) {
                     return false;
                 }
             }

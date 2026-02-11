@@ -557,9 +557,9 @@ export function parseLinkHeader(header: string): LinkDefinition[] {
         saveParam();
         saveLink();
     } else if (state === State.IN_QUOTED_VALUE) {
-        // Unclosed quote - save what we have anyway
-        saveParam();
-        saveLink();
+        // RFC 8288 §3.2: unterminated quoted-string is malformed.
+        // Fail closed for the current link-value and preserve prior parsed links.
+        currentLink = createLinkAccumulator();
     }
 
     return results;

@@ -114,21 +114,21 @@ describe('Cache-Status (RFC 9211 Section 2)', () => {
     it('throws for invalid fwd token values (RFC 9211 Section 2.2)', () => {
         assert.throws(() => {
             formatCacheStatus([{ cache: 'Edge', params: { fwd: 'uri miss' } }]);
-        }, /Invalid Cache-Status fwd token/);
+        }, /Cache-Status param "fwd"/);
 
         assert.throws(() => {
             formatCacheStatus([{ cache: 'Edge', params: { fwd: 'Uri-Miss' } }]);
-        }, /Invalid Cache-Status fwd token/);
+        }, /Cache-Status param "fwd"/);
     });
 
     it('throws for non-integer fwd-status and ttl values (RFC 9211 Section 2.3/2.4)', () => {
         assert.throws(() => {
             formatCacheStatus([{ cache: 'Edge', params: { fwdStatus: 200.5 } }]);
-        }, /Invalid Cache-Status fwd-status value/);
+        }, /Cache-Status param "fwd-status"/);
 
         assert.throws(() => {
             formatCacheStatus([{ cache: 'Edge', params: { ttl: 1.5 } }]);
-        }, /Invalid Cache-Status ttl value/);
+        }, /Cache-Status param "ttl"/);
     });
 
     it('preserves extension parameters while protecting known keys (RFC 9211 Section 2)', () => {

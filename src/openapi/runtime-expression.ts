@@ -224,7 +224,7 @@ function normalizeExpression(expression: string | OpenApiRuntimeExpression): Ope
 
 function formatHeaderName(name: string, expressionType: OpenApiRuntimeExpression['type']): string {
     if (!isHeaderName(name)) {
-        throw new Error(`OpenAPI runtime expression "${expressionType}" requires a valid header token name.`);
+        throw new Error(`OpenAPI runtime expression "${expressionType}" requires a valid RFC 9110 token name.`);
     }
     return name;
 }
