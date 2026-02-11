@@ -158,6 +158,27 @@ jobs:
       - name: Type-aware lint checks
         run: pnpm lint:ci
 
+  lint_type_aware_combined:
+    name: Lint (type-aware + type-check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Type-aware lint + type-check checks
+        run: pnpm lint:type-aware:combined
+
   lint_autofix:
     name: Lint autofix (same-repo PR)
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -299,6 +320,8 @@ jobs:
         run: pnpm test:coverage
 
       - name: Coverage threshold checks
+        env:
+          COVERAGE_ENFORCE_HOTSPOTS: 'true'
         run: pnpm test:coverage:check
 
   build:
@@ -331,6 +354,7 @@ jobs:
       - structure
       - security
       - lint_type_aware
+      - lint_type_aware_combined
       - typecheck
       - coverage
       - build
@@ -367,6 +391,7 @@ jobs:
           check_result 'structure' '${{ needs.structure.result }}' 'false'
           check_result 'security' '${{ needs.security.result }}' 'false'
           check_result 'lint_type_aware' '${{ needs.lint_type_aware.result }}' 'false'
+          check_result 'lint_type_aware_combined' '${{ needs.lint_type_aware_combined.result }}' 'false'
           check_result 'typecheck' '${{ needs.typecheck.result }}' 'false'
           check_result 'Run tests + audit coverage' '${{ needs.coverage.result }}' 'false'
           check_result 'build' '${{ needs.build.result }}' 'false'

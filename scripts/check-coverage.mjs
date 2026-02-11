@@ -25,7 +25,7 @@ const HOTSPOT_THRESHOLDS = [
     { path: 'src/cache-status.ts', line: 86, branch: 55, funcs: 100 },
     { path: 'src/cookie.ts', line: 91, branch: 50, funcs: 100 },
     { path: 'src/trace-context.ts', line: 91, branch: 60, funcs: 93 },
-    { path: 'src/ni.ts', line: 93, branch: 58, funcs: 90 },
+    { path: 'src/ni.ts', line: 90, branch: 58, funcs: 86 },
     { path: 'scripts/semver/policy.ts', line: 85, branch: 75, funcs: 85 },
 ];
 

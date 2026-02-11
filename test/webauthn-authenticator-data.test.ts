@@ -31,7 +31,7 @@ function concatBytes(...parts: Uint8Array[]): Uint8Array {
 }
 
 function encodeNestedSingleEntryMap(depth: number): Uint8Array {
-    let encoded = new Uint8Array([0xa0]);
+    let encoded: Uint8Array = new Uint8Array([0xa0]);
     for (let index = 0; index < depth; index++) {
         encoded = concatBytes(new Uint8Array([0xa1, 0x00]), encoded);
     }

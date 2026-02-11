@@ -408,7 +408,7 @@ export async function generateDigest(
     let input: BufferSource;
 
     if (typeof data === 'string') {
-        input = encodeUtf8(data);
+        input = encodeUtf8(data).slice();
     } else if (data instanceof ArrayBuffer) {
         input = data;
     } else {

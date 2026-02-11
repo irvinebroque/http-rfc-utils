@@ -80,7 +80,11 @@ function toBufferSource(data: ArrayBuffer | ArrayBufferView): BufferSource {
     if (data instanceof ArrayBuffer) {
         return data;
     }
-    return toUint8ArrayView(data);
+
+    const bytes = toUint8ArrayView(data);
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    return copy;
 }
 
 /**
@@ -114,7 +118,7 @@ export async function generateETagAsync(
         dataBuffer = toBufferSource(data);
     } else {
         const str = dataToString(data);
-        dataBuffer = encodeUtf8(str);
+        dataBuffer = encodeUtf8(str).slice();
     }
 
     const hashBuffer = await globalThis.crypto.subtle.digest(algorithm, dataBuffer);
