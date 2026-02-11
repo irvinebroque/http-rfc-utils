@@ -46,16 +46,13 @@ export function tryParseJrd(json: string): WebFingerResponse | null {
 function parseJrdObject(obj: unknown): WebFingerResponse {
     const record = toRecordOrEmpty(obj);
 
-    // RFC 7033 §4.4.1: subject is RECOMMENDED (SHOULD), not required.
-    if (record.subject !== undefined && typeof record.subject !== 'string') {
-        throw new Error('JRD "subject" must be a string when present');
+    if (typeof record.subject !== 'string') {
+        throw new Error('JRD document must have a "subject" string property');
     }
 
-    const result: WebFingerResponse = {};
-
-    if (typeof record.subject === 'string') {
-        result.subject = record.subject;
-    }
+    const result: WebFingerResponse = {
+        subject: record.subject,
+    };
 
     if (Array.isArray(record.aliases)) {
         result.aliases = record.aliases.filter((a: unknown) => typeof a === 'string');

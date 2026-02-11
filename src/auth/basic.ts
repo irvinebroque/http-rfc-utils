@@ -153,11 +153,13 @@ export function parseBasicChallenge(header: string): BasicChallenge | null {
  */
 // RFC 7617 §2, §2.1: Basic challenge formatting.
 export function formatBasicChallenge(realm: string, options: { charset?: 'UTF-8' } = {}): string {
+    const schemaInput: BasicChallengeParamsSchema = { realm };
+    if (options.charset !== undefined) {
+        schemaInput.charset = options.charset;
+    }
+
     const params: AuthParam[] = buildAuthParamsBySchema<BasicChallengeParamsSchema>(
-        {
-            realm,
-            charset: options.charset,
-        },
+        schemaInput,
         BASIC_CHALLENGE_SCHEMA
     );
     return `Basic ${formatAuthParams(params)}`;

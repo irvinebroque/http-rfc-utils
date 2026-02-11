@@ -148,7 +148,7 @@ export interface JsonPathLiteral {
 export interface JsonPathSingularQuery {
     type: 'singular-query';
     root: '$' | '@';
-    segments: JsonPathSingularSegment[];
+    segments: JsonPathSegment[];
 }
 
 export type JsonPathSingularSegment = JsonPathSingularChildSegment;

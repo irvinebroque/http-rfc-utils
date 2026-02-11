@@ -140,6 +140,7 @@ export function evaluateOpenApiSecurity(
 
     const normalized = parsed.map((requirement) => normalizeRequirement(requirement));
     const diagnostics = collectRequirementDiagnostics(normalized, schemeRegistry, options);
+    const unknownHandling = resolveUnknownSchemeHandling(options);
     if (isStrictMode(options) && diagnostics.length > 0) {
         throw new Error(diagnostics[0]?.message ?? STRICT_FALLBACK_MESSAGE);
     }
@@ -159,6 +160,10 @@ export function evaluateOpenApiSecurity(
 
     for (let requirementIndex = 0; requirementIndex < normalized.length; requirementIndex++) {
         const requirement = normalized[requirementIndex];
+        if (requirement === undefined) {
+            continue;
+        }
+
         const schemeNames = Object.keys(requirement);
         if (schemeNames.length === 0) {
             const anonymousResult: OpenApiSecurityRequirementEvaluationResult = {
@@ -180,6 +185,11 @@ export function evaluateOpenApiSecurity(
         for (const schemeName of schemeNames) {
             const requiredScopes = requirement[schemeName] ?? [];
             const scheme = schemeRegistry[schemeName];
+
+            if (!scheme && unknownHandling === 'ignore') {
+                continue;
+            }
+
             const credential = credentials[schemeName];
             const schemeResult = evaluateScheme(
                 schemeName,
@@ -208,7 +218,9 @@ export function evaluateOpenApiSecurity(
         }
     }
 
-    const matchedRequirement = matchedRequirementIndex === null ? null : requirementResults[matchedRequirementIndex];
+    const matchedRequirement = matchedRequirementIndex === null
+        ? null
+        : (requirementResults[matchedRequirementIndex] ?? null);
     return {
         allowed: matchedRequirementIndex !== null,
         anonymous: matchedRequirement?.anonymous ?? false,
@@ -229,6 +241,10 @@ function collectRequirementDiagnostics(
 
     for (let requirementIndex = 0; requirementIndex < requirements.length; requirementIndex++) {
         const requirement = requirements[requirementIndex];
+        if (requirement === undefined) {
+            continue;
+        }
+
         const schemeNames = Object.keys(requirement);
         for (const schemeName of schemeNames) {
             const requiredScopes = requirement[schemeName] ?? [];
@@ -313,12 +329,9 @@ function evaluateScheme(
         };
     }
 
-    const present = hasCredential(credential);
-
     switch (scheme.type) {
-        case 'apiKey':
-        case 'mutualTLS': {
-            if (!present) {
+        case 'apiKey': {
+            if (!hasApiKeyCredential(credential)) {
                 return {
                     schemeName,
                     schemeType: scheme.type,
@@ -331,19 +344,28 @@ function evaluateScheme(
                 };
             }
 
-            const grantedScopes = normalizeScopes(extractCredentialScopes(credential));
-            const grantedSet = new Set(grantedScopes);
-            const missingScopes = required.filter((scope) => !grantedSet.has(scope));
-            if (missingScopes.length > 0) {
+            return {
+                schemeName,
+                schemeType: scheme.type,
+                satisfied: true,
+                code: 'satisfied',
+                message: `Security scheme "${schemeName}" is satisfied.`,
+                requiredScopes: required,
+                grantedScopes: [],
+                missingScopes: [],
+            };
+        }
+        case 'mutualTLS': {
+            if (!hasMutualTlsCredential(credential)) {
                 return {
                     schemeName,
                     schemeType: scheme.type,
                     satisfied: false,
-                    code: 'missing-scopes',
-                    message: `Security scheme "${schemeName}" is missing required scopes: ${missingScopes.join(', ')}.`,
+                    code: 'missing-credential',
+                    message: `Security scheme "${schemeName}" is required but no credential was provided.`,
                     requiredScopes: required,
-                    grantedScopes,
-                    missingScopes,
+                    grantedScopes: [],
+                    missingScopes: required,
                 };
             }
 
@@ -354,12 +376,12 @@ function evaluateScheme(
                 code: 'satisfied',
                 message: `Security scheme "${schemeName}" is satisfied.`,
                 requiredScopes: required,
-                grantedScopes,
+                grantedScopes: [],
                 missingScopes: [],
             };
         }
         case 'http': {
-            if (!present) {
+            if (!hasHttpCredential(credential)) {
                 return {
                     schemeName,
                     schemeType: scheme.type,
@@ -374,7 +396,6 @@ function evaluateScheme(
 
             const expectedScheme = scheme.scheme.trim().toLowerCase();
             const providedScheme = extractHttpScheme(credential);
-            const grantedScopes = normalizeScopes(extractCredentialScopes(credential));
             if (providedScheme !== undefined && providedScheme !== expectedScheme) {
                 return {
                     schemeName,
@@ -383,23 +404,8 @@ function evaluateScheme(
                     code: 'http-scheme-mismatch',
                     message: `HTTP security scheme "${schemeName}" expects "${scheme.scheme}" credentials.`,
                     requiredScopes: required,
-                    grantedScopes,
+                    grantedScopes: [],
                     missingScopes: required,
-                };
-            }
-
-            const grantedSet = new Set(grantedScopes);
-            const missingScopes = required.filter((scope) => !grantedSet.has(scope));
-            if (missingScopes.length > 0) {
-                return {
-                    schemeName,
-                    schemeType: scheme.type,
-                    satisfied: false,
-                    code: 'missing-scopes',
-                    message: `Security scheme "${schemeName}" is missing required scopes: ${missingScopes.join(', ')}.`,
-                    requiredScopes: required,
-                    grantedScopes,
-                    missingScopes,
                 };
             }
 
@@ -410,13 +416,13 @@ function evaluateScheme(
                 code: 'satisfied',
                 message: `HTTP security scheme "${schemeName}" is satisfied.`,
                 requiredScopes: required,
-                grantedScopes,
+                grantedScopes: [],
                 missingScopes: [],
             };
         }
         case 'oauth2':
         case 'openIdConnect': {
-            if (!present) {
+            if (!hasScopedCredential(credential)) {
                 return {
                     schemeName,
                     schemeType: scheme.type,
@@ -484,7 +490,7 @@ function normalizeScopes(scopes: readonly string[]): string[] {
     return Array.from(new Set(scopes)).sort((left, right) => left.localeCompare(right));
 }
 
-function hasCredential(credential: OpenApiSecurityCredential | undefined): boolean {
+function hasApiKeyCredential(credential: OpenApiSecurityCredential | undefined): boolean {
     if (credential === undefined || credential === null) {
         return false;
     }
@@ -498,30 +504,111 @@ function hasCredential(credential: OpenApiSecurityCredential | undefined): boole
     }
 
     if (Array.isArray(credential)) {
-        return true;
-    }
-
-    if (isSecurityCredentialObject(credential)) {
-        if (typeof credential.present === 'boolean') {
-            return credential.present;
-        }
-
-        if (typeof credential.value === 'string' && credential.value.trim().length > 0) {
-            return true;
-        }
-
-        if (typeof credential.scheme === 'string' && credential.scheme.trim().length > 0) {
-            return true;
-        }
-
-        if (Array.isArray(credential.scopes) && credential.scopes.some((scope) => typeof scope === 'string' && scope.length > 0)) {
-            return true;
-        }
-
         return false;
     }
 
-    return false;
+    if (!isSecurityCredentialObject(credential)) {
+        return false;
+    }
+
+    if (typeof credential.present === 'boolean') {
+        return credential.present;
+    }
+
+    return typeof credential.value === 'string' && credential.value.trim().length > 0;
+}
+
+function hasMutualTlsCredential(credential: OpenApiSecurityCredential | undefined): boolean {
+    if (credential === undefined || credential === null) {
+        return false;
+    }
+
+    if (typeof credential === 'boolean') {
+        return credential;
+    }
+
+    if (typeof credential === 'string') {
+        return credential.trim().length > 0;
+    }
+
+    if (Array.isArray(credential)) {
+        return false;
+    }
+
+    if (!isSecurityCredentialObject(credential)) {
+        return false;
+    }
+
+    if (typeof credential.present === 'boolean') {
+        return credential.present;
+    }
+
+    return typeof credential.value === 'string' && credential.value.trim().length > 0;
+}
+
+function hasHttpCredential(credential: OpenApiSecurityCredential | undefined): boolean {
+    if (credential === undefined || credential === null) {
+        return false;
+    }
+
+    if (typeof credential === 'boolean') {
+        return credential;
+    }
+
+    if (typeof credential === 'string') {
+        return credential.trim().length > 0;
+    }
+
+    if (Array.isArray(credential)) {
+        return false;
+    }
+
+    if (!isSecurityCredentialObject(credential)) {
+        return false;
+    }
+
+    if (typeof credential.present === 'boolean') {
+        return credential.present;
+    }
+
+    if (typeof credential.scheme === 'string' && credential.scheme.trim().length > 0) {
+        return true;
+    }
+
+    return typeof credential.value === 'string' && credential.value.trim().length > 0;
+}
+
+function hasScopedCredential(credential: OpenApiSecurityCredential | undefined): boolean {
+    if (credential === undefined || credential === null) {
+        return false;
+    }
+
+    if (typeof credential === 'boolean') {
+        return credential;
+    }
+
+    if (typeof credential === 'string') {
+        return credential.trim().length > 0;
+    }
+
+    if (Array.isArray(credential)) {
+        return credential.some((scope) => typeof scope === 'string' && scope.trim().length > 0);
+    }
+
+    if (!isSecurityCredentialObject(credential)) {
+        return false;
+    }
+
+    if (typeof credential.present === 'boolean') {
+        return credential.present;
+    }
+
+    if (typeof credential.value === 'string' && credential.value.trim().length > 0) {
+        return true;
+    }
+
+    return Array.isArray(credential.scopes)
+        && credential.scopes.some((scope) => typeof scope === 'string' && scope.trim().length > 0);
 }
 
 function extractCredentialScopes(credential: OpenApiSecurityCredential | undefined): string[] {

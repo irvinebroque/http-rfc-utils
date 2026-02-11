@@ -47,7 +47,7 @@ export interface WebFingerLink {
 }
 
 export interface WebFingerResponse {
-    subject?: string;
+    subject: string;
     aliases?: string[];
     properties?: Record<string, string | null>;
     links?: WebFingerLink[];

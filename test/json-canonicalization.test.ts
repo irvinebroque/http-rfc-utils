@@ -103,7 +103,7 @@ describe('RFC 8785 JSON Canonicalization Scheme (§3.2)', () => {
             const cyclicArray: unknown[] = [];
             cyclicArray.push(cyclicArray);
             assert.throws(
-                () => validateCanonicalJson(cyclicArray),
+                () => validateCanonicalJson(cyclicArray as unknown as CanonicalJsonValue),
                 { message: '$[0] contains a cyclic reference' }
             );
 
