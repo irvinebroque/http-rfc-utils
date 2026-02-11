@@ -23,6 +23,8 @@ const KNOWN_FIELDS = new Set([
     'hiring',
 ]);
 
+const DISALLOWED_CONTACT_CTL_REGEX = /[\u0000-\u001F\u007F]/;
+
 /**
  * Parse a security.txt file into a structured SecurityTxt object.
  * RFC 9116 §3: Comments start with `#`, field names are case-insensitive.
@@ -125,11 +127,25 @@ export function formatSecurityTxt(config: SecurityTxt): string {
 
     const lines: string[] = [];
 
-    for (const contact of config.contact) {
+    for (const [index, contact] of config.contact.entries()) {
+        if (contact.trim() === '') {
+            throw new Error(
+                `security.txt config.contact[${index}] must not be empty or whitespace; received ${JSON.stringify(contact)}`
+            );
+        }
+        if (DISALLOWED_CONTACT_CTL_REGEX.test(contact)) {
+            throw new Error(
+                `security.txt config.contact[${index}] must not contain control characters or newlines; received ${JSON.stringify(contact)}`
+            );
+        }
         lines.push(`Contact: ${contact}`);
     }
 
     // RFC 9116 §2.5.3: Expires is REQUIRED.
+    const expiresTime = config.expires?.getTime();
+    if (expiresTime === undefined || Number.isNaN(expiresTime)) {
+        throw new Error(`security.txt config.expires must be a valid Date; received ${String(config.expires)}`);
+    }
     lines.push(`Expires: ${config.expires.toISOString()}`);
 
     if (config.encryption) {
@@ -211,7 +227,8 @@ export function validateSecurityTxt(config: SecurityTxt): SecurityTxtIssue[] {
 
     // Validate Contact URIs.
     for (const contact of config.contact) {
-        if (!contact.startsWith('mailto:') && !contact.startsWith('https:') && !contact.startsWith('tel:')) {
+        const contactLower = contact.toLowerCase();
+        if (!contactLower.startsWith('mailto:') && !contactLower.startsWith('https:') && !contactLower.startsWith('tel:')) {
             issues.push({
                 field: 'contact',
                 message: `Contact "${contact}" should be a mailto:, https:, or tel: URI (RFC 9116 §2.5.1)`,

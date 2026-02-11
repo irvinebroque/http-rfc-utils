@@ -15,6 +15,7 @@ import {
     formatBearerChallenge,
     parseBearerChallenge,
     parseWWWAuthenticate,
+    formatWWWAuthenticate,
     parseAuthorization,
     // Digest (RFC 7616)
     DIGEST_AUTH_ALGORITHMS,
@@ -67,6 +68,11 @@ describe('Basic Authentication (RFC 7617 Section 2)', () => {
         assert.equal(parseBasicAuthorization('Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ'), null);
         assert.equal(parseBasicAuthorization('Basic dXNlcjpwYXNz.'), null);
     });
+
+    it('throws for semantic-invalid Basic formatter inputs', () => {
+        assert.throws(() => formatBasicAuthorization('user:name', 'secret'), /must not contain ":"/);
+        assert.throws(() => formatBasicAuthorization('user', 'bad\npass'), /control characters/);
+    });
 });
 
 describe('Bearer Authentication (RFC 6750 Section 2.1)', () => {
@@ -100,6 +106,14 @@ describe('Bearer Authentication (RFC 6750 Section 2.1)', () => {
         );
     });
 
+    it('throws for unregistered Bearer error values in formatter', () => {
+        assert.throws(() => {
+            formatBearerChallenge({
+                error: 'not_registered' as unknown as 'invalid_token',
+            });
+        }, /params\.error must be one of invalid_request, invalid_token, insufficient_scope/);
+    });
+
     // RFC 9110 §5.5: reject CR/LF and CTLs in serialized auth parameters.
     it('rejects control bytes in Bearer challenge formatting', () => {
         assert.throws(() => {
@@ -116,6 +130,12 @@ describe('Bearer Authentication (RFC 6750 Section 2.1)', () => {
             });
         }, /valid RFC 9110 token/);
     });
+
+    it('throws for semantic-invalid Bearer formatter inputs', () => {
+        assert.throws(() => {
+            formatBearerAuthorization('not allowed spaces');
+        }, /b64token syntax/);
+    });
 });
 
 describe('WWW-Authenticate parsing (RFC 7235 Section 2.1)', () => {
@@ -124,6 +144,14 @@ describe('WWW-Authenticate parsing (RFC 7235 Section 2.1)', () => {
         assert.equal(parsed.length, 2);
         assert.equal(parsed[0]?.scheme.toLowerCase(), 'basic');
         assert.equal(parsed[1]?.scheme.toLowerCase(), 'bearer');
+    });
+
+    it('formats WWW-Authenticate challenges directly', () => {
+        const header = formatWWWAuthenticate([
+            { scheme: 'Basic', params: [{ name: 'realm', value: 'docs' }] },
+            { scheme: 'Bearer', params: [{ name: 'realm', value: 'api' }] },
+        ]);
+        assert.equal(header, 'Basic realm="docs", Bearer realm="api"');
     });
 });
 
@@ -297,7 +325,23 @@ describe('Digest Authentication (RFC 7616)', () => {
                     nonce: 'abc123',
                     algorithm: 'SHA-256,evil' as unknown as 'SHA-256',
                 });
-            }, /valid RFC 9110 token/);
+            }, /algorithm must be one of/);
+        });
+
+        it('throws when required Digest challenge fields are missing', () => {
+            assert.throws(() => {
+                formatDigestChallenge({
+                    scheme: 'Digest',
+                    nonce: 'abc123',
+                } as unknown as DigestChallenge);
+            }, /Digest challenge realm is required/);
+
+            assert.throws(() => {
+                formatDigestChallenge({
+                    scheme: 'Digest',
+                    realm: 'test',
+                } as unknown as DigestChallenge);
+            }, /Digest challenge nonce is required/);
         });
     });
 
@@ -567,7 +611,29 @@ describe('Digest Authentication (RFC 7616)', () => {
                     response: 'deadbeef',
                     qop: 'auth,evil' as unknown as 'auth',
                 });
-            }, /valid RFC 9110 token/);
+            }, /qop must be "auth" or "auth-int"/);
+        });
+
+        it('throws when required Digest credential fields are missing', () => {
+            assert.throws(() => {
+                formatDigestAuthorization({
+                    scheme: 'Digest',
+                    username: 'user',
+                    realm: 'example.com',
+                    response: 'deadbeef',
+                } as unknown as DigestCredentials);
+            }, /Digest uri is required/);
+
+            assert.throws(() => {
+                formatDigestAuthorization({
+                    scheme: 'Digest',
+                    username: 'user',
+                    realm: 'example.com',
+                    uri: '/resource',
+                    response: 'deadbeef',
+                    qop: 'auth',
+                } as unknown as DigestCredentials);
+            }, /cnonce is required when qop is present/);
         });
     });
 

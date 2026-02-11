@@ -4,7 +4,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHTTPDate, parseRFC3339 } from '../src/datetime.js';
+import { isExpired, parseHTTPDate, parseRFC3339, secondsUntil } from '../src/datetime.js';
 
 const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -200,5 +200,34 @@ describe('parseHTTPDate', () => {
     it('rejects invalid RFC 850 time values', () => {
         const parsed = parseHTTPDate('Sunday, 06-Nov-94 08:49:60 GMT');
         assert.equal(parsed, null);
+    });
+});
+
+// RFC 9111 §4.2: freshness evaluation compares expiration instants against current time and computes delta-seconds.
+describe('Date helpers (RFC 9111 Section 4.2)', () => {
+    it('isExpired compares dates against Date.now deterministically', () => {
+        const originalNow = Date.now;
+        Date.now = () => Date.UTC(2026, 1, 1, 0, 0, 0, 0);
+
+        try {
+            assert.equal(isExpired(new Date('2026-01-31T23:59:59.999Z')), true);
+            assert.equal(isExpired(new Date('2026-02-01T00:00:00.000Z')), false);
+            assert.equal(isExpired(new Date('2026-02-01T00:00:01.000Z')), false);
+        } finally {
+            Date.now = originalNow;
+        }
+    });
+
+    it('secondsUntil floors positive values and clamps past dates to zero', () => {
+        const originalNow = Date.now;
+        Date.now = () => Date.UTC(2026, 1, 1, 0, 0, 0, 250);
+
+        try {
+            assert.equal(secondsUntil(new Date('2026-02-01T00:00:10.999Z')), 10);
+            assert.equal(secondsUntil(new Date('2026-02-01T00:00:00.250Z')), 0);
+            assert.equal(secondsUntil(new Date('2026-01-31T23:59:59.000Z')), 0);
+        } finally {
+            Date.now = originalNow;
+        }
     });
 });

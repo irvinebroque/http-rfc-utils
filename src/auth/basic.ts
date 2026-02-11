@@ -106,9 +106,13 @@ export function formatBasicAuthorization(
     username: string,
     password: string,
     options: { encoding?: 'utf-8' | 'latin1' } = {}
-): string | null {
-    if (username.includes(':') || hasCtl(username) || hasCtl(password)) {
-        return null;
+): string {
+    if (username.includes(':')) {
+        throw new Error(`Basic username must not contain ":"; received ${JSON.stringify(username)}`);
+    }
+
+    if (hasCtl(username) || hasCtl(password)) {
+        throw new Error('Basic username and password must not contain control characters');
     }
 
     const encoding = options.encoding ?? 'utf-8';

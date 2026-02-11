@@ -78,9 +78,9 @@ export function parseBearerAuthorization(header: string): string | null {
  * Format Bearer Authorization header.
  */
 // RFC 6750 §2.1: Bearer Authorization formatting.
-export function formatBearerAuthorization(token: string): string | null {
+export function formatBearerAuthorization(token: string): string {
     if (!isB64Token(token)) {
-        return null;
+        throw new Error(`Bearer token must match RFC 6750 b64token syntax; received ${JSON.stringify(token)}`);
     }
     return `Bearer ${token}`;
 }
@@ -117,6 +117,12 @@ export function parseBearerChallenge(header: string): BearerChallenge | null {
  */
 // RFC 6750 §3: Bearer challenge formatting.
 export function formatBearerChallenge(params: BearerChallenge): string {
+    if (params.error !== undefined && !BEARER_ERRORS.includes(params.error)) {
+        throw new Error(
+            `Bearer challenge params.error must be one of ${BEARER_ERRORS.join(', ')}; received ${JSON.stringify(params.error)}`
+        );
+    }
+
     const parts: AuthParam[] = buildAuthParamsBySchema<BearerChallengeSchema>(
         params,
         BEARER_CHALLENGE_SCHEMA,

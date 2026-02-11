@@ -61,8 +61,16 @@ export function parseRetryAfter(value: string): RetryAfterValue | null {
 // RFC 9110 §10.2.3: Retry-After formatting.
 export function formatRetryAfter(value: Date | number): string {
     if (typeof value === 'number') {
-        const seconds = Math.max(0, Math.floor(value));
-        return String(seconds);
+        if (!Number.isFinite(value)) {
+            throw new Error(`Retry-After delay-seconds must be finite; received ${String(value)}`);
+        }
+        if (!Number.isInteger(value)) {
+            throw new Error(`Retry-After delay-seconds must be an integer; received ${value}`);
+        }
+        if (value < 0) {
+            throw new Error(`Retry-After delay-seconds must be non-negative; received ${value}`);
+        }
+        return String(value);
     }
 
     return formatHTTPDate(value);

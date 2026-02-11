@@ -22,6 +22,12 @@ describe('Retry-After + Vary (RFC 9110 Sections 10.2.3, 12.5.5)', () => {
         assert.equal(formatRetryAfter(60), '60');
     });
 
+    it('throws for semantic-invalid Retry-After numeric values', () => {
+        assert.throws(() => formatRetryAfter(Number.POSITIVE_INFINITY), /must be finite/);
+        assert.throws(() => formatRetryAfter(1.5), /must be an integer/);
+        assert.throws(() => formatRetryAfter(-1), /must be non-negative/);
+    });
+
     it('merges Vary values and honors * (RFC 9110 Section 12.5.5)', () => {
         assert.equal(mergeVary('Accept-Encoding', 'Accept-Language'), 'Accept-Encoding, Accept-Language');
         assert.equal(mergeVary('*', 'Accept-Encoding'), '*');

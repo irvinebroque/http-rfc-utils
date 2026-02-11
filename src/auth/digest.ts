@@ -96,6 +96,78 @@ function assertDigestBareAuthParamValue(param: Readonly<{ name: string; value: s
     assertHeaderToken(param.value, `Digest ${param.name} value`);
 }
 
+function assertNonEmptyDigestString(value: unknown, context: string): string {
+    if (typeof value !== 'string' || value.length === 0) {
+        throw new Error(`${context} is required and must be a non-empty string; received ${JSON.stringify(value)}`);
+    }
+    return value;
+}
+
+function assertDigestChallengeForFormatting(challenge: DigestChallenge): void {
+    if (challenge.scheme.toLowerCase() !== 'digest') {
+        throw new Error(`Digest challenge scheme must be "Digest"; received ${JSON.stringify(challenge.scheme)}`);
+    }
+
+    assertNonEmptyDigestString(challenge.realm, 'Digest challenge realm');
+    assertNonEmptyDigestString(challenge.nonce, 'Digest challenge nonce');
+
+    if (challenge.algorithm !== undefined && !isDigestAlgorithm(challenge.algorithm)) {
+        throw new Error(
+            `Digest challenge algorithm must be one of ${DIGEST_AUTH_ALGORITHMS.join(', ')}; received ${JSON.stringify(challenge.algorithm)}`,
+        );
+    }
+
+    if (challenge.qop !== undefined) {
+        if (!Array.isArray(challenge.qop) || challenge.qop.length === 0) {
+            throw new Error('Digest challenge qop must be a non-empty array when provided');
+        }
+
+        for (const value of challenge.qop) {
+            if (!isDigestQop(value)) {
+                throw new Error(`Digest challenge qop contains invalid value ${JSON.stringify(value)}; expected "auth" or "auth-int"`);
+            }
+        }
+    }
+}
+
+function assertDigestCredentialsForFormatting(credentials: DigestCredentials): void {
+    if (credentials.scheme.toLowerCase() !== 'digest') {
+        throw new Error(`Digest credentials scheme must be "Digest"; received ${JSON.stringify(credentials.scheme)}`);
+    }
+
+    assertNonEmptyDigestString(credentials.username, 'Digest username');
+    assertNonEmptyDigestString(credentials.realm, 'Digest realm');
+    assertNonEmptyDigestString(credentials.uri, 'Digest uri');
+    assertNonEmptyDigestString(credentials.response, 'Digest response');
+
+    if (credentials.algorithm !== undefined && !isDigestAlgorithm(credentials.algorithm)) {
+        throw new Error(
+            `Digest algorithm must be one of ${DIGEST_AUTH_ALGORITHMS.join(', ')}; received ${JSON.stringify(credentials.algorithm)}`,
+        );
+    }
+
+    if (credentials.qop !== undefined && !isDigestQop(credentials.qop)) {
+        throw new Error(`Digest qop must be "auth" or "auth-int" when provided; received ${JSON.stringify(credentials.qop)}`);
+    }
+
+    if (credentials.cnonce !== undefined && credentials.cnonce.length === 0) {
+        throw new Error('Digest cnonce must be a non-empty string when provided');
+    }
+
+    if (credentials.nc !== undefined) {
+        assertDigestNc(credentials.nc, 'Digest nc');
+    }
+
+    if (credentials.qop !== undefined) {
+        if (credentials.cnonce === undefined || credentials.cnonce.length === 0) {
+            throw new Error('Digest cnonce is required when qop is present');
+        }
+        if (credentials.nc === undefined) {
+            throw new Error('Digest nc is required when qop is present');
+        }
+    }
+}
+
 const DIGEST_CHALLENGE_SCHEMA = [
     createAuthParamSchemaEntry<DigestChallengeSchema>({
         key: 'realm',
@@ -412,6 +484,8 @@ export function parseDigestChallenge(challenge: AuthChallenge): DigestChallenge 
  */
 // RFC 7616 §3.3: Digest challenge formatting.
 export function formatDigestChallenge(challenge: DigestChallenge): string {
+    assertDigestChallengeForFormatting(challenge);
+
     const params = buildAuthParamsBySchema<DigestChallengeSchema>(
         challenge,
         DIGEST_CHALLENGE_SCHEMA
@@ -518,6 +592,8 @@ export function parseDigestAuthorization(credentials: AuthCredentials): DigestCr
  */
 // RFC 7616 §3.4: Digest credentials formatting.
 export function formatDigestAuthorization(credentials: DigestCredentials): string {
+    assertDigestCredentialsForFormatting(credentials);
+
     const params = buildAuthParamsBySchema<DigestCredentialsSchema>(
         credentials,
         DIGEST_CREDENTIALS_SCHEMA

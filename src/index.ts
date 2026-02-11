@@ -881,7 +881,34 @@ export {
 // =============================================================================
 // OpenAPI
 // =============================================================================
-export * from './openapi.js';
+export {
+    normalizeOpenApiParameterSpec,
+    formatQueryParameter,
+    parseQueryParameter,
+    formatPathParameter,
+    parsePathParameter,
+    formatHeaderParameter,
+    parseHeaderParameter,
+    formatCookieParameter,
+    parseCookieParameter,
+    parseOpenApiRuntimeExpression,
+    formatOpenApiRuntimeExpression,
+    isOpenApiRuntimeExpression,
+    evaluateOpenApiRuntimeExpression,
+    materializeOpenApiLinkValues,
+    resolveOpenApiCallbackUrl,
+    parseOpenApiSecurityRequirements,
+    tryParseOpenApiSecurityRequirements,
+    validateOpenApiSecurityRequirements,
+    normalizeOpenApiSecurityRequirements,
+    resolveEffectiveOpenApiSecurity,
+    evaluateOpenApiSecurity,
+    compileOpenApiPathMatcher,
+    extractOpenApiPathParams,
+    resolveOpenApiServerUrl,
+    listOpenApiServerCandidates,
+    lintOpenApiDocument,
+} from './openapi.js';
 
 // =============================================================================
 // URI (RFC 3986)
