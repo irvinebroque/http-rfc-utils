@@ -43,9 +43,13 @@ describe('Retry-After + Vary (RFC 9110 Sections 10.2.3, 12.5.5)', () => {
 describe('parseSunset (RFC 8594 Section 3)', () => {
     // RFC 8594 §3: Sunset = HTTP-date
     it('parses valid IMF-fixdate', () => {
-        const result = parseSunset('Sat, 31 Dec 2018 23:59:59 GMT');
+        const result = parseSunset('Mon, 31 Dec 2018 23:59:59 GMT');
         assert.ok(result instanceof Date);
         assert.equal(result!.toUTCString(), 'Mon, 31 Dec 2018 23:59:59 GMT');
+    });
+
+    it('returns null for weekday/date mismatch', () => {
+        assert.equal(parseSunset('Sat, 31 Dec 2018 23:59:59 GMT'), null);
     });
 
     // RFC 8594 §9: Example from spec

@@ -195,9 +195,13 @@ function filterAllowlistedFindings(
     };
 }
 
-function getRequiredBump(findings: CompatibilityFinding[]): SemverBump {
+function getRequiredBump(comparison: CompatibilityResult, findings: CompatibilityFinding[]): SemverBump {
     if (findings.length > 0) {
         return 'major';
+    }
+
+    if (comparison.nextExportCount > comparison.previousExportCount) {
+        return 'minor';
     }
 
     return 'patch';
@@ -211,7 +215,7 @@ export async function evaluateSemverPolicy(
     const allowlist = await loadAllowlist(options.allowlistPath);
     const filteredFindings = filterAllowlistedFindings(options.comparison.findings, allowlist.entries, now);
 
-    const requiredBump = getRequiredBump(filteredFindings.effectiveFindings);
+    const requiredBump = getRequiredBump(options.comparison, filteredFindings.effectiveFindings);
     const messages: string[] = [];
 
     if (allowlist.issues.length > 0) {
@@ -231,6 +235,10 @@ export async function evaluateSemverPolicy(
     if (requiredBump === 'major' && options.declaredBump !== 'major') {
         const declared = options.declaredBump ?? 'none';
         messages.push(`breaking API changes require major but declared bump is ${declared}`);
+    }
+
+    if (requiredBump === 'minor' && options.declaredBump === 'patch') {
+        messages.push('additive API changes require minor but declared bump is patch');
     }
 
     if (

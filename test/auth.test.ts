@@ -287,6 +287,18 @@ describe('Digest Authentication (RFC 7616)', () => {
             assert.deepEqual(parsed.qop, original.qop);
             assert.equal(parsed.algorithm, original.algorithm);
         });
+
+        // RFC 9110 §5.6.2: bare auth-param values must serialize as tokens.
+        it('rejects invalid bare challenge parameter tokens during formatting', () => {
+            assert.throws(() => {
+                formatDigestChallenge({
+                    scheme: 'Digest',
+                    realm: 'test',
+                    nonce: 'abc123',
+                    algorithm: 'SHA-256,evil' as unknown as 'SHA-256',
+                });
+            }, /valid RFC 9110 token/);
+        });
     });
 
     // RFC 7616 §3.4: Authorization credentials parsing
@@ -527,6 +539,36 @@ describe('Digest Authentication (RFC 7616)', () => {
             assert.equal(parsed.nc, original.nc);
             assert.equal(parsed.cnonce, original.cnonce);
         });
+
+        // RFC 7616 §3.4: nc is exactly 8 hexadecimal digits.
+        it('rejects invalid nc values during Digest Authorization formatting', () => {
+            assert.throws(() => {
+                formatDigestAuthorization({
+                    scheme: 'Digest',
+                    username: 'user',
+                    realm: 'example.com',
+                    uri: '/resource',
+                    response: 'deadbeef',
+                    qop: 'auth',
+                    cnonce: 'xyz789',
+                    nc: '1',
+                });
+            }, /exactly 8 hexadecimal digits/);
+        });
+
+        // RFC 9110 §5.6.2: bare qop parameter values are tokens.
+        it('rejects invalid bare qop tokens during Digest Authorization formatting', () => {
+            assert.throws(() => {
+                formatDigestAuthorization({
+                    scheme: 'Digest',
+                    username: 'user',
+                    realm: 'example.com',
+                    uri: '/resource',
+                    response: 'deadbeef',
+                    qop: 'auth,evil' as unknown as 'auth',
+                });
+            }, /valid RFC 9110 token/);
+        });
     });
 
     // RFC 7616 §3.5: Authentication-Info
@@ -588,6 +630,16 @@ describe('Digest Authentication (RFC 7616)', () => {
                 nextnonce: 'abc123',
                 rspauth: 'deadbeef',
             });
+        });
+
+        // RFC 7616 §3.5: nc is exactly 8 hexadecimal digits.
+        it('rejects invalid nc values during Authentication-Info formatting', () => {
+            assert.throws(() => {
+                formatDigestAuthenticationInfo({
+                    qop: 'auth',
+                    nc: 'xyz',
+                });
+            }, /exactly 8 hexadecimal digits/);
         });
     });
 

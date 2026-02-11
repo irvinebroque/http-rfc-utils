@@ -163,6 +163,18 @@ describe('Cookie date parsing (RFC 6265 Section 5.1.1)', () => {
         assert.equal(parseCookieDate('Wed, 09 Jun 2021 24:00:00 GMT'), null);
     });
 
+    it('rejects impossible calendar dates that would otherwise normalize', () => {
+        assert.equal(parseCookieDate('Fri, 31 Apr 2021 10:18:14 GMT'), null);
+        assert.equal(parseCookieDate('Mon, 29 Feb 2021 10:18:14 GMT'), null);
+    });
+
+    it('accepts valid leap-day cookie dates', () => {
+        assert.equal(
+            parseCookieDate('Sat, 29 Feb 2020 10:18:14 GMT')?.toISOString(),
+            '2020-02-29T10:18:14.000Z'
+        );
+    });
+
     it('returns null when the cookie-date is missing required tokens', () => {
         assert.equal(parseCookieDate('Wed, Jun 2021 GMT'), null);
     });

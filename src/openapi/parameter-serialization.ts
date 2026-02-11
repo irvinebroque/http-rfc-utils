@@ -135,13 +135,13 @@ export function parseQueryParameter(
     if (parsedSource === null) {
         return null;
     }
-    const { entries, encoded } = parsedSource;
+    const { entries, encoded, sourceType } = parsedSource;
 
     if (normalized.style === 'deepObject') {
         return parseDeepObjectQuery(normalized, entries, encoded);
     }
 
-    return parseQueryFromEntries(normalized, entries, encoded);
+    return parseQueryFromEntries(normalized, entries, encoded, sourceType);
 }
 
 export function formatPathParameter(spec: OpenApiSchemaParameterSpec, value: OpenApiParameterValue): string {
@@ -351,11 +351,24 @@ function parseQueryFromEntries(
     normalized: NormalizedOpenApiSchemaParameterSpec,
     entries: readonly OpenApiQueryEntry[],
     encoded: boolean,
+    sourceType: 'query-string' | 'url-search-params' | 'entries',
 ): OpenApiParameterValue | null {
+    const isScopedFormExplodedObject =
+        normalized.style === 'form' &&
+        normalized.valueType === 'object' &&
+        normalized.explode &&
+        sourceType === 'entries';
+
+    const allowFormExplodedObjectParsing =
+        normalized.style !== 'form' ||
+        normalized.valueType !== 'object' ||
+        !normalized.explode ||
+        isScopedFormExplodedObject;
+
     if (encoded) {
         switch (normalized.style) {
             case 'form':
-                return parseFormQueryEncoded(normalized, entries);
+                return parseFormQueryEncoded(normalized, entries, allowFormExplodedObjectParsing);
             case 'spaceDelimited':
                 return parseNamedDelimitedQueryEncoded(normalized, entries, ' ');
             case 'pipeDelimited':
@@ -372,7 +385,7 @@ function parseQueryFromEntries(
 
     switch (normalized.style) {
         case 'form':
-            return parseFormQuery(normalized, decodedEntries);
+            return parseFormQuery(normalized, decodedEntries, allowFormExplodedObjectParsing);
         case 'spaceDelimited':
             return parseNamedDelimitedQuery(normalized, decodedEntries, ' ');
         case 'pipeDelimited':
@@ -385,8 +398,12 @@ function parseQueryFromEntries(
 function parseFormQuery(
     normalized: NormalizedOpenApiSchemaParameterSpec,
     entries: readonly OpenApiQueryEntry[],
+    allowExplodedObjectParsing: boolean,
 ): OpenApiParameterValue | null {
     if (normalized.valueType === 'object' && normalized.explode) {
+        if (!allowExplodedObjectParsing) {
+            return null;
+        }
         const objectValue: Record<string, OpenApiParameterPrimitive> = {};
         for (const entry of entries) {
             if (!entry.name) {
@@ -426,8 +443,12 @@ function parseFormQuery(
 function parseFormQueryEncoded(
     normalized: NormalizedOpenApiSchemaParameterSpec,
     entries: readonly OpenApiQueryEntry[],
+    allowExplodedObjectParsing: boolean,
 ): OpenApiParameterValue | null {
     if (normalized.valueType === 'object' && normalized.explode) {
+        if (!allowExplodedObjectParsing) {
+            return null;
+        }
         const decodedEntries: OpenApiQueryEntry[] = [];
         for (const entry of entries) {
             const decodedName = decodeComponent(entry.name);
@@ -437,7 +458,7 @@ function parseFormQueryEncoded(
             }
             decodedEntries.push({ name: decodedName, value: decodedValue });
         }
-        return parseFormQuery(normalized, decodedEntries);
+        return parseFormQuery(normalized, decodedEntries, allowExplodedObjectParsing);
     }
 
     const namedRawValues = collectEncodedNamedRawValues(normalized, entries);
@@ -992,10 +1013,14 @@ function decodeSplitDelimited(value: string, delimiter: string): string[] | null
 
 function readQueryEntries(
     source: string | URLSearchParams | readonly OpenApiQueryEntry[],
-): { entries: OpenApiQueryEntry[]; encoded: boolean } | null {
+): {
+    entries: OpenApiQueryEntry[];
+    encoded: boolean;
+    sourceType: 'query-string' | 'url-search-params' | 'entries';
+} | null {
     if (typeof source === 'string') {
         const entries = parseRawQueryString(source);
-        return entries === null ? null : { entries, encoded: true };
+        return entries === null ? null : { entries, encoded: true, sourceType: 'query-string' };
     }
 
     if (source instanceof URLSearchParams) {
@@ -1003,7 +1028,7 @@ function readQueryEntries(
         for (const [name, value] of source.entries()) {
             entries.push({ name, value });
         }
-        return { entries, encoded: false };
+        return { entries, encoded: false, sourceType: 'url-search-params' };
     }
 
     const entries: OpenApiQueryEntry[] = [];
@@ -1013,7 +1038,7 @@ function readQueryEntries(
         }
         entries.push({ name: entry.name, value: entry.value });
     }
-    return { entries, encoded: false };
+    return { entries, encoded: false, sourceType: 'entries' };
 }
 
 function parseRawQueryString(input: string): OpenApiQueryEntry[] | null {

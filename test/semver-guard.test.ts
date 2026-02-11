@@ -171,6 +171,56 @@ describe('semver policy gate (SemVer 2.0.0)', () => {
         assert.equal(outcome.pass, true);
     });
 
+    it('fails when additive API changes are paired with patch intent', async () => {
+        const comparison = compareFixturePair('add-export-only');
+        const intent = await readIntentFromFixture('patch.md');
+        const outcome = await evaluateSemverPolicy({
+            packageName: PACKAGE_NAME,
+            comparison,
+            declaredBump: intent.declaredBump,
+            codeChanged: true,
+            changesetIssues: intent.issues,
+        });
+
+        assert.equal(outcome.pass, false);
+        assert.equal(outcome.requiredBump, 'minor');
+        assert.ok(
+            outcome.messages.some(message =>
+                message.includes('additive API changes require minor but declared bump is patch')
+            )
+        );
+    });
+
+    it('passes when additive API changes are paired with minor intent', async () => {
+        const comparison = compareFixturePair('add-export-only');
+        const intent = await readIntentFromFixture('minor.md');
+        const outcome = await evaluateSemverPolicy({
+            packageName: PACKAGE_NAME,
+            comparison,
+            declaredBump: intent.declaredBump,
+            codeChanged: true,
+            changesetIssues: intent.issues,
+        });
+
+        assert.equal(outcome.pass, true);
+        assert.equal(outcome.requiredBump, 'minor');
+    });
+
+    it('keeps patch requirement for non-breaking, non-additive API changes', async () => {
+        const comparison = compareFixturePair('widen-parameter');
+        const intent = await readIntentFromFixture('patch.md');
+        const outcome = await evaluateSemverPolicy({
+            packageName: PACKAGE_NAME,
+            comparison,
+            declaredBump: intent.declaredBump,
+            codeChanged: true,
+            changesetIssues: intent.issues,
+        });
+
+        assert.equal(outcome.pass, true);
+        assert.equal(outcome.requiredBump, 'patch');
+    });
+
     it('fails for malformed or empty changeset intent', async () => {
         const comparison = compareFixturePair('removed-export');
         const intent = await readIntentFromFixture('empty.md');

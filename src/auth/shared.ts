@@ -264,11 +264,19 @@ export function formatAuthParams(params: AuthParam[]): string {
 
 export function formatAuthParamsWithBareValues(
     params: readonly AuthParam[],
-    bareValueNames: ReadonlySet<string>
+    bareValueNames: ReadonlySet<string>,
+    validateBareValue?: (param: Readonly<AuthParam>) => void
 ): string {
     return params.map((param) => {
+        assertHeaderToken(param.name, `Authorization parameter name "${param.name}"`);
+        assertNoCtl(param.value, `Authorization parameter "${param.name}" value`);
         const normalizedName = param.name.toLowerCase();
         if (bareValueNames.has(normalizedName)) {
+            if (validateBareValue) {
+                validateBareValue(param);
+            } else {
+                assertHeaderToken(param.value, `Authorization parameter "${param.name}" bare value`);
+            }
             return `${param.name}=${param.value}`;
         }
         return `${param.name}=${quoteAuthParamValue(param.value)}`;

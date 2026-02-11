@@ -12,6 +12,7 @@ RFC-aligned HTTP utilities for Node.js APIs, covering semantics, caching, negoti
 ## Installation
 
 Requires Node.js `>=22`.
+Canonical source of truth: `package.json` -> `engines.node`.
 
 ```bash
 pnpm add @irvinebroque/http-rfc-utils

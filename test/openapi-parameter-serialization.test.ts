@@ -150,6 +150,36 @@ describe('OpenAPI query style=form', () => {
         assert.equal(formatQueryParameter(spec, { y: '20', x: '10' }), 'coords=x,10,y,20');
         assert.deepEqual(parseQueryParameter(spec, 'coords=x,10,y,20'), { x: '10', y: '20' });
     });
+
+    it('rejects ambiguous full-query parsing for exploded objects to avoid unrelated parameter absorption', () => {
+        const spec = {
+            name: 'coords',
+            in: 'query' as const,
+            style: 'form' as const,
+            explode: true,
+            valueType: 'object' as const,
+        };
+
+        assert.equal(parseQueryParameter(spec, 'x=10&y=20&page=1'), null);
+        assert.equal(parseQueryParameter(spec, new URLSearchParams('x=10&y=20&page=1')), null);
+    });
+
+    it('parses exploded objects from explicit scoped query entries', () => {
+        const spec = {
+            name: 'coords',
+            in: 'query' as const,
+            style: 'form' as const,
+            explode: true,
+            valueType: 'object' as const,
+        };
+
+        const scopedEntries = [
+            { name: 'x', value: '10' },
+            { name: 'y', value: '20' },
+        ] as const;
+
+        assert.deepEqual(parseQueryParameter(spec, scopedEntries), { x: '10', y: '20' });
+    });
 });
 
 // OpenAPI Specification v3.1.1: query style=pipeDelimited array serialization.

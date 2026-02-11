@@ -123,6 +123,32 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
                 null,
             );
         });
+
+        it('returns null for cyclic object graphs without throwing', () => {
+            const cyclicObject: Record<string, unknown> = {
+                issuer: 'https://server.example.com',
+                authorization_endpoint: 'https://server.example.com/authorize',
+                token_endpoint: 'https://server.example.com/token',
+                response_types_supported: ['code'],
+            };
+            cyclicObject.self = cyclicObject;
+
+            const cyclicArray: unknown[] = [];
+            cyclicArray.push(cyclicArray);
+            const metadataWithCyclicArray = {
+                issuer: 'https://server.example.com',
+                authorization_endpoint: 'https://server.example.com/authorize',
+                token_endpoint: 'https://server.example.com/token',
+                response_types_supported: ['code'],
+                extension: cyclicArray,
+            };
+
+            assert.doesNotThrow(() => parseAuthorizationServerMetadataObject(cyclicObject));
+            assert.equal(parseAuthorizationServerMetadataObject(cyclicObject), null);
+
+            assert.doesNotThrow(() => parseAuthorizationServerMetadataObject(metadataWithCyclicArray));
+            assert.equal(parseAuthorizationServerMetadataObject(metadataWithCyclicArray), null);
+        });
     });
 
     // RFC 8414 Section 2: required fields and endpoint/issuer constraints.

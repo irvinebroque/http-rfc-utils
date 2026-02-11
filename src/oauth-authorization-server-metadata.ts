@@ -480,6 +480,10 @@ interface JsonObject {
 }
 
 function isJsonValue(value: unknown): value is JsonValue {
+    return isJsonValueInternal(value, new WeakSet<object>());
+}
+
+function isJsonValueInternal(value: unknown, visiting: WeakSet<object>): value is JsonValue {
     if (value === null) {
         return true;
     }
@@ -493,14 +497,40 @@ function isJsonValue(value: unknown): value is JsonValue {
     }
 
     if (Array.isArray(value)) {
-        return value.every((item) => isJsonValue(item));
+        if (visiting.has(value)) {
+            return false;
+        }
+
+        visiting.add(value);
+        for (const item of value) {
+            if (!isJsonValueInternal(item, visiting)) {
+                visiting.delete(value);
+                return false;
+            }
+        }
+
+        visiting.delete(value);
+        return true;
     }
 
     if (!isRecord(value)) {
         return false;
     }
 
-    return Object.values(value).every((member) => isJsonValue(member));
+    if (visiting.has(value)) {
+        return false;
+    }
+
+    visiting.add(value);
+    for (const member of Object.values(value)) {
+        if (!isJsonValueInternal(member, visiting)) {
+            visiting.delete(value);
+            return false;
+        }
+    }
+
+    visiting.delete(value);
+    return true;
 }
 
 function cloneJsonValue(value: JsonValue): JsonValue {

@@ -4,6 +4,9 @@ Date: 2026-02-11
 Repository: `http-rfc-utils`
 Scope: `src/**/*.ts`, `scripts/**/*.mjs`, `.github/workflows/*.yml`
 
+Status: canonical repository security-audit findings document as of 2026-02-11.
+Supersession note: `security-review-findings.md` is retained as a historical deep-review snapshot and links here for current tracking.
+
 ## Methodology
 
 - Manual code review of parser, validator, auth/crypto, and utility modules.

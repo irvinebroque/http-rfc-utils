@@ -67,6 +67,13 @@ interface EvalNode {
     segments: (string | number)[];
 }
 
+const NOTHING = Symbol('JSONPathNothing');
+type JsonPathNothing = typeof NOTHING;
+
+function isNothing(value: unknown): value is JsonPathNothing {
+    return value === NOTHING;
+}
+
 /**
  * Execute a JSONPath query against a JSON document.
  * Returns an array of matching values (nodelist).
@@ -129,7 +136,12 @@ export function queryJsonPathNodes(
     options?: JsonPathOptions
 ): JsonPathNode[] | null {
     const ast = parseJsonPath(query);
-    if (ast === null) return null;
+    if (ast === null) {
+        if (options?.throwOnError) {
+            throw new Error(`Invalid JSONPath query: ${query}`);
+        }
+        return null;
+    }
 
     try {
         return evaluateQuery(ast, document, options).map(materializeNodePath);
@@ -762,7 +774,7 @@ function evaluateComparable(comp: JsonPathComparable, ctx: EvalContext): unknown
     }
 }
 
-function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): unknown {
+function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): unknown | JsonPathNothing {
     const startValue = query.root === '$' ? ctx.root : ctx.current;
     const startPath = query.root === '$' ? [] : [...ctx.currentPath];
 
@@ -779,7 +791,7 @@ function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): 
 
     // RFC 9535 §2.3.5.1: Singular query produces at most one node
     if (nodes.length !== 1) {
-        return undefined;
+        return NOTHING;
     }
 
     const [onlyNode] = nodes;
@@ -810,6 +822,10 @@ function evaluateFilterQuery(query: JsonPathQuery, ctx: EvalContext): EvalNode[]
 
 function compare(left: unknown, op: JsonPathComparisonOp, right: unknown, ctx: EvalContext): boolean {
     // RFC 9535 §2.3.5.2.2: Comparison semantics
+    // Any comparison involving Nothing evaluates to false.
+    if (isNothing(left) || isNothing(right)) {
+        return false;
+    }
 
     switch (op) {
         case '==':
@@ -964,12 +980,12 @@ function evaluateFunction(expr: JsonPathFunctionExpr, ctx: EvalContext): unknown
 }
 
 // RFC 9535 §2.4.4: length() function
-function fnLength(args: JsonPathFunctionArg[], ctx: EvalContext): number | null {
-    if (args.length !== 1) return null;
+function fnLength(args: JsonPathFunctionArg[], ctx: EvalContext): number | JsonPathNothing {
+    if (args.length !== 1) return NOTHING;
 
     const [arg] = args;
     if (!arg) {
-        return null;
+        return NOTHING;
     }
 
     const value = evaluateFunctionArg(arg, ctx);
@@ -984,7 +1000,7 @@ function fnLength(args: JsonPathFunctionArg[], ctx: EvalContext): number | null 
         return Object.keys(value).length;
     }
 
-    return null;
+    return NOTHING;
 }
 
 // RFC 9535 §2.4.5: count() function
@@ -1338,24 +1354,24 @@ function fnSearch(args: JsonPathFunctionArg[], ctx: EvalContext): boolean {
 
 // RFC 9535 §2.4.8: value() function
 function fnValue(args: JsonPathFunctionArg[], ctx: EvalContext): unknown {
-    if (args.length !== 1) return null;
+    if (args.length !== 1) return NOTHING;
 
     const [arg] = args;
     if (!arg) {
-        return null;
+        return NOTHING;
     }
 
     if (arg.type === 'query') {
         const nodes = evaluateFilterQuery(arg, ctx);
         if (nodes.length !== 1) {
-            return null;
+            return NOTHING;
         }
 
         const [onlyNode] = nodes;
-        return onlyNode?.value ?? null;
+        return onlyNode?.value;
     }
 
-    return null;
+    return NOTHING;
 }
 
 function evaluateFunctionArg(arg: JsonPathFunctionArg, ctx: EvalContext): unknown {
@@ -1366,7 +1382,7 @@ function evaluateFunctionArg(arg: JsonPathFunctionArg, ctx: EvalContext): unknow
             // For value-type arguments, get the singular value
             const nodes = evaluateFilterQuery(arg, ctx);
             if (nodes.length !== 1) {
-                return undefined;
+                return NOTHING;
             }
 
             return nodes[0]?.value;

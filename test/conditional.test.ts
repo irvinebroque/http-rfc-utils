@@ -58,6 +58,42 @@ describe('RFC 9110 Conditional Requests (§13.1.1-§13.1.4, §13.2.2)', () => {
             assert.deepEqual(result, []);
         });
 
+        it('rejects trailing garbage after a valid entity-tag', () => {
+            const result = parseIfNoneMatch('"abc"oops');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects prefix garbage before a valid entity-tag', () => {
+            const result = parseIfNoneMatch('oops"abc"');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects missing comma between entity-tags', () => {
+            const result = parseIfNoneMatch('"a" "b"');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects empty list members', () => {
+            const result = parseIfNoneMatch('"a",, "b"');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects trailing comma in list', () => {
+            const result = parseIfNoneMatch('"a", ');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects wildcard mixed after a valid entity-tag', () => {
+            const result = parseIfNoneMatch('"a", *');
+            assert.deepEqual(result, []);
+        });
+
+        // RFC 9110 §8.8.3: weak indicator is case-sensitive (%s"W/").
+        it('rejects lowercase weak indicator inside a list', () => {
+            const result = parseIfNoneMatch('"a", w/"b"');
+            assert.deepEqual(result, []);
+        });
+
         it('handles whitespace around commas', () => {
             const result = parseIfNoneMatch('"a"  ,  "b"  ,   W/"c"');
             assert.equal(result.length, 3);

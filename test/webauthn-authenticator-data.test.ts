@@ -30,6 +30,30 @@ function concatBytes(...parts: Uint8Array[]): Uint8Array {
     return out;
 }
 
+function encodeNestedSingleEntryMap(depth: number): Uint8Array {
+    let encoded = new Uint8Array([0xa0]);
+    for (let index = 0; index < depth; index++) {
+        encoded = concatBytes(new Uint8Array([0xa1, 0x00]), encoded);
+    }
+    return encoded;
+}
+
+function encodeFlatMapWithZeroPairs(pairCount: number): Uint8Array {
+    let header: Uint8Array;
+    if (pairCount < 24) {
+        header = new Uint8Array([0xa0 + pairCount]);
+    } else if (pairCount <= 0xff) {
+        header = new Uint8Array([0xb8, pairCount]);
+    } else if (pairCount <= 0xffff) {
+        header = new Uint8Array([0xb9, (pairCount >> 8) & 0xff, pairCount & 0xff]);
+    } else {
+        throw new Error('pairCount too large for test helper.');
+    }
+
+    const pairs = new Uint8Array(pairCount * 2);
+    return concatBytes(header, pairs);
+}
+
 describe('WebAuthn authenticatorData parsing (WebAuthn Section 6.1)', () => {
     it('parses rpIdHash, flags, and signCount for minimum-length data', () => {
         // WebAuthn authenticatorData: 32-byte rpIdHash + flags + signCount.
@@ -133,6 +157,47 @@ describe('WebAuthn authenticatorData parsing (WebAuthn Section 6.1)', () => {
         );
 
         assert.equal(parseWebauthnAuthenticatorData(invalidCredentialPublicKey), null);
+    });
+
+    it('accepts nested extension CBOR maps within guard limits', () => {
+        const rpIdHash = new Uint8Array(32);
+        const nestedExtensions = encodeNestedSingleEntryMap(20);
+        const authData = concatBytes(
+            rpIdHash,
+            new Uint8Array([0x81]), // UP + ED
+            encodeUint32(1),
+            nestedExtensions,
+        );
+
+        const parsed = parseWebauthnAuthenticatorData(authData);
+        assert(parsed);
+        assert.deepEqual(parsed.extensions, nestedExtensions);
+    });
+
+    it('rejects extension CBOR maps that exceed recursion depth guard', () => {
+        const rpIdHash = new Uint8Array(32);
+        const tooDeepExtensions = encodeNestedSingleEntryMap(80);
+        const authData = concatBytes(
+            rpIdHash,
+            new Uint8Array([0x81]), // UP + ED
+            encodeUint32(1),
+            tooDeepExtensions,
+        );
+
+        assert.equal(parseWebauthnAuthenticatorData(authData), null);
+    });
+
+    it('rejects extension CBOR maps that exceed item-count guard', () => {
+        const rpIdHash = new Uint8Array(32);
+        const tooManyItemsExtensions = encodeFlatMapWithZeroPairs(5001);
+        const authData = concatBytes(
+            rpIdHash,
+            new Uint8Array([0x81]), // UP + ED
+            encodeUint32(1),
+            tooManyItemsExtensions,
+        );
+
+        assert.equal(parseWebauthnAuthenticatorData(authData), null);
     });
 });
 

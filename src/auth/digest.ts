@@ -16,6 +16,7 @@ import type {
     DigestCredentials,
 } from '../types/auth.js';
 import { decodeExtValue, encodeExtValue } from '../ext-value.js';
+import { assertHeaderToken } from '../header-utils.js';
 import {
     formatAuthParamsWithBareValues,
     parseAuthParamsList,
@@ -77,6 +78,22 @@ interface DigestAuthenticationInfoSchema {
     rspauth?: string;
     cnonce?: string;
     nc?: string;
+}
+
+function assertDigestNc(value: string, context: string): void {
+    if (!NC_REGEX.test(value)) {
+        throw new Error(`${context} must be exactly 8 hexadecimal digits; received ${JSON.stringify(value)}`);
+    }
+}
+
+function assertDigestBareAuthParamValue(param: Readonly<{ name: string; value: string }>): void {
+    const name = param.name.toLowerCase();
+    if (name === 'nc') {
+        assertDigestNc(param.value, 'Digest nc');
+        return;
+    }
+
+    assertHeaderToken(param.value, `Digest ${param.name} value`);
 }
 
 const DIGEST_CHALLENGE_SCHEMA = [
@@ -399,7 +416,11 @@ export function formatDigestChallenge(challenge: DigestChallenge): string {
         challenge,
         DIGEST_CHALLENGE_SCHEMA
     );
-    return `Digest ${formatAuthParamsWithBareValues(params, DIGEST_CHALLENGE_BARE_VALUE_NAMES)}`;
+    return `Digest ${formatAuthParamsWithBareValues(
+        params,
+        DIGEST_CHALLENGE_BARE_VALUE_NAMES,
+        assertDigestBareAuthParamValue
+    )}`;
 }
 
 /**
@@ -501,7 +522,11 @@ export function formatDigestAuthorization(credentials: DigestCredentials): strin
         credentials,
         DIGEST_CREDENTIALS_SCHEMA
     );
-    return `Digest ${formatAuthParamsWithBareValues(params, DIGEST_AUTHORIZATION_BARE_VALUE_NAMES)}`;
+    return `Digest ${formatAuthParamsWithBareValues(
+        params,
+        DIGEST_AUTHORIZATION_BARE_VALUE_NAMES,
+        assertDigestBareAuthParamValue
+    )}`;
 }
 
 /**
@@ -557,7 +582,11 @@ export function formatDigestAuthenticationInfo(info: DigestAuthenticationInfo): 
         info,
         DIGEST_AUTHENTICATION_INFO_SCHEMA
     );
-    return formatAuthParamsWithBareValues(params, DIGEST_AUTHENTICATION_INFO_BARE_VALUE_NAMES);
+    return formatAuthParamsWithBareValues(
+        params,
+        DIGEST_AUTHENTICATION_INFO_BARE_VALUE_NAMES,
+        assertDigestBareAuthParamValue
+    );
 }
 
 /**

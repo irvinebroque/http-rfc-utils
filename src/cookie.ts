@@ -395,8 +395,20 @@ export function parseCookieDate(value: string): Date | null {
         return null;
     }
 
-    const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-    if (Number.isNaN(date.getTime())) {
+    const utcMillis = Date.UTC(year, month - 1, day, hour, minute, second);
+    if (Number.isNaN(utcMillis)) {
+        return null;
+    }
+
+    const date = new Date(utcMillis);
+    if (
+        date.getUTCFullYear() !== year
+        || date.getUTCMonth() !== month - 1
+        || date.getUTCDate() !== day
+        || date.getUTCHours() !== hour
+        || date.getUTCMinutes() !== minute
+        || date.getUTCSeconds() !== second
+    ) {
         return null;
     }
 

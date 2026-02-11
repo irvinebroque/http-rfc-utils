@@ -6,6 +6,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTTPDate, parseRFC3339 } from '../src/datetime.js';
 
+const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 // RFC 3339 §5.6: Internet Date/Time Format parsing.
 describe('parseRFC3339', () => {
     it('parses basic UTC timestamps', () => {
@@ -161,7 +163,8 @@ describe('parseHTTPDate', () => {
         const candidate = currentCentury + twoDigit;
         const expectedYear = candidate > nowYear + 50 ? candidate - 100 : candidate;
         const twoDigitStr = String(twoDigit).padStart(2, '0');
-        const parsed = parseHTTPDate(`Sunday, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
+        const weekday = FULL_DAY_NAMES[new Date(Date.UTC(expectedYear, 10, 6)).getUTCDay()];
+        const parsed = parseHTTPDate(`${weekday}, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
 
         assert.ok(parsed instanceof Date);
         assert.equal(parsed!.getUTCFullYear(), expectedYear);
@@ -171,9 +174,31 @@ describe('parseHTTPDate', () => {
     it('parses RFC 850 dates for current two-digit year', () => {
         const nowYear = new Date().getUTCFullYear();
         const twoDigitStr = String(nowYear % 100).padStart(2, '0');
-        const parsed = parseHTTPDate(`Sunday, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
+        const weekday = FULL_DAY_NAMES[new Date(Date.UTC(nowYear, 10, 6)).getUTCDay()];
+        const parsed = parseHTTPDate(`${weekday}, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
 
         assert.ok(parsed instanceof Date);
         assert.equal(parsed!.getUTCFullYear(), nowYear);
+    });
+
+    // RFC 9110 §5.6.7: senders MUST generate a weekday matching the calendar date.
+    it('rejects IMF-fixdate weekday/date mismatch', () => {
+        const parsed = parseHTTPDate('Sat, 31 Dec 2018 23:59:59 GMT');
+        assert.equal(parsed, null);
+    });
+
+    it('rejects impossible IMF-fixdate calendar day', () => {
+        const parsed = parseHTTPDate('Mon, 31 Apr 2026 08:49:37 GMT');
+        assert.equal(parsed, null);
+    });
+
+    it('rejects impossible asctime calendar day', () => {
+        const parsed = parseHTTPDate('Tue Feb 30 08:49:37 1994');
+        assert.equal(parsed, null);
+    });
+
+    it('rejects invalid RFC 850 time values', () => {
+        const parsed = parseHTTPDate('Sunday, 06-Nov-94 08:49:60 GMT');
+        assert.equal(parsed, null);
     });
 });

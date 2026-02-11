@@ -23,6 +23,13 @@ const FLAG_BS = 0x10;
 const FLAG_AT = 0x40;
 const FLAG_ED = 0x80;
 const CBOR_BREAK = 0xff;
+const CBOR_MAX_NESTING_DEPTH = 64;
+const CBOR_MAX_ITEM_COUNT = 10_000;
+
+interface CborReadGuardState {
+    depth: number;
+    itemCount: number;
+}
 
 /**
  * Parse authenticatorData bytes into structured fields.
@@ -262,84 +269,98 @@ function readRequiredCborMapItemEnd(bytes: Uint8Array, offset: number): number |
     if (majorType !== 5) {
         return null;
     }
-    return readCborItemEnd(bytes, offset);
+    return readCborItemEnd(bytes, offset, { depth: 0, itemCount: 0 });
 }
 
-function readCborItemEnd(bytes: Uint8Array, offset: number): number | null {
+function readCborItemEnd(bytes: Uint8Array, offset: number, guard: CborReadGuardState): number | null {
     if (offset >= bytes.length) {
         return null;
     }
 
-    const initial = bytes[offset] ?? 0;
-    const majorType = initial >> 5;
-    const additionalInfo = initial & 0x1f;
-
-    const header = readCborLengthArgument(bytes, offset, majorType, additionalInfo);
-    if (!header) {
+    if (guard.itemCount >= CBOR_MAX_ITEM_COUNT) {
         return null;
     }
+    guard.itemCount += 1;
 
-    if (majorType === 0 || majorType === 1) {
-        return header.nextOffset;
-    }
-
-    if (majorType === 2 || majorType === 3) {
-        if (header.indefinite) {
-            return readIndefiniteStringLike(bytes, header.nextOffset, majorType);
-        }
-        const end = header.nextOffset + header.length;
-        return end <= bytes.length ? end : null;
-    }
-
-    if (majorType === 4) {
-        if (header.indefinite) {
-            return readIndefiniteArray(bytes, header.nextOffset);
-        }
-        let cursor = header.nextOffset;
-        for (let index = 0; index < header.length; index++) {
-            const itemEnd = readCborItemEnd(bytes, cursor);
-            if (itemEnd === null) {
-                return null;
-            }
-            cursor = itemEnd;
-        }
-        return cursor;
-    }
-
-    if (majorType === 5) {
-        if (header.indefinite) {
-            return readIndefiniteMap(bytes, header.nextOffset);
-        }
-        let cursor = header.nextOffset;
-        for (let index = 0; index < header.length; index++) {
-            const keyEnd = readCborItemEnd(bytes, cursor);
-            if (keyEnd === null) {
-                return null;
-            }
-            const valueEnd = readCborItemEnd(bytes, keyEnd);
-            if (valueEnd === null) {
-                return null;
-            }
-            cursor = valueEnd;
-        }
-        return cursor;
-    }
-
-    if (majorType === 6) {
-        return readCborItemEnd(bytes, header.nextOffset);
-    }
-
-    if (majorType === 7) {
-        if (additionalInfo === 24 || additionalInfo === 25 || additionalInfo === 26 || additionalInfo === 27) {
-            return header.nextOffset;
-        }
-        if (additionalInfo < 24) {
-            return header.nextOffset;
-        }
+    if (guard.depth >= CBOR_MAX_NESTING_DEPTH) {
         return null;
     }
+    guard.depth += 1;
 
-    return null;
+    try {
+        const initial = bytes[offset] ?? 0;
+        const majorType = initial >> 5;
+        const additionalInfo = initial & 0x1f;
+
+        const header = readCborLengthArgument(bytes, offset, majorType, additionalInfo);
+        if (!header) {
+            return null;
+        }
+
+        if (majorType === 0 || majorType === 1) {
+            return header.nextOffset;
+        }
+
+        if (majorType === 2 || majorType === 3) {
+            if (header.indefinite) {
+                return readIndefiniteStringLike(bytes, header.nextOffset, majorType, guard);
+            }
+            const end = header.nextOffset + header.length;
+            return end <= bytes.length ? end : null;
+        }
+
+        if (majorType === 4) {
+            if (header.indefinite) {
+                return readIndefiniteArray(bytes, header.nextOffset, guard);
+            }
+            let cursor = header.nextOffset;
+            for (let index = 0; index < header.length; index++) {
+                const itemEnd = readCborItemEnd(bytes, cursor, guard);
+                if (itemEnd === null) {
+                    return null;
+                }
+                cursor = itemEnd;
+            }
+            return cursor;
+        }
+
+        if (majorType === 5) {
+            if (header.indefinite) {
+                return readIndefiniteMap(bytes, header.nextOffset, guard);
+            }
+            let cursor = header.nextOffset;
+            for (let index = 0; index < header.length; index++) {
+                const keyEnd = readCborItemEnd(bytes, cursor, guard);
+                if (keyEnd === null) {
+                    return null;
+                }
+                const valueEnd = readCborItemEnd(bytes, keyEnd, guard);
+                if (valueEnd === null) {
+                    return null;
+                }
+                cursor = valueEnd;
+            }
+            return cursor;
+        }
+
+        if (majorType === 6) {
+            return readCborItemEnd(bytes, header.nextOffset, guard);
+        }
+
+        if (majorType === 7) {
+            if (additionalInfo === 24 || additionalInfo === 25 || additionalInfo === 26 || additionalInfo === 27) {
+                return header.nextOffset;
+            }
+            if (additionalInfo < 24) {
+                return header.nextOffset;
+            }
+            return null;
+        }
+
+        return null;
+    } finally {
+        guard.depth -= 1;
+    }
 }
 
 function readCborLengthArgument(
@@ -414,13 +435,23 @@ function readCborLengthArgument(
     return null;
 }
 
-function readIndefiniteStringLike(bytes: Uint8Array, offset: number, expectedMajorType: number): number | null {
+function readIndefiniteStringLike(
+    bytes: Uint8Array,
+    offset: number,
+    expectedMajorType: number,
+    guard: CborReadGuardState,
+): number | null {
     let cursor = offset;
     while (cursor < bytes.length) {
         const initial = bytes[cursor] ?? 0;
         if (initial === CBOR_BREAK) {
             return cursor + 1;
         }
+
+        if (guard.itemCount >= CBOR_MAX_ITEM_COUNT) {
+            return null;
+        }
+        guard.itemCount += 1;
 
         const majorType = initial >> 5;
         const additionalInfo = initial & 0x1f;
@@ -443,14 +474,14 @@ function readIndefiniteStringLike(bytes: Uint8Array, offset: number, expectedMaj
     return null;
 }
 
-function readIndefiniteArray(bytes: Uint8Array, offset: number): number | null {
+function readIndefiniteArray(bytes: Uint8Array, offset: number, guard: CborReadGuardState): number | null {
     let cursor = offset;
     while (cursor < bytes.length) {
         if ((bytes[cursor] ?? 0) === CBOR_BREAK) {
             return cursor + 1;
         }
 
-        const itemEnd = readCborItemEnd(bytes, cursor);
+        const itemEnd = readCborItemEnd(bytes, cursor, guard);
         if (itemEnd === null) {
             return null;
         }
@@ -460,18 +491,18 @@ function readIndefiniteArray(bytes: Uint8Array, offset: number): number | null {
     return null;
 }
 
-function readIndefiniteMap(bytes: Uint8Array, offset: number): number | null {
+function readIndefiniteMap(bytes: Uint8Array, offset: number, guard: CborReadGuardState): number | null {
     let cursor = offset;
     while (cursor < bytes.length) {
         if ((bytes[cursor] ?? 0) === CBOR_BREAK) {
             return cursor + 1;
         }
 
-        const keyEnd = readCborItemEnd(bytes, cursor);
+        const keyEnd = readCborItemEnd(bytes, cursor, guard);
         if (keyEnd === null) {
             return null;
         }
-        const valueEnd = readCborItemEnd(bytes, keyEnd);
+        const valueEnd = readCborItemEnd(bytes, keyEnd, guard);
         if (valueEnd === null) {
             return null;
         }

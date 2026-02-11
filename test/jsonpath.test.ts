@@ -687,6 +687,11 @@ describe('RFC 9535 JSONPath', () => {
             it('rejects length() with node-list argument', () => {
                 assert.equal(parseJsonPath('$[?length(@.obj[*]) == 2]'), null);
             });
+
+            it('treats Nothing distinctly from null in comparisons', () => {
+                const data = [{ s: 'ab' }, { s: null }, {}];
+                assert.deepEqual(queryJsonPath('$[?length(@.s) == null]', data), []);
+            });
         });
 
         // RFC 9535 §2.4.5: count()
@@ -791,9 +796,14 @@ describe('RFC 9535 JSONPath', () => {
                 assert.deepEqual(queryJsonPath('$[?value(@.a.b) == 1]', data), [{ a: { b: 1 } }]);
             });
 
-            it('accepts node-list argument and returns null when non-singular', () => {
+            it('accepts node-list argument and yields Nothing when non-singular', () => {
                 const data = [{ a: [1, 2] }, { a: [1] }];
                 assert.deepEqual(queryJsonPath('$[?value(@.a[*]) == 1]', data), [{ a: [1] }]);
+            });
+
+            it('keeps singular null distinct from non-singular Nothing', () => {
+                const data = [{ a: [null] }, { a: [1, 2] }, { a: null }];
+                assert.deepEqual(queryJsonPath('$[?value(@.a[*]) == null]', data), [{ a: [null] }]);
             });
         });
 
@@ -842,6 +852,11 @@ describe('RFC 9535 JSONPath', () => {
             assert.ok(result !== null);
             assert.equal(result.length, 1);
             assert.deepEqual(result[0], { a: null });
+        });
+
+        it('Nothing does not satisfy != null comparisons', () => {
+            const data = [{ a: null }, {}];
+            assert.deepEqual(queryJsonPath('$[?@.a != null]', data), []);
         });
     });
 
@@ -963,6 +978,16 @@ describe('RFC 9535 JSONPath', () => {
             assert.throws(() => {
                 queryJsonPath('invalid', {}, { throwOnError: true });
             });
+        });
+
+        it('returns null for invalid node query by default', () => {
+            assert.equal(queryJsonPathNodes('invalid', {}), null);
+        });
+
+        it('throws for invalid node query with throwOnError option', () => {
+            assert.throws(() => {
+                queryJsonPathNodes('invalid', {}, { throwOnError: true });
+            }, /Invalid JSONPath query/);
         });
 
         // RFC 9535 §2.5.2 + security hardening: descendant traversal must terminate on cyclic graphs.
