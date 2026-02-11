@@ -1,0 +1,666 @@
+test/webauthn-client-data.test.ts
+  0ae306b863716900 1-89,120
+src/security-txt.ts
+  2e681c4375c83921 123
+  92d22132c77deb29 189-193
+src/content-disposition.ts
+  92d22132c77deb29 19,21,51-60,69
+test/compression-dictionary.test.ts
+  9555b1b50df0c8ee 171
+comprehensive-code-review-findings.md
+  35d9ded08c2e3c79 1-212
+docs/error-message-audit-2026-02-11.md
+  9555b1b50df0c8ee 1-72,81-87
+  2e681c4375c83921 73-79
+src/fetch-metadata.ts
+  2e681c4375c83921 106,127,148
+test/openapi-path-server-resolver.test.ts
+  09bbd54242668e0e 169-223
+  0254a19f78481a25 16,284
+src/patch.ts
+  2e681c4375c83921 54,126-127,129,135
+src/auth/index.ts
+  0ae306b863716900 3-5,55-73
+test/etag.test.ts
+  8f13d884adaddd1a 258-264
+src/robots.ts
+  09bbd54242668e0e 27-28,74,209-210,213,215,221,223-224,226-228,234-248,252-316,318-319,322,387-400,432,436,444
+src/header-utils.ts
+  92d22132c77deb29 8-12,139,143
+  2e681c4375c83921 45,58,608,616
+src/openapi/parameter-serialization.ts
+  101217803e3d87a7 113,115,215-216,325-326,334,338,647-648,656,660,735-736,745,749,838-839,846,850,1064-1073
+src/types/openapi.ts
+  0254a19f78481a25 196-197,206-207,211-222,224-250,261,268,394
+test/headers.test.ts
+  8f13d884adaddd1a 29-39
+src/jsonpath/evaluator.ts
+  d3a21d9d665ffea9 739,811,816,818,830-834,836-838,840-842,844-845,847-848,851-868,871-880,883-911,913-919,923
+  a86f697ce7ee20f3 177,184-226
+  101217803e3d87a7 1023-1029,1049-1055
+src/auth/webauthn-client-data.ts
+  2e681c4375c83921 10,76-79,81-82
+  0ae306b863716900 33,35,40,44,48,52,56-59,61-69
+test/fixtures/code-sharing/digest-baseline.json
+  389c7de7240cc7fd 1-80
+test/problem.test.ts
+  9555b1b50df0c8ee 411,424,433
+  0254a19f78481a25 12-21
+test/json-canonicalization.test.ts
+  62659d02a47a24b0 95,97,100-104,106,109-111,113,138,140-142,146
+test/forwarded.test.ts
+  a2670ba71627220f 55
+  92d22132c77deb29 31-36
+src/headers.ts
+  8f13d884adaddd1a 10,12-33,76-77
+src/http-signatures.ts
+  b7c9a671cebf62e6 14,46-139,141-172,257-260,262-264,267,333-335,337,340-341,343,346,349,517-521,523,561,564,597-598,600,612-613,615-616,618,630-631,636,656-657,659,662-663,666-667,670,673,676,750-753,755,760,764,932,935-941,948,963
+docs/plans/code-sharing/deep-code-sharing-implementation-plan-2026-02-11.md
+  e28e68fefefc8f63 1,3-4,6,9-23,25-205,214,225,229,231-238,240-244,248-251,253,255-259
+  56f809d222be5259 2,5,7-8,24,206-213,215-224,226-228,230,239,245-247,252,254
+test/hsts.test.ts
+  92d22132c77deb29 58-63
+  8f13d884adaddd1a 57,64-70
+src/cache-groups.ts
+  2e681c4375c83921 41,43
+docs/reference/imports-by-task.md
+  0ae306b863716900 32
+src/link.ts
+  55f6af32c3509b38 560-562
+test/language.test.ts
+  09bbd54242668e0e 22-24,26-39,47-52
+  2e681c4375c83921 25
+test/alt-svc.test.ts
+  92d22132c77deb29 27-30
+  9555b1b50df0c8ee 107
+test/trace-context.test.ts
+  55f6af32c3509b38 52,60,68-71
+test/http-signatures.test.ts
+  b7c9a671cebf62e6 143-155,354-368,399,401,404,428-441,790-801
+src/linkset.ts
+  50ad4a69b45b81d9 678-683
+test/webauthn-base64url.test.ts
+  0ae306b863716900 1-36
+.opencode/napkin.md
+  a2670ba71627220f 46
+  e28e68fefefc8f63 36
+  bacd9b9879646154 34-35
+  0ae306b863716900 37
+  101217803e3d87a7 41
+  389c7de7240cc7fd 42
+  9555b1b50df0c8ee 43-45
+  a57c7d7a0c22d525 38
+  829f74df116c4d2f 39
+test/jsonpath.test.ts
+  a86f697ce7ee20f3 15,173-213,623-659,661-665,686-689,703-705,739-742,781-783,793-797,799-803,870-885
+  92d22132c77deb29 214-227,977-994,1039-1057,1061-1068
+src/oauth-authorization-server-metadata.ts
+  2e681c4375c83921 268,413,427,431
+src/json-patch.ts
+  101217803e3d87a7 95-99,126-130,245,273,300,348,381,401-403,423-425,427,434-438,454-456,463-464,467,475-480,498-503,709-718,748-757
+test/encoding.test.ts
+  09bbd54242668e0e 21-36,49-54
+test/link.test.ts
+  a2670ba71627220f 269
+  55f6af32c3509b38 460-475
+src/jsonpath/parser.ts
+  a86f697ce7ee20f3 24,29-35,51-58,302-304,315-317,325-327,499-501,554-563,653,658-663,684-733,764-766
+  92d22132c77deb29 36-50,75-78,92-124,360,431,616-618,622,627,631,633-635,638-645,664
+src/openapi/runtime-expression.ts
+  a2670ba71627220f 227
+.changeset/webauthn-v1-auth-utils.md
+  0ae306b863716900 1-5
+test/openapi-runtime-expression.test.ts
+  a2670ba71627220f 54-56
+src/index.ts
+  0ae306b863716900 221-239,241-245,576-592
+  a86f697ce7ee20f3 539
+test/prefer.test.ts
+  92d22132c77deb29 41-46
+  a2670ba71627220f 126,154
+src/digest.ts
+  101217803e3d87a7 373-374
+src/auth/digest.ts
+  2da84a48b0032c1e 44-46,402,504,560
+  2e681c4375c83921 595,626,671
+  07d88190ed519068 20,23-29,47-298,350-352,354,357,363-364,367-368,370-371,373,376-377,379-380,382-383,385,398-400,415-424,426-431,434-445,448-450,452-453,456,462-465,468,472-473,475-476,478-479,481-482,484-487,500-502,522-526,531-535,537-541,543-544,556-558
+src/ext-value.ts
+  8f13d884adaddd1a 174-176
+README.md
+  0ae306b863716900 85,105,107
+  43caf6eae74eaa71 121-122
+src/openapi/lint.ts
+  101217803e3d87a7 372-375,378-381
+src/etag.ts
+  8f13d884adaddd1a 176-178
+src/auth/webauthn-cose.ts
+  43caf6eae74eaa71 10
+docs/code-sharing-opportunities-deep-2026-02-11.md
+  e28e68fefefc8f63 1-236
+src/hsts.ts
+  8f13d884adaddd1a 110-113
+test/digest.test.ts
+  07d88190ed519068 130-134
+test/webauthn-options.test.ts
+  0ae306b863716900 1-82,97-135,145-146
+src/openapi/security-requirements.ts
+  0254a19f78481a25 250,268-293
+src/auth/bearer.ts
+  07d88190ed519068 19-24,27-61,99-101,103-105,107-108,110,112,120-122,124-131,133
+src/auth/webauthn-authenticator-data.ts
+  0ae306b863716900 107,113-121
+test/ni.test.ts
+  8f13d884adaddd1a 43-63,193-198
+docs/src/lib/rfc-map.ts
+  0254a19f78481a25 273
+  0ae306b863716900 240-272,274
+docs/spec-compliance-audit.md
+  bacd9b9879646154 14,17-19,23-49
+src/forwarded.ts
+  92d22132c77deb29 13,15,28-32,34,39
+test/auth.test.ts
+  07d88190ed519068 188-200,381-394,580-590
+  55f6af32c3509b38 64-69,395-405,575-579
+  bacd9b9879646154 117,753,773
+test/ext-value.test.ts
+  8f13d884adaddd1a 235-240
+src/cache-status.ts
+  2e681c4375c83921 33,36,47,50,61,64
+src/alt-svc.ts
+  2e681c4375c83921 77,84,154,168,227,242,251
+  92d22132c77deb29 15-19,34-37,175-180,184,189,199-200,260-261,265,270
+test/code-sharing-baselines.test.ts
+  8f13d884adaddd1a 44,49,137,151
+  389c7de7240cc7fd 1-43,45-48,50-136,138-150,152-279
+src/proxy-status.ts
+  2e681c4375c83921 68-69,71,127,141,143,146-149,160,176-177,179-182,192-195,197
+src/jsonpath/tokens.ts
+  a86f697ce7ee20f3 15
+src/auth/shared.ts
+  07d88190ed519068 18-19,265-273
+test/referrer-policy.test.ts
+  a2670ba71627220f 84
+test/openapi-security-requirements.test.ts
+  0254a19f78481a25 17,19-60,98,102-103
+docs/plans/code-sharing/deep-code-sharing-plan-critique-2026-02-11.md
+  e28e68fefefc8f63 1-31
+CODE_REVIEW_FINDINGS.md
+  82aced1d316df671 1-33
+test/fixtures/code-sharing/percent-decoding-baseline.json
+  389c7de7240cc7fd 1-55
+src/encoding.ts
+  09bbd54242668e0e 8,10-16,24
+src/json-canonicalization.ts
+  43caf6eae74eaa71 23,56,65,77,82-87,95,104,106
+  62659d02a47a24b0 39,52,76,78-80,89,94,96-98,108,122,142-146,148,150,154,162-163,165,169,173,175,179
+src/openapi/link-callback.ts
+  2e681c4375c83921 22-23,353
+src/trace-context.ts
+  55f6af32c3509b38 20,114,151,287,296-297
+src/client-hints.ts
+  2e681c4375c83921 69
+src/compression-dictionary.ts
+  2e681c4375c83921 176,182,188,198,201,285,317
+test/cookie.test.ts
+  8f13d884adaddd1a 112-145
+security-review-findings.md
+  6230a24743549d13 142-147,151-288
+src/auth/internal-auth-param-schema.ts
+  07d88190ed519068 1-166
+test/structured-fields.test.ts
+  8f13d884adaddd1a 121-139,183-185
+  bacd9b9879646154 398
+  a57c7d7a0c22d525 75-85
+docs/plans/code-sharing/artifacts/phase-0-baseline.md
+  389c7de7240cc7fd 1-44
+test/proxy-status.test.ts
+  9555b1b50df0c8ee 536,543
+src/structured-fields.ts
+  8f13d884adaddd1a 267,277-278
+  2e681c4375c83921 611,618,627,640,662,681
+test/early-hints.test.ts
+  a2670ba71627220f 99
+test/cache-status.test.ts
+  9555b1b50df0c8ee 117,121,127,131
+src/auth.ts
+  0ae306b863716900 3-5,9
+test/header-utils.test.ts
+  92d22132c77deb29 234-240
+  a2670ba71627220f 103-104
+test/response.test.ts
+  a2670ba71627220f 84-85,88-95
+src/language.ts
+  09bbd54242668e0e 10-23,45
+docs/plans/spec-implementation/passkeys-webauthn-implementation-review.md
+  c4dd1f4898280598 1-153
+src/auth/basic.ts
+  07d88190ed519068 20-25,29-45,132-134,136,138-139,143-145,156,158-162
+  55f6af32c3509b38 26-28,46-56,73-75
+test/webfinger.test.ts
+  97379617a194ee58 68-71,74-75,81-82,86-91,153-155,157
+src/negotiate.ts
+  50ad4a69b45b81d9 57-60,78,96,177-188,219,271-272,350,380
+src/openapi/path-server-resolver.ts
+  09bbd54242668e0e 53-56,210-217,220,244,253
+  50ad4a69b45b81d9 136,164,261-262,444,464,472-480
+src/reporting.ts
+  101217803e3d87a7 208-211
+test/security-txt.test.ts
+  9555b1b50df0c8ee 114
+  55f6af32c3509b38 94-102,199-206
+test/content-disposition.test.ts
+  92d22132c77deb29 20,87-94
+  a2670ba71627220f 106,110
+src/well-known.ts
+  2e681c4375c83921 141,159,165
+test/webauthn-authenticator-data.test.ts
+  2e681c4375c83921 90-136,172-212,215-235
+  0ae306b863716900 1-89,137-171,213-214,236-237
+src/ni.ts
+  8f13d884adaddd1a 29-30,32-98,224-226,285
+src/internal-parameterized-members.ts
+  92d22132c77deb29 1-13,15-21,23-107,109-110,113-114,116-117,137-141,143-196
+test/webauthn-cose.test.ts
+  43caf6eae74eaa71 1-23
+src/referrer-policy.ts
+  a2670ba71627220f 98
+src/types/auth.ts
+  0ae306b863716900 3
+src/cookie.ts
+  8f13d884adaddd1a 22-27,306,311,327
+test/fixtures/code-sharing/openapi-runtime-baseline.json
+  389c7de7240cc7fd 1-96
+src/jsonpath/lexer.ts
+  a86f697ce7ee20f3 21-22,45-49,96-99,154,166,169,197-198,200,220-222,224-226,277,284,296,302,339,350,357,363,382,390-393,400,405,407-409,417,425-426,432,436,441-473,476-482,485-486,490
+  43caf6eae74eaa71 544-545
+test/robots.test.ts
+  09bbd54242668e0e 70-87,237-256,364-399
+src/auth/webauthn-options.ts
+  0ae306b863716900 94,100-117,130,145-165,257,260-277,290,293-310,368,371-374,451,455-458,546,550-553
+src/types/problem.ts
+  0254a19f78481a25 8-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.1",
+  "base_commit_sha": "b1b178171584276b012ab4a2c255b633ca7e79df",
+  "prompts": {
+    "0254a19f78481a25": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b43c0d19ffeXHVhZBMOozajrx",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 194,
+      "total_deletions": 34,
+      "accepted_lines": 141,
+      "overriden_lines": 0
+    },
+    "07d88190ed519068": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b42a6393ffesuQ3mH1IhPHK5R",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 735,
+      "total_deletions": 418,
+      "accepted_lines": 685,
+      "overriden_lines": 0
+    },
+    "09bbd54242668e0e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b4408394ffeeSLw5xh9NbZq6U",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 343,
+      "total_deletions": 29,
+      "accepted_lines": 341,
+      "overriden_lines": 0
+    },
+    "0ae306b863716900": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b45d80e5ffeIYUqJUReo7DwYT",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 635,
+      "total_deletions": 76,
+      "accepted_lines": 613,
+      "overriden_lines": 0
+    },
+    "101217803e3d87a7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b441ca89ffeS4BjR7BSJRmoHb",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 151,
+      "total_deletions": 29,
+      "accepted_lines": 131,
+      "overriden_lines": 0
+    },
+    "2da84a48b0032c1e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b41406a7ffe6ujPVudhZ032Ak",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 4,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    },
+    "2e681c4375c83921": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b449331effebejYTLEDFjmb9b",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 307,
+      "total_deletions": 99,
+      "accepted_lines": 211,
+      "overriden_lines": 1
+    },
+    "35d9ded08c2e3c79": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b4287666ffeusxLP3r47f64p7",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 224,
+      "total_deletions": 12,
+      "accepted_lines": 212,
+      "overriden_lines": 0
+    },
+    "389c7de7240cc7fd": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b43827a7ffeUqAlcPmJ6FOyBH",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 558,
+      "total_deletions": 3,
+      "accepted_lines": 551,
+      "overriden_lines": 0
+    },
+    "43caf6eae74eaa71": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b43efeebffesl0Zylp3MMzHaf",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 41,
+      "total_deletions": 11,
+      "accepted_lines": 41,
+      "overriden_lines": 0
+    },
+    "50ad4a69b45b81d9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b49a0a93ffeTFDVpINA4fdNwr",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 195,
+      "total_deletions": 47,
+      "accepted_lines": 44,
+      "overriden_lines": 1
+    },
+    "55f6af32c3509b38": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b4312680ffebjGJB8vbuCfmpr",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 120,
+      "total_deletions": 39,
+      "accepted_lines": 114,
+      "overriden_lines": 0
+    },
+    "56f809d222be5259": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b4410b46ffeuxwO9ePs2KyIqq",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 232,
+      "total_deletions": 0,
+      "accepted_lines": 33,
+      "overriden_lines": 0
+    },
+    "6230a24743549d13": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b459ee94ffejkCaHIgiyPSpiJ",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 144,
+      "total_deletions": 7,
+      "accepted_lines": 144,
+      "overriden_lines": 0
+    },
+    "62659d02a47a24b0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b452e724ffeZhGbobFa73B4s5",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 60,
+      "total_deletions": 19,
+      "accepted_lines": 49,
+      "overriden_lines": 2
+    },
+    "829f74df116c4d2f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b466d5e5ffepC5iTrgS47P4E0",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "82aced1d316df671": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b4122365ffeMpEi9VyfqoApLW",
+        "model": "anthropic/claude-sonnet-4-5-20250929"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 33,
+      "total_deletions": 0,
+      "accepted_lines": 33,
+      "overriden_lines": 0
+    },
+    "8f13d884adaddd1a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b436367dffe8sRKiARcIWATyF",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 247,
+      "total_deletions": 9,
+      "accepted_lines": 247,
+      "overriden_lines": 0
+    },
+    "92d22132c77deb29": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b432450dffezsGN3tM0FmNxdW",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 448,
+      "total_deletions": 124,
+      "accepted_lines": 407,
+      "overriden_lines": 0
+    },
+    "9555b1b50df0c8ee": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b455f068ffeQp1Ebb7OEbHBe6",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 96,
+      "total_deletions": 51,
+      "accepted_lines": 95,
+      "overriden_lines": 0
+    },
+    "97379617a194ee58": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b459e9d4ffeMmx6Xm0IZ1GKSy",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 22,
+      "total_deletions": 6,
+      "accepted_lines": 22,
+      "overriden_lines": 0
+    },
+    "a2670ba71627220f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b42a0a22ffeAwfM4B64TJjXSR",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 27,
+      "total_deletions": 16,
+      "accepted_lines": 26,
+      "overriden_lines": 0
+    },
+    "a57c7d7a0c22d525": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b48b4747ffe4YMXYOelnqlZUJ",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 15,
+      "total_deletions": 1,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    },
+    "a86f697ce7ee20f3": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b4507d88ffex6tbjZWBWENi9I",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 389,
+      "total_deletions": 47,
+      "accepted_lines": 375,
+      "overriden_lines": 0
+    },
+    "b7c9a671cebf62e6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b42b849fffettDS5KM1XB75Ok",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 295,
+      "total_deletions": 89,
+      "accepted_lines": 259,
+      "overriden_lines": 0
+    },
+    "bacd9b9879646154": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b476c9d5ffensVatz2H3hpiC7",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 40,
+      "total_deletions": 47,
+      "accepted_lines": 37,
+      "overriden_lines": 0
+    },
+    "c4dd1f4898280598": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b44683dfffedEHVS8b1IZ2E8B",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 153,
+      "total_deletions": 0,
+      "accepted_lines": 153,
+      "overriden_lines": 0
+    },
+    "d3a21d9d665ffea9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b42dc62affeKeOJTR3pf69FSf",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 91,
+      "total_deletions": 28,
+      "accepted_lines": 89,
+      "overriden_lines": 0
+    },
+    "e28e68fefefc8f63": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3b45c99b5ffe8nc8hsJaEfg2D7",
+        "model": "openai/gpt-5.3-codex"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 499,
+      "total_deletions": 204,
+      "accepted_lines": 494,
+      "overriden_lines": 0
+    }
+  }
+}
