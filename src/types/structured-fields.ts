@@ -1,6 +1,9 @@
-// Structured Field Values (RFC 8941 + RFC 9651)
-// https://www.rfc-editor.org/rfc/rfc8941.html
-// https://www.rfc-editor.org/rfc/rfc9651.html
+/**
+ * Structured Field Values type wrappers and contracts.
+ * RFC 8941 and RFC 9651.
+ * @see https://www.rfc-editor.org/rfc/rfc8941.html
+ * @see https://www.rfc-editor.org/rfc/rfc9651.html
+ */
 
 /**
  * Date bare item per RFC 9651 Section 3.3.7.

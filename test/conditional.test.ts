@@ -1,3 +1,7 @@
+/**
+ * Tests for conditional behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -17,7 +21,7 @@ function mockRequest(method: string, headers: Record<string, string>): Request {
 }
 
 // RFC 9110 §13.1.1-§13.1.4, §13.2.2: Conditional request header handling.
-describe('RFC 9110 Conditional Requests', () => {
+describe('RFC 9110 Conditional Requests (§13.1.1-§13.1.4, §13.2.2)', () => {
     // RFC 9110 §13.1.2: If-None-Match field value parsing.
     describe('parseIfNoneMatch', () => {
         it('parses single ETag', () => {
@@ -51,6 +55,42 @@ describe('RFC 9110 Conditional Requests', () => {
 
         it('ignores invalid wildcard mixed with tags', () => {
             const result = parseIfNoneMatch('*, "abc"');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects trailing garbage after a valid entity-tag', () => {
+            const result = parseIfNoneMatch('"abc"oops');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects prefix garbage before a valid entity-tag', () => {
+            const result = parseIfNoneMatch('oops"abc"');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects missing comma between entity-tags', () => {
+            const result = parseIfNoneMatch('"a" "b"');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects empty list members', () => {
+            const result = parseIfNoneMatch('"a",, "b"');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects trailing comma in list', () => {
+            const result = parseIfNoneMatch('"a", ');
+            assert.deepEqual(result, []);
+        });
+
+        it('rejects wildcard mixed after a valid entity-tag', () => {
+            const result = parseIfNoneMatch('"a", *');
+            assert.deepEqual(result, []);
+        });
+
+        // RFC 9110 §8.8.3: weak indicator is case-sensitive (%s"W/").
+        it('rejects lowercase weak indicator inside a list', () => {
+            const result = parseIfNoneMatch('"a", w/"b"');
             assert.deepEqual(result, []);
         });
 

@@ -1,6 +1,7 @@
 /**
  * Digest field types.
  * RFC 9530.
+ * @see https://www.rfc-editor.org/rfc/rfc9530.html
  */
 
 /**

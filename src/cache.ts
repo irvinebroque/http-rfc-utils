@@ -2,20 +2,12 @@
  * Cache-Control utilities per RFC 9111.
  * RFC 9111 §5.2 (Cache-Control directives), §1.2.2 (delta-seconds).
  * @module
+ * @see https://www.rfc-editor.org/rfc/rfc9111.html
  */
 
 import type { CacheOptions } from './types.js';
 import { formatHTTPDate } from './datetime.js';
-import { parseDeltaSeconds, parseKeyValueSegment, splitQuotedValue, unquote } from './header-utils.js';
-
-const MAX_DELTA_SECONDS = 2147483648;
-
-function parseFieldNameList(value: string): string[] {
-    return splitQuotedValue(value, ',')
-        .map(item => item.trim())
-        .filter(Boolean)
-        .map(item => item.toLowerCase());
-}
+import { formatClassicCacheDirectives, parseClassicCacheDirectives } from './internal-cache-control-schema.js';
 
 /**
  * Build a Cache-Control header value from options.
@@ -43,60 +35,7 @@ function parseFieldNameList(value: string): string[] {
  */
 // RFC 9111 §5.2: Cache-Control field-value construction.
 export function cacheControl(options: CacheOptions): string {
-    const directives: string[] = [];
-
-    // public/private are mutually exclusive - private takes precedence
-    if (options.private || options.privateFields?.length) {
-        if (options.privateFields && options.privateFields.length > 0) {
-            directives.push(`private="${options.privateFields.join(', ')}"`);
-        } else {
-            directives.push('private');
-        }
-    } else if (options.public) {
-        directives.push('public');
-    }
-
-    if (options.noCache || options.noCacheFields?.length) {
-        if (options.noCacheFields && options.noCacheFields.length > 0) {
-            directives.push(`no-cache="${options.noCacheFields.join(', ')}"`);
-        } else {
-            directives.push('no-cache');
-        }
-    }
-
-    if (options.noStore) {
-        directives.push('no-store');
-    }
-
-    if (options.maxAge !== undefined && options.maxAge >= 0) {
-        directives.push(`max-age=${Math.floor(options.maxAge)}`);
-    }
-
-    if (options.sMaxAge !== undefined && options.sMaxAge >= 0) {
-        directives.push(`s-maxage=${Math.floor(options.sMaxAge)}`);
-    }
-
-    if (options.mustRevalidate) {
-        directives.push('must-revalidate');
-    }
-
-    if (options.proxyRevalidate) {
-        directives.push('proxy-revalidate');
-    }
-
-    if (options.immutable) {
-        directives.push('immutable');
-    }
-
-    if (options.staleWhileRevalidate !== undefined && options.staleWhileRevalidate >= 0) {
-        directives.push(`stale-while-revalidate=${Math.floor(options.staleWhileRevalidate)}`);
-    }
-
-    if (options.staleIfError !== undefined && options.staleIfError >= 0) {
-        directives.push(`stale-if-error=${Math.floor(options.staleIfError)}`);
-    }
-
-    return directives.join(', ');
+    return formatClassicCacheDirectives(options);
 }
 
 /**
@@ -142,89 +81,7 @@ export function getCacheHeaders(
  */
 // RFC 9111 §5.2: Cache-Control parsing.
 export function parseCacheControl(header: string): CacheOptions {
-    const options: CacheOptions = {};
-
-    // Split by comma and process each directive
-    const directives = splitQuotedValue(header, ',').map(d => d.trim()).filter(Boolean);
-
-    for (const directive of directives) {
-        // Handle directives with values (e.g., "max-age=3600" or "max-age = 3600")
-        const parsedDirective = parseKeyValueSegment(directive);
-        if (!parsedDirective) {
-            continue;
-        }
-
-        const name = parsedDirective.key.trim().toLowerCase();
-        const rawValue = parsedDirective.hasEquals ? parsedDirective.value : undefined;
-        const value = rawValue !== undefined ? unquote(rawValue) : undefined;
-
-        switch (name) {
-            case 'public':
-                options.public = true;
-                break;
-            case 'private':
-                options.private = true;
-                if (value) {
-                    const fields = parseFieldNameList(value);
-                    if (fields.length > 0) {
-                        options.privateFields = fields;
-                    }
-                }
-                break;
-            case 'no-cache':
-                options.noCache = true;
-                if (value) {
-                    const fields = parseFieldNameList(value);
-                    if (fields.length > 0) {
-                        options.noCacheFields = fields;
-                    }
-                }
-                break;
-            case 'no-store':
-                options.noStore = true;
-                break;
-            case 'max-age': {
-                const parsed = parseDeltaSeconds(value, { mode: 'clamp', max: MAX_DELTA_SECONDS });
-                if (parsed !== null) {
-                    options.maxAge = parsed;
-                }
-                break;
-            }
-            case 's-maxage': {
-                const parsed = parseDeltaSeconds(value, { mode: 'clamp', max: MAX_DELTA_SECONDS });
-                if (parsed !== null) {
-                    options.sMaxAge = parsed;
-                }
-                break;
-            }
-            case 'must-revalidate':
-                options.mustRevalidate = true;
-                break;
-            case 'proxy-revalidate':
-                options.proxyRevalidate = true;
-                break;
-            case 'immutable':
-                options.immutable = true;
-                break;
-            case 'stale-while-revalidate': {
-                const parsed = parseDeltaSeconds(value, { mode: 'clamp', max: MAX_DELTA_SECONDS });
-                if (parsed !== null) {
-                    options.staleWhileRevalidate = parsed;
-                }
-                break;
-            }
-            case 'stale-if-error': {
-                const parsed = parseDeltaSeconds(value, { mode: 'clamp', max: MAX_DELTA_SECONDS });
-                if (parsed !== null) {
-                    options.staleIfError = parsed;
-                }
-                break;
-            }
-            // Unknown directives are ignored per spec
-        }
-    }
-
-    return options;
+    return parseClassicCacheDirectives(header);
 }
 
 /**

@@ -1,6 +1,7 @@
 /**
  * Authentication-related types.
- * RFC 7617, RFC 6750, RFC 7616.
+ * RFC 7617, RFC 6750, RFC 7616, RFC 7636, W3C WebAuthn Level 3.
+ * @see https://www.rfc-editor.org/rfc/rfc7617.html
  */
 
 // RFC 7235 shared auth surface
@@ -105,4 +106,187 @@ export interface DigestComputeOptions {
     qop?: DigestAuthQop;
     algorithm?: DigestAuthAlgorithm;
     entityBody?: Uint8Array;
+}
+
+// PKCE (RFC 7636)
+export type PkceCodeChallengeMethod = 'plain' | 'S256';
+
+export interface PkceCodeVerifierGenerationOptions {
+    byteLength?: number;
+}
+
+export interface PkceAuthorizationRequestParams {
+    codeChallenge: string;
+    codeChallengeMethod: PkceCodeChallengeMethod;
+}
+
+export interface PkceAuthorizationRequestInput {
+    codeChallenge: string;
+    codeChallengeMethod?: PkceCodeChallengeMethod;
+}
+
+export interface PkceTokenRequestParams {
+    codeVerifier: string;
+}
+
+// WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)
+export type WebauthnAuthenticatorAttachment = 'platform' | 'cross-platform';
+
+export type WebauthnResidentKeyRequirement = 'discouraged' | 'preferred' | 'required';
+
+export type WebauthnUserVerificationRequirement = 'discouraged' | 'preferred' | 'required';
+
+export type WebauthnAttestationConveyancePreference = 'none' | 'indirect' | 'direct' | 'enterprise';
+
+export interface WebauthnPublicKeyCredentialRpEntity {
+    id?: string;
+    name: string;
+}
+
+export interface WebauthnPublicKeyCredentialRpEntityJson {
+    id?: string;
+    name: string;
+}
+
+export interface WebauthnPublicKeyCredentialUserEntity {
+    id: Uint8Array;
+    name: string;
+    displayName: string;
+}
+
+export interface WebauthnPublicKeyCredentialUserEntityJson {
+    id: string;
+    name: string;
+    displayName: string;
+}
+
+export interface WebauthnPublicKeyCredentialParameters {
+    type: 'public-key';
+    alg: number;
+}
+
+export interface WebauthnPublicKeyCredentialDescriptor {
+    type: 'public-key';
+    id: Uint8Array;
+    transports?: string[];
+}
+
+export interface WebauthnPublicKeyCredentialDescriptorJson {
+    type: 'public-key';
+    id: string;
+    transports?: string[];
+}
+
+export interface WebauthnAuthenticatorSelectionCriteria {
+    authenticatorAttachment?: WebauthnAuthenticatorAttachment;
+    residentKey?: WebauthnResidentKeyRequirement;
+    requireResidentKey?: boolean;
+    userVerification?: WebauthnUserVerificationRequirement;
+}
+
+export interface WebauthnPublicKeyCredentialCreationOptions {
+    challenge: Uint8Array;
+    rp: WebauthnPublicKeyCredentialRpEntity;
+    user: WebauthnPublicKeyCredentialUserEntity;
+    pubKeyCredParams: WebauthnPublicKeyCredentialParameters[];
+    timeout?: number;
+    excludeCredentials?: WebauthnPublicKeyCredentialDescriptor[];
+    authenticatorSelection?: WebauthnAuthenticatorSelectionCriteria;
+    attestation?: WebauthnAttestationConveyancePreference;
+    hints?: string[];
+}
+
+export interface WebauthnPublicKeyCredentialCreationOptionsJson {
+    challenge: string;
+    rp: WebauthnPublicKeyCredentialRpEntityJson;
+    user: WebauthnPublicKeyCredentialUserEntityJson;
+    pubKeyCredParams: WebauthnPublicKeyCredentialParameters[];
+    timeout?: number;
+    excludeCredentials?: WebauthnPublicKeyCredentialDescriptorJson[];
+    authenticatorSelection?: WebauthnAuthenticatorSelectionCriteria;
+    attestation?: WebauthnAttestationConveyancePreference;
+    hints?: string[];
+}
+
+export interface WebauthnPublicKeyCredentialRequestOptions {
+    challenge: Uint8Array;
+    timeout?: number;
+    rpId?: string;
+    allowCredentials?: WebauthnPublicKeyCredentialDescriptor[];
+    userVerification?: WebauthnUserVerificationRequirement;
+    hints?: string[];
+}
+
+export interface WebauthnPublicKeyCredentialRequestOptionsJson {
+    challenge: string;
+    timeout?: number;
+    rpId?: string;
+    allowCredentials?: WebauthnPublicKeyCredentialDescriptorJson[];
+    userVerification?: WebauthnUserVerificationRequirement;
+    hints?: string[];
+}
+
+export interface WebauthnCreationOptionsValidationOptions {
+    minChallengeLength?: number;
+    allowedCoseAlgorithms?: readonly number[];
+    allowIpRpId?: boolean;
+}
+
+export interface WebauthnRequestOptionsValidationOptions {
+    minChallengeLength?: number;
+    allowIpRpId?: boolean;
+}
+
+export interface WebauthnClientData {
+    type: string;
+    challenge: string;
+    origin: string;
+    crossOrigin?: boolean;
+    topOrigin?: string;
+}
+
+export interface WebauthnClientDataValidationOptions {
+    expectedType?: string | readonly string[];
+    expectedChallenge?: string | Uint8Array;
+    expectedOrigin?: string | readonly string[];
+    minChallengeLength?: number;
+    requireHttpsOrigin?: boolean;
+    allowHttpLoopbackOrigin?: boolean;
+}
+
+export interface WebauthnClientDataFormatOptions {
+    requireHttpsOrigin?: boolean;
+    allowHttpLoopbackOrigin?: boolean;
+}
+
+export interface WebauthnAuthenticatorFlags {
+    userPresent: boolean;
+    userVerified: boolean;
+    backupEligible: boolean;
+    backupState: boolean;
+    attestedCredentialData: boolean;
+    extensionData: boolean;
+}
+
+export interface WebauthnAttestedCredentialData {
+    aaguid: Uint8Array;
+    credentialId: Uint8Array;
+    credentialPublicKey: Uint8Array;
+}
+
+export interface WebauthnAuthenticatorData {
+    rpIdHash: Uint8Array;
+    flagsByte: number;
+    flags: WebauthnAuthenticatorFlags;
+    signCount: number;
+    attestedCredentialData?: WebauthnAttestedCredentialData;
+    extensions?: Uint8Array;
+}
+
+export interface WebauthnAuthenticatorDataValidationOptions {
+    expectedRpId?: string;
+    requireUserPresence?: boolean;
+    requireUserVerification?: boolean;
+    previousSignCount?: number;
+    allowIpRpId?: boolean;
 }

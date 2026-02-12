@@ -1,3 +1,7 @@
+/**
+ * Reusable assertion helpers for fuzz invariants.
+ */
+
 import assert from 'node:assert/strict';
 
 const CTL_RE = /[\u0000-\u001f\u007f]/;

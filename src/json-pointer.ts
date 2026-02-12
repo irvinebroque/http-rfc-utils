@@ -9,9 +9,14 @@
  * RFC 6901 §4: Decode ~1 to / first, then ~0 to ~.
  * Order matters to avoid ~01 becoming / instead of ~1.
  */
-import { pushPercentEncodedByte } from './internal-percent-encoding.js';
+import {
+    createAsciiAllowTable,
+    decodePercentComponent,
+    encodeRfc3986,
+} from './internal-uri-encoding.js';
 
-const URI_FRAGMENT_ENCODER = new TextEncoder();
+const URI_FRAGMENT_ALLOW_CHARACTERS = '/ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+const URI_FRAGMENT_ALLOW_TABLE = createAsciiAllowTable(URI_FRAGMENT_ALLOW_CHARACTERS);
 
 function decodeToken(token: string): string {
     // RFC 6901 §4: first ~1 → /, then ~0 → ~
@@ -177,7 +182,7 @@ export function evaluateJsonPointer(pointer: string, document: unknown): unknown
         } else if (typeof current === 'object') {
             // RFC 6901 §4: No Unicode normalization; byte-by-byte comparison
             const obj = current as Record<string, unknown>;
-            if (!(token in obj)) {
+            if (!Object.prototype.hasOwnProperty.call(obj, token)) {
                 return undefined;
             }
             current = obj[token];
@@ -210,37 +215,11 @@ export function toUriFragment(pointer: string): string {
         return '#';
     }
 
-    // RFC 6901 §6: UTF-8 encode then percent-encode per RFC 3986 fragment rule.
-    // The JSON Pointer string itself is encoded, not the decoded values.
-    // Characters allowed in URI fragments per RFC 3986: unreserved / pchar / "/" / "?"
-    // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
-    // We encode the pointer directly, preserving / and ~ which are allowed.
-    const parts: string[] = [];
-    for (const char of pointer) {
-        if (char === '/') {
-            // / is allowed in fragments, keep as-is
-            parts.push('/');
-        } else if (char === '~') {
-            // ~ is allowed in fragments (unreserved), keep as-is
-            parts.push('~');
-        } else if (
-            // unreserved characters (except ~ handled above)
-            (char >= 'A' && char <= 'Z') ||
-            (char >= 'a' && char <= 'z') ||
-            (char >= '0' && char <= '9') ||
-            char === '-' || char === '.' || char === '_'
-        ) {
-            parts.push(char);
-        } else {
-            // Percent-encode everything else
-            const bytes = URI_FRAGMENT_ENCODER.encode(char);
-            for (const byte of bytes) {
-                pushPercentEncodedByte(parts, byte);
-            }
-        }
-    }
-
-    return '#' + parts.join('');
+    return '#' + encodeRfc3986(pointer, {
+        allowTable: URI_FRAGMENT_ALLOW_TABLE,
+        preservePctTriplets: false,
+        normalizePctHexUppercase: true,
+    });
 }
 
 /**
@@ -266,11 +245,11 @@ export function fromUriFragment(fragment: string): string | null {
     }
 
     // RFC 6901 §6: Decode percent-encoding
-    try {
-        pointer = decodeURIComponent(pointer);
-    } catch {
-        return null; // Invalid percent-encoding
+    const decoded = decodePercentComponent(pointer);
+    if (decoded === null) {
+        return null;
     }
+    pointer = decoded;
 
     // Validate the resulting pointer
     if (pointer === '' || parseJsonPointer(pointer) !== null) {

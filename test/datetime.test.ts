@@ -1,6 +1,12 @@
+/**
+ * Tests for datetime behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHTTPDate, parseRFC3339 } from '../src/datetime.js';
+import { isExpired, parseHTTPDate, parseRFC3339, secondsUntil } from '../src/datetime.js';
+
+const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // RFC 3339 §5.6: Internet Date/Time Format parsing.
 describe('parseRFC3339', () => {
@@ -157,7 +163,8 @@ describe('parseHTTPDate', () => {
         const candidate = currentCentury + twoDigit;
         const expectedYear = candidate > nowYear + 50 ? candidate - 100 : candidate;
         const twoDigitStr = String(twoDigit).padStart(2, '0');
-        const parsed = parseHTTPDate(`Sunday, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
+        const weekday = FULL_DAY_NAMES[new Date(Date.UTC(expectedYear, 10, 6)).getUTCDay()];
+        const parsed = parseHTTPDate(`${weekday}, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
 
         assert.ok(parsed instanceof Date);
         assert.equal(parsed!.getUTCFullYear(), expectedYear);
@@ -167,9 +174,60 @@ describe('parseHTTPDate', () => {
     it('parses RFC 850 dates for current two-digit year', () => {
         const nowYear = new Date().getUTCFullYear();
         const twoDigitStr = String(nowYear % 100).padStart(2, '0');
-        const parsed = parseHTTPDate(`Sunday, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
+        const weekday = FULL_DAY_NAMES[new Date(Date.UTC(nowYear, 10, 6)).getUTCDay()];
+        const parsed = parseHTTPDate(`${weekday}, 06-Nov-${twoDigitStr} 08:49:37 GMT`);
 
         assert.ok(parsed instanceof Date);
         assert.equal(parsed!.getUTCFullYear(), nowYear);
+    });
+
+    // RFC 9110 §5.6.7: senders MUST generate a weekday matching the calendar date.
+    it('rejects IMF-fixdate weekday/date mismatch', () => {
+        const parsed = parseHTTPDate('Sat, 31 Dec 2018 23:59:59 GMT');
+        assert.equal(parsed, null);
+    });
+
+    it('rejects impossible IMF-fixdate calendar day', () => {
+        const parsed = parseHTTPDate('Mon, 31 Apr 2026 08:49:37 GMT');
+        assert.equal(parsed, null);
+    });
+
+    it('rejects impossible asctime calendar day', () => {
+        const parsed = parseHTTPDate('Tue Feb 30 08:49:37 1994');
+        assert.equal(parsed, null);
+    });
+
+    it('rejects invalid RFC 850 time values', () => {
+        const parsed = parseHTTPDate('Sunday, 06-Nov-94 08:49:60 GMT');
+        assert.equal(parsed, null);
+    });
+});
+
+// RFC 9111 §4.2: freshness evaluation compares expiration instants against current time and computes delta-seconds.
+describe('Date helpers (RFC 9111 Section 4.2)', () => {
+    it('isExpired compares dates against Date.now deterministically', () => {
+        const originalNow = Date.now;
+        Date.now = () => Date.UTC(2026, 1, 1, 0, 0, 0, 0);
+
+        try {
+            assert.equal(isExpired(new Date('2026-01-31T23:59:59.999Z')), true);
+            assert.equal(isExpired(new Date('2026-02-01T00:00:00.000Z')), false);
+            assert.equal(isExpired(new Date('2026-02-01T00:00:01.000Z')), false);
+        } finally {
+            Date.now = originalNow;
+        }
+    });
+
+    it('secondsUntil floors positive values and clamps past dates to zero', () => {
+        const originalNow = Date.now;
+        Date.now = () => Date.UTC(2026, 1, 1, 0, 0, 0, 250);
+
+        try {
+            assert.equal(secondsUntil(new Date('2026-02-01T00:00:10.999Z')), 10);
+            assert.equal(secondsUntil(new Date('2026-02-01T00:00:00.250Z')), 0);
+            assert.equal(secondsUntil(new Date('2026-01-31T23:59:59.000Z')), 0);
+        } finally {
+            Date.now = originalNow;
+        }
     });
 });

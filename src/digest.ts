@@ -10,8 +10,7 @@
 
 import { parseSfDict, serializeSfDict } from './structured-fields.js';
 import type { SfDictionary, SfItem } from './types.js';
-
-const UTF8_ENCODER = new TextEncoder();
+import { encodeUtf8, toUint8ArrayView } from './internal-unicode.js';
 
 // =============================================================================
 // Types
@@ -364,6 +363,22 @@ const CRYPTO_ALGORITHMS: Record<DigestAlgorithm, string> = {
 };
 
 /**
+ * Compare two byte arrays without early exit on mismatch.
+ */
+function constantTimeEqualBytes(expected: Uint8Array, actual: Uint8Array): boolean {
+    let diff = expected.length ^ actual.length;
+    const maxLength = Math.max(expected.length, actual.length);
+
+    for (let i = 0; i < maxLength; i++) {
+        const expectedByte = i < expected.length ? (expected[i] ?? 0) : 0;
+        const actualByte = i < actual.length ? (actual[i] ?? 0) : 0;
+        diff |= expectedByte ^ actualByte;
+    }
+
+    return diff === 0;
+}
+
+/**
  * Generate a digest for the given data.
  * RFC 9530 §2, §3.
  *
@@ -390,19 +405,18 @@ export async function generateDigest(
         throw new Error(`Unsupported algorithm for generation: ${algorithm}`);
     }
 
-    let buffer: ArrayBuffer;
+    let input: BufferSource;
 
     if (typeof data === 'string') {
-        buffer = UTF8_ENCODER.encode(data).buffer as ArrayBuffer;
+        input = encodeUtf8(data).slice();
     } else if (data instanceof ArrayBuffer) {
-        buffer = data;
+        input = data;
     } else {
-        // ArrayBufferView - create a copy to ensure it's an ArrayBuffer
-        const view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-        buffer = view.slice().buffer as ArrayBuffer;
+        // ArrayBufferView - copy to avoid observing caller mutations during hashing
+        input = toUint8ArrayView(data).slice();
     }
 
-    const hashBuffer = await globalThis.crypto.subtle.digest(cryptoAlgorithm, buffer);
+    const hashBuffer = await globalThis.crypto.subtle.digest(cryptoAlgorithm, input);
 
     return {
         algorithm,
@@ -442,17 +456,5 @@ export async function verifyDigest(
     }
 
     const computed = await generateDigest(data, digest.algorithm);
-
-    // Compare byte arrays
-    if (computed.value.length !== digest.value.length) {
-        return false;
-    }
-
-    for (let i = 0; i < computed.value.length; i++) {
-        if (computed.value[i] !== digest.value[i]) {
-            return false;
-        }
-    }
-
-    return true;
+    return constantTimeEqualBytes(computed.value, digest.value);
 }

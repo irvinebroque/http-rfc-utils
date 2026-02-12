@@ -7,6 +7,7 @@
 import type { CacheStatusEntry, CacheStatusParams, SfBareItem, SfItem, SfList } from './types.js';
 import { SfToken } from './types.js';
 import { isEmptyHeader } from './header-utils.js';
+import { expectSfItem, isSfKeyText } from './structured-field-helpers.js';
 import { parseSfList, serializeSfList } from './structured-fields.js';
 import { isSfInteger } from './structured-field-params.js';
 import {
@@ -15,8 +16,6 @@ import {
     parseSfParamsBySchema,
     type SfParamSchemaEntry,
 } from './structured-field-schema.js';
-
-const SF_TOKEN = /^[a-z*][a-z0-9_\-\.\*]*$/;
 
 const CACHE_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<CacheStatusParams>[] = [
     createSfParamSchemaEntry<CacheStatusParams, 'hit'>({
@@ -31,10 +30,10 @@ const CACHE_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<CacheStatusParams>[
         parse: (value) => value instanceof SfToken ? value.value : undefined,
         format: (value) => {
             if (typeof value !== 'string') {
-                throw new Error('Invalid Cache-Status fwd token');
+                throw new Error(`Cache-Status param "fwd" must be a string token; received type ${typeof value}`);
             }
-            if (!SF_TOKEN.test(value)) {
-                throw new Error('Invalid Cache-Status fwd token');
+            if (!isSfKeyText(value)) {
+                throw new Error(`Cache-Status param "fwd" must be an RFC 8941 key token; received ${String(value)}`);
             }
             return new SfToken(value);
         },
@@ -45,10 +44,10 @@ const CACHE_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<CacheStatusParams>[
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
             if (typeof value !== 'number') {
-                throw new Error('Invalid Cache-Status fwd-status value');
+                throw new Error(`Cache-Status param "fwd-status" must be a number; received type ${typeof value}`);
             }
             if (!isSfInteger(value)) {
-                throw new Error('Invalid Cache-Status fwd-status value');
+                throw new Error(`Cache-Status param "fwd-status" must be an RFC 8941 integer; received ${String(value)}`);
             }
             return value;
         },
@@ -59,10 +58,10 @@ const CACHE_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<CacheStatusParams>[
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
             if (typeof value !== 'number') {
-                throw new Error('Invalid Cache-Status ttl value');
+                throw new Error(`Cache-Status param "ttl" must be a number; received type ${typeof value}`);
             }
             if (!isSfInteger(value)) {
-                throw new Error('Invalid Cache-Status ttl value');
+                throw new Error(`Cache-Status param "ttl" must be an RFC 8941 integer; received ${String(value)}`);
             }
             return value;
         },
@@ -88,7 +87,15 @@ const CACHE_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<CacheStatusParams>[
     createSfParamSchemaEntry<CacheStatusParams, 'detail'>({
         key: 'detail',
         property: 'detail',
-        parse: (value) => typeof value === 'string' ? value : undefined,
+        parse: (value) => {
+            if (typeof value === 'string') {
+                return value;
+            }
+            if (value instanceof SfToken) {
+                return value.value;
+            }
+            return undefined;
+        },
         format: (value) => value as SfBareItem,
     }),
 ];
@@ -117,14 +124,15 @@ export function parseCacheStatus(header: string): CacheStatusEntry[] | null {
 
     const entries: CacheStatusEntry[] = [];
     for (const member of list) {
-        if ('items' in member) {
+        const item = expectSfItem(member);
+        if (!item) {
             return null;
         }
-        if (typeof member.value !== 'string') {
-            if (member.value instanceof SfToken) {
+        if (typeof item.value !== 'string') {
+            if (item.value instanceof SfToken) {
                 entries.push({
-                    cache: member.value.value,
-                    params: parseCacheStatusParams(member.params),
+                    cache: item.value.value,
+                    params: parseCacheStatusParams(item.params),
                 });
                 continue;
             }
@@ -132,8 +140,8 @@ export function parseCacheStatus(header: string): CacheStatusEntry[] | null {
         }
 
         entries.push({
-            cache: member.value,
-            params: parseCacheStatusParams(member.params),
+            cache: item.value,
+            params: parseCacheStatusParams(item.params),
         });
     }
 
@@ -145,12 +153,13 @@ export function parseCacheStatus(header: string): CacheStatusEntry[] | null {
  */
 // RFC 9211 §2: Cache-Status Structured Field serialization.
 export function formatCacheStatus(entries: CacheStatusEntry[]): string {
-    const list: SfList = entries.map((entry) => {
+    const list: SfList = new Array(entries.length);
+    for (let index = 0; index < entries.length; index++) {
+        const entry = entries[index]!;
         const params = buildCacheStatusParams(entry.params ?? {});
         const cacheToken = new SfToken(entry.cache);
-        const item: SfItem = params ? { value: cacheToken, params } : { value: cacheToken };
-        return item;
-    });
+        list[index] = params ? { value: cacheToken, params } : { value: cacheToken };
+    }
 
     return serializeSfList(list);
 }

@@ -1,0 +1,30 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "categories": {
+        "correctness": "off",
+        "nursery": "off",
+        "pedantic": "off",
+        "perf": "off",
+        "restriction": "off",
+        "style": "off",
+        "suspicious": "off"
+    },
+    "rules": {
+        "typescript/await-thenable": "error",
+        "typescript/no-array-delete": "error",
+        "typescript/no-duplicate-enum-values": "error",
+        "typescript/no-duplicate-type-constituents": "error",
+        "typescript/no-extra-non-null-assertion": "error",
+        "typescript/no-for-in-array": "error",
+        "typescript/no-implied-eval": "error",
+        "typescript/no-misused-new": "error",
+        "typescript/no-misused-promises": "error",
+        "typescript/no-unsafe-declaration-merging": "error",
+        "typescript/no-unsafe-unary-minus": "error",
+        "typescript/no-useless-empty-export": "error",
+        "typescript/no-wrapper-object-types": "error",
+        "typescript/prefer-as-const": "error",
+        "typescript/require-array-sort-compare": "error"
+    },
+    "overrides": []
+}

@@ -1,3 +1,7 @@
+/**
+ * Tests for header utils behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -11,6 +15,7 @@ import {
     parseKeyValueSegment,
     splitAndParseKeyValueSegments,
     unquote,
+    unquoteLenient,
     parseQuotedStringStrict,
     escapeQuotedString,
     quoteString,
@@ -20,6 +25,7 @@ import {
     parseUnsignedInteger,
     parseDeltaSeconds,
     parseQSegments,
+    parseWeightedTokenList,
     getHeaderValue,
     parseTypeAndSubtype,
     parseMediaType,
@@ -94,8 +100,8 @@ describe('assertHeaderToken', () => {
     });
 
     it('rejects invalid token names', () => {
-        assert.throws(() => assertHeaderToken('bad key', 'token'), /valid header token/);
-        assert.throws(() => assertHeaderToken('bad=key', 'token'), /valid header token/);
+        assert.throws(() => assertHeaderToken('bad key', 'token'), /valid RFC 9110 token/);
+        assert.throws(() => assertHeaderToken('bad=key', 'token'), /valid RFC 9110 token/);
     });
 });
 
@@ -225,10 +231,22 @@ describe('splitAndParseKeyValueSegments', () => {
             { key: 'c', value: '3', hasEquals: true },
         ]);
     });
+
+    it('preserves delimiters inside quoted values', () => {
+        assert.deepEqual(splitAndParseKeyValueSegments('a="x;y"; b=2', ';'), [
+            { key: 'a', value: '"x;y"', hasEquals: true },
+            { key: 'b', value: '2', hasEquals: true },
+        ]);
+    });
 });
 
 // RFC 9110 §5.6.4: quoted-string unescaping.
 describe('unquote', () => {
+    it('keeps unquote and unquoteLenient behavior aligned', () => {
+        const value = '  "path\\\\file"  ';
+        assert.equal(unquote(value), unquoteLenient(value));
+    });
+
     it('unquotes a simple quoted string', () => {
         assert.equal(unquote('"hello"'), 'hello');
     });
@@ -421,6 +439,59 @@ describe('parseQSegments', () => {
             invalidQ: true,
             firstQIndex: null,
         });
+    });
+});
+
+describe('parseWeightedTokenList', () => {
+    it('parses weighted token list and skips invalid q segments', () => {
+        assert.deepEqual(parseWeightedTokenList('gzip;q=0.8, br;q=2, identity'), [
+            { token: 'identity', q: 1 },
+            { token: 'gzip', q: 0.8 },
+        ]);
+    });
+
+    it('preserves default q=1 when q parameter is absent', () => {
+        assert.deepEqual(parseWeightedTokenList('gzip, br;q=0.7', { sort: 'none' }), [
+            { token: 'gzip', q: 1 },
+            { token: 'br', q: 0.7 },
+        ]);
+    });
+
+    it('sorts by q then specificity callback when requested', () => {
+        const specificity = (token: string): number => {
+            if (token === '*') {
+                return 0;
+            }
+
+            let count = 1;
+            for (const character of token) {
+                if (character === '-') {
+                    count++;
+                }
+            }
+
+            return count;
+        };
+
+        assert.deepEqual(
+            parseWeightedTokenList('en;q=0.8, en-us;q=0.8, *;q=0.8', {
+                sort: 'q-then-specificity',
+                specificity,
+            }),
+            [
+                { token: 'en-us', q: 0.8 },
+                { token: 'en', q: 0.8 },
+                { token: '*', q: 0.8 },
+            ]
+        );
+    });
+
+    it('keeps duplicate token ordering stable when q values match', () => {
+        assert.deepEqual(parseWeightedTokenList('gzip;q=0.5, br;q=0.5, gzip;q=0.5'), [
+            { token: 'gzip', q: 0.5 },
+            { token: 'br', q: 0.5 },
+            { token: 'gzip', q: 0.5 },
+        ]);
     });
 });
 

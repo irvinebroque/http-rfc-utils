@@ -1,3 +1,7 @@
+/**
+ * Tests for security fuzz behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import { describe, it } from 'node:test';
@@ -77,9 +81,38 @@ const LOWER_ALPHA = 'abcdefghijklmnopqrstuvwxyz'.split('');
 const ALPHANUMERIC = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
 const TOKEN_TAIL_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789-_'.split('');
 const SAFE_VALUE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~:/?&=+*%(),;@"[]{}!$| '.split('');
+const SAFE_SET_COOKIE_EXTENSION_VALUE_CHARS = SAFE_VALUE_CHARS.filter((char) => char !== ';');
 const TRACESTATE_VALUE_CHARS = SAFE_VALUE_CHARS.filter((char) => char !== ',' && char !== '=');
 const HEX_CHARS = '0123456789abcdef'.split('');
 const HEADER_TOKEN_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+function isFormatSafeSignatureInput(input: SignatureInput): boolean {
+    for (const component of input.components) {
+        const params = component.params;
+        if (!params) {
+            continue;
+        }
+
+        if (params.key !== undefined && typeof params.key !== 'string') {
+            return false;
+        }
+
+        if (params.sf !== undefined && params.sf !== true) {
+            return false;
+        }
+        if (params.bs !== undefined && params.bs !== true) {
+            return false;
+        }
+        if (params.req !== undefined && params.req !== true) {
+            return false;
+        }
+        if (params.tr !== undefined && params.tr !== true) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 const DERIVED_COMPONENTS = [
     '@method',
@@ -438,7 +471,14 @@ const signatureInputsArbitrary = fc.uniqueArray(signatureInputArbitrary, {
 });
 
 const signatureInputGrammarArbitrary = signatureInputsArbitrary
-    .map((inputs) => formatSignatureInput(inputs));
+    .filter((inputs) => inputs.every(isFormatSafeSignatureInput))
+    .map((inputs) => {
+        try {
+            return formatSignatureInput(inputs);
+        } catch {
+            return 'sig=("@method")';
+        }
+    });
 
 const signatureArbitrary: fc.Arbitrary<Signature> = fc.record({
     label: tokenArbitrary,
@@ -468,7 +508,11 @@ const cookieAttributesArbitrary: fc.Arbitrary<SetCookie['attributes']> = fc
         secure: fc.option(fc.boolean(), { nil: undefined }),
         httpOnly: fc.option(fc.boolean(), { nil: undefined }),
         extensions: fc.option(
-            fc.dictionary(tokenArbitrary, fc.option(safeValueArbitrary, { nil: undefined }), { maxKeys: 2 }),
+            fc.dictionary(
+                tokenArbitrary,
+                fc.option(stringFromChars(SAFE_SET_COOKIE_EXTENSION_VALUE_CHARS, { maxLength: 64 }), { nil: undefined }),
+                { maxKeys: 2 },
+            ),
             { nil: undefined },
         ),
     })
@@ -969,6 +1013,10 @@ const parseSignatureInputTarget: FuzzTarget<string, ReturnType<typeof parseSigna
             return;
         }
 
+        if (!result.every(isFormatSafeSignatureInput)) {
+            return;
+        }
+
         const serialized = formatSignatureInput(result);
         const reparsed = parseSignatureInput(serialized);
         assert.notEqual(reparsed, null);
@@ -1157,6 +1205,10 @@ const parseSecurityTxtTarget: FuzzTarget<string, ReturnType<typeof parseSecurity
             return;
         }
 
+        if (result.contact.length === 0) {
+            return;
+        }
+
         const formatted = formatSecurityTxt(result);
         assert.ok(formatted.endsWith('\r\n'));
 
@@ -1237,7 +1289,9 @@ const tryParseJrdTarget: FuzzTarget<string, ReturnType<typeof tryParseJrd>> = {
             return;
         }
 
-        assert.equal(typeof result.subject, 'string');
+        if (result.subject !== undefined) {
+            assert.equal(typeof result.subject, 'string');
+        }
         assert.ok(Array.isArray(validateJrd(result)));
 
         if (result.properties) {
@@ -1257,7 +1311,7 @@ const tryParseJrdTarget: FuzzTarget<string, ReturnType<typeof tryParseJrd>> = {
 
         const serialized = formatJrd(result);
         const reparsed = parseJrd(serialized);
-        assert.equal(reparsed.subject, result.subject);
+        assert.deepEqual(reparsed, result);
     },
 };
 

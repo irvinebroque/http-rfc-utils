@@ -1,6 +1,7 @@
 /**
  * JSONPath lexer.
  * RFC 9535 §2.1, §2.3.
+ * @see https://www.rfc-editor.org/rfc/rfc9535.html
  */
 
 import {
@@ -17,6 +18,8 @@ export class Lexer {
     private pos: number = 0;
     private readonly tokens: Token[] = [];
     private tokenIndex: number = 0;
+    private lastStringErrorPos: number | null = null;
+    private lastNumberErrorPos: number | null = null;
 
     constructor(input: string) {
         this.input = input;
@@ -39,6 +42,11 @@ export class Lexer {
 
             // Two-character tokens
             if (ch === '.' && this.peekChar(1) === '.') {
+                const shorthandStart = this.peekChar(2);
+                if (shorthandStart !== undefined && this.isWhitespaceChar(shorthandStart)) {
+                    throw new Error(`Invalid descendant shorthand at position ${startPos + 2}`);
+                }
+
                 this.pos += 2;
                 this.pushToken('DOTDOT', '..', startPos);
                 continue;
@@ -85,6 +93,10 @@ export class Lexer {
                     this.pushToken('CURRENT', '@', startPos);
                     continue;
                 case '.':
+                    if (this.peekChar(1) !== undefined && this.isWhitespaceChar(this.peekChar(1)!)) {
+                        throw new Error(`Invalid dot shorthand at position ${startPos + 1}`);
+                    }
+
                     this.pos++;
                     this.pushToken('DOT', '.', startPos);
                     continue;
@@ -138,7 +150,9 @@ export class Lexer {
             if (ch === '"' || ch === '\'') {
                 const str = this.readString(ch);
                 if (str === null) {
-                    throw new Error(`Invalid string at position ${startPos}`);
+                    throw new Error(
+                        `Invalid string at position ${this.lastStringErrorPos ?? startPos}`
+                    );
                 }
                 this.pushToken('STRING', str, startPos);
                 continue;
@@ -148,9 +162,11 @@ export class Lexer {
             if (ch === '-' || (ch >= '0' && ch <= '9')) {
                 const num = this.readNumber();
                 if (num === null) {
-                    throw new Error(`Invalid number at position ${startPos}`);
+                    throw new Error(
+                        `Invalid number at position ${this.lastNumberErrorPos ?? startPos}`
+                    );
                 }
-                this.pushToken('NUMBER', num, startPos);
+                this.pushToken('NUMBER', num.value, startPos, num.raw);
                 continue;
             }
 
@@ -178,9 +194,10 @@ export class Lexer {
     private pushToken<TType extends TokenType>(
         type: TType,
         value: TokenValue<TType>,
-        pos: number
+        pos: number,
+        raw?: string
     ): void {
-        this.tokens.push({ type, value, pos } as TokenOf<TType>);
+        this.tokens.push({ type, value, pos, raw } as TokenOf<TType>);
     }
 
     private peekChar(offset: number = 0): string | undefined {
@@ -198,6 +215,14 @@ export class Lexer {
 
             break;
         }
+    }
+
+    private isWhitespaceChar(ch: string): boolean {
+        return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
+    }
+
+    private isDigit(ch: string | undefined): boolean {
+        return ch !== undefined && ch >= '0' && ch <= '9';
     }
 
     // RFC 9535 §2.3.1.1: member-name-shorthand = name-first *name-char
@@ -249,12 +274,14 @@ export class Lexer {
 
     // RFC 9535 §2.3.1.1: String literal parsing with escape sequences
     private readString(quote: '"' | '\''): string | null {
+        this.lastStringErrorPos = null;
         this.pos++; // Skip opening quote
         let result = '';
 
         while (this.pos < this.input.length) {
             const ch = this.input[this.pos];
             if (ch === undefined) {
+                this.lastStringErrorPos = this.pos;
                 return null;
             }
 
@@ -266,11 +293,13 @@ export class Lexer {
             if (ch === '\\') {
                 this.pos++;
                 if (this.pos >= this.input.length) {
+                    this.lastStringErrorPos = this.pos;
                     return null;
                 }
 
                 const escaped = this.input[this.pos];
                 if (escaped === undefined) {
+                    this.lastStringErrorPos = this.pos;
                     return null;
                 }
 
@@ -307,6 +336,7 @@ export class Lexer {
                         this.pos++;
                         const hex = this.input.slice(this.pos, this.pos + 4);
                         if (!/^[0-9A-Fa-f]{4}$/.test(hex)) {
+                            this.lastStringErrorPos = this.pos;
                             return null;
                         }
 
@@ -317,17 +347,20 @@ export class Lexer {
                         if (codePoint >= 0xD800 && codePoint <= 0xDBFF) {
                             // Must be followed by \uXXXX low surrogate
                             if (this.input.slice(this.pos, this.pos + 2) !== '\\u') {
+                                this.lastStringErrorPos = this.pos;
                                 return null;
                             }
 
                             this.pos += 2;
                             const lowSurrogateHex = this.input.slice(this.pos, this.pos + 4);
                             if (!/^[0-9A-Fa-f]{4}$/.test(lowSurrogateHex)) {
+                                this.lastStringErrorPos = this.pos;
                                 return null;
                             }
 
                             const lowSurrogate = parseInt(lowSurrogateHex, 16);
                             if (lowSurrogate < 0xDC00 || lowSurrogate > 0xDFFF) {
+                                this.lastStringErrorPos = this.pos;
                                 return null;
                             }
 
@@ -346,6 +379,7 @@ export class Lexer {
                         continue;
                     }
                     default:
+                        this.lastStringErrorPos = this.pos;
                         return null;
                 }
 
@@ -353,30 +387,34 @@ export class Lexer {
                 continue;
             }
 
+            const code = ch.charCodeAt(0);
+            if (code <= 0x1F) {
+                this.lastStringErrorPos = this.pos;
+                return null;
+            }
+
             result += ch;
             this.pos++;
         }
 
+        this.lastStringErrorPos = this.pos;
         return null; // Unterminated string
     }
 
     // RFC 9535 §2.3.3.1: int = "0" / (["-"] DIGIT1 *DIGIT)
-    private readNumber(): number | null {
+    private readNumber(): { value: number; raw: string } | null {
         const start = this.pos;
-        let hasSign = false;
+        this.lastNumberErrorPos = null;
+        let hasFraction = false;
+        let hasExponent = false;
 
         if (this.input[this.pos] === '-') {
-            hasSign = true;
             this.pos++;
-        }
-
-        if (this.pos >= this.input.length) {
-            this.pos = start;
-            return null;
         }
 
         const firstDigit = this.input[this.pos];
         if (firstDigit === undefined) {
+            this.lastNumberErrorPos = this.pos;
             this.pos = start;
             return null;
         }
@@ -384,40 +422,72 @@ export class Lexer {
         // "0" by itself or leading zeros not allowed for non-zero integers
         if (firstDigit === '0') {
             this.pos++;
-            const next = this.input[this.pos];
-            if (next !== undefined && next >= '0' && next <= '9') {
+            if (this.isDigit(this.input[this.pos])) {
+                this.lastNumberErrorPos = this.pos;
                 this.pos = start;
                 return null;
             }
         } else if (firstDigit >= '1' && firstDigit <= '9') {
             this.pos++;
-            while (this.pos < this.input.length) {
-                const digit = this.input[this.pos];
-                if (digit !== undefined && digit >= '0' && digit <= '9') {
-                    this.pos++;
-                    continue;
-                }
-
-                break;
+            while (this.pos < this.input.length && this.isDigit(this.input[this.pos])) {
+                this.pos++;
             }
-        } else if (hasSign) {
-            // - not followed by digit
-            this.pos = start;
-            return null;
         } else {
+            this.lastNumberErrorPos = this.pos;
             this.pos = start;
             return null;
         }
 
-        const numStr = this.input.slice(start, this.pos);
-        const num = parseInt(numStr, 10);
+        if (this.input[this.pos] === '.') {
+            hasFraction = true;
+            this.pos++;
+            if (!this.isDigit(this.input[this.pos])) {
+                this.lastNumberErrorPos = this.pos;
+                this.pos = start;
+                return null;
+            }
+
+            while (this.pos < this.input.length && this.isDigit(this.input[this.pos])) {
+                this.pos++;
+            }
+        }
+
+        const exp = this.input[this.pos];
+        if (exp === 'e' || exp === 'E') {
+            hasExponent = true;
+            this.pos++;
+
+            const sign = this.input[this.pos];
+            if (sign === '+' || sign === '-') {
+                this.pos++;
+            }
+
+            if (!this.isDigit(this.input[this.pos])) {
+                this.lastNumberErrorPos = this.pos;
+                this.pos = start;
+                return null;
+            }
+
+            while (this.pos < this.input.length && this.isDigit(this.input[this.pos])) {
+                this.pos++;
+            }
+        }
+
+        const raw = this.input.slice(start, this.pos);
+        const num = Number(raw);
+        if (!Number.isFinite(num)) {
+            this.lastNumberErrorPos = start;
+            this.pos = start;
+            return null;
+        }
 
         // RFC 9535 §2.1: Integers MUST be within I-JSON range
-        if (num < I_JSON_MIN || num > I_JSON_MAX) {
+        if (!hasFraction && !hasExponent && (num < I_JSON_MIN || num > I_JSON_MAX)) {
+            this.lastNumberErrorPos = start;
             return null;
         }
 
-        return num;
+        return { value: num, raw };
     }
 
     current(): Token {
@@ -471,7 +541,8 @@ export class Lexer {
             return token;
         }
 
-        throw new Error(`Expected ${type} but got ${this.current().type}`);
+        const current = this.current();
+        throw new Error(`Expected ${type} at position ${current.pos} but found ${current.type}`);
     }
 
     isAtEnd(): boolean {

@@ -1,3 +1,7 @@
+/**
+ * Tests for alt svc behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -18,6 +22,10 @@ describe('parseAltSvc (RFC 7838 Section 3)', () => {
 
     it('does not treat mixed-case clear as valid clear', () => {
         assert.equal(parseAltSvc('Clear'), null);
+    });
+
+    it('rejects members with a missing protocol-id segment', () => {
+        assert.equal(parseAltSvc(';h2=":443"'), null);
     });
 
     // RFC 7838 §3: parse alternatives as ordered 1# list members.
@@ -96,7 +104,7 @@ describe('formatAltSvc (RFC 7838 Section 3)', () => {
                 clear: true,
                 alternatives: [{ protocolId: 'h2', authority: ':443' }],
             });
-        }, /clear value/);
+        }, /clear=true/);
     });
 
     it('formats ordered alternatives with ma and persist', () => {
@@ -109,6 +117,23 @@ describe('formatAltSvc (RFC 7838 Section 3)', () => {
         });
 
         assert.equal(value, 'h2=":8000"; ma=60, h3="alt.example.test:443"; persist=1');
+    });
+
+    it('formats authority with embedded quote and backslash', () => {
+        const value = formatAltSvc({
+            clear: false,
+            alternatives: [{ protocolId: 'h2', authority: 'alt\\"svc:443' }],
+        });
+
+        assert.equal(value, 'h2="alt\\\\\\"svc:443"');
+    });
+
+    it('round-trips parse -> format -> parse for alternatives', () => {
+        const input = 'h2=":8000"; ma=60, h3="alt.example.test:443"; persist=1';
+        const parsed = parseAltSvc(input);
+        assert.ok(parsed);
+        const reparsed = parseAltSvc(formatAltSvc(parsed));
+        assert.deepEqual(reparsed, parsed);
     });
 });
 

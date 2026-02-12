@@ -20,7 +20,7 @@ import type {
     ApiCatalogApi,
 } from './types.js';
 import { parseLinkHeader, formatLink } from './link.js';
-import { createObjectMap } from './object-map.js';
+import { createObjectMap, hasOwnKey } from './object-map.js';
 
 // RFC 9264 §4.2: Linkset JSON media type.
 export const LINKSET_MEDIA_TYPE = 'application/linkset+json';
@@ -435,15 +435,16 @@ export function isValidLinkset(obj: unknown): obj is Linkset {
 
     const record = obj as Record<string, unknown>;
 
-    // RFC 9264 §4.2.1: linkset MUST be the sole member (profile is allowed for api-catalog)
-    const keys = Object.keys(record);
-    if (!keys.includes('linkset')) {
+    // RFC 9264 §4.2.1: linkset MUST be the sole top-level member.
+    if (!hasOwnKey(record, 'linkset')) {
         return false;
     }
 
-    // Allow 'profile' as additional key for API catalogs
-    for (const key of keys) {
-        if (key !== 'linkset' && key !== 'profile') {
+    for (const key in record) {
+        if (!Object.prototype.hasOwnProperty.call(record, key)) {
+            continue;
+        }
+        if (key !== 'linkset') {
             return false;
         }
     }
@@ -452,36 +453,9 @@ export function isValidLinkset(obj: unknown): obj is Linkset {
         return false;
     }
 
-    // Validate each context object
     for (const context of record.linkset) {
-        if (typeof context !== 'object' || context === null) {
+        if (!isValidLinksetContext(context)) {
             return false;
-        }
-
-        // Validate each relation type's targets
-        for (const [key, value] of Object.entries(context as Record<string, unknown>)) {
-            if (key === 'anchor') {
-                if (typeof value !== 'string') {
-                    return false;
-                }
-                continue;
-            }
-
-            // Value must be an array of target objects
-            if (!Array.isArray(value)) {
-                return false;
-            }
-
-            for (const target of value) {
-                if (typeof target !== 'object' || target === null) {
-                    return false;
-                }
-
-                // RFC 9264 §4.2.3: href is required
-                if (!('href' in target) || typeof (target as Record<string, unknown>).href !== 'string') {
-                    return false;
-                }
-            }
         }
     }
 
@@ -584,17 +558,42 @@ export function parseApiCatalog(json: string | object): ApiCatalog | null {
         }
     }
 
-    const linkset = parseLinksetJson(input as object);
+    if (typeof input !== 'object' || input === null) {
+        return null;
+    }
+
+    const inputRecord = input as Record<string, unknown>;
+
+    // RFC 9727 §4.2: API catalogs may carry profile metadata, but base
+    // RFC 9264 linkset validation stays strict and only accepts "linkset".
+    if (!hasOwnKey(inputRecord, 'linkset')) {
+        return null;
+    }
+
+    for (const key in inputRecord) {
+        if (!Object.prototype.hasOwnProperty.call(inputRecord, key)) {
+            continue;
+        }
+        if (key !== 'linkset' && key !== 'profile') {
+            return null;
+        }
+    }
+
+    const baseLinksetCandidate = { linkset: inputRecord.linkset };
+    const linkset = parseLinksetJson(baseLinksetCandidate);
     if (!linkset) {
         return null;
     }
 
-    // Add profile if present in the input
-    if (input && typeof input === 'object' && 'profile' in input) {
-        return { ...linkset, profile: (input as { profile: string }).profile };
+    if (hasOwnKey(inputRecord, 'profile')) {
+        if (typeof inputRecord.profile !== 'string') {
+            return null;
+        }
+
+        return { ...linkset, profile: inputRecord.profile };
     }
 
-    return linkset as ApiCatalog;
+    return linkset;
 }
 
 /**
@@ -606,10 +605,159 @@ export function parseApiCatalog(json: string | object): ApiCatalog | null {
  */
 // RFC 9727 §7.3: Check for API catalog profile.
 export function isApiCatalog(linkset: Linkset | ApiCatalog): boolean {
-    if ('profile' in linkset) {
-        return (linkset as ApiCatalog).profile === API_CATALOG_PROFILE;
+    if ('profile' in linkset && typeof linkset.profile === 'string') {
+        return linkset.profile === API_CATALOG_PROFILE;
     }
+
     return false;
+}
+
+function isInternationalizedValue(value: unknown): value is InternationalizedValue {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return false;
+    }
+
+    const valueRecord = value as Record<string, unknown>;
+
+    if (!hasOwnKey(valueRecord, 'value') || typeof valueRecord.value !== 'string') {
+        return false;
+    }
+
+    if (
+        hasOwnKey(valueRecord, 'language')
+        && valueRecord.language !== undefined
+        && typeof valueRecord.language !== 'string'
+    ) {
+        return false;
+    }
+
+    return true;
+}
+
+function isStringArray(value: unknown): value is string[] {
+    if (!Array.isArray(value)) {
+        return false;
+    }
+
+    for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (typeof item !== 'string') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function isInternationalizedValueArray(value: unknown): value is InternationalizedValue[] {
+    if (!Array.isArray(value)) {
+        return false;
+    }
+
+    for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (!isInternationalizedValue(item)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function isValidLinksetTarget(value: unknown): value is LinksetTarget {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return false;
+    }
+
+    const targetRecord = value as Record<string, unknown>;
+
+    if (!hasOwnKey(targetRecord, 'href') || typeof targetRecord.href !== 'string') {
+        return false;
+    }
+
+    for (const key in targetRecord) {
+        if (!Object.prototype.hasOwnProperty.call(targetRecord, key)) {
+            continue;
+        }
+
+        const member = targetRecord[key];
+        if (member === undefined) {
+            continue;
+        }
+
+        switch (key) {
+            case 'href':
+            case 'type':
+            case 'title':
+            case 'media': {
+                if (typeof member !== 'string') {
+                    return false;
+                }
+                continue;
+            }
+            case 'hreflang': {
+                if (!isStringArray(member)) {
+                    return false;
+                }
+                continue;
+            }
+            case 'title*': {
+                if (!isInternationalizedValueArray(member)) {
+                    return false;
+                }
+                continue;
+            }
+            default: {
+                if (typeof member === 'string') {
+                    continue;
+                }
+                if (isStringArray(member)) {
+                    continue;
+                }
+                if (isInternationalizedValueArray(member)) {
+                    continue;
+                }
+
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+function isValidLinksetContext(value: unknown): value is LinksetContext {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return false;
+    }
+
+    const contextRecord = value as Record<string, unknown>;
+    for (const key in contextRecord) {
+        if (!Object.prototype.hasOwnProperty.call(contextRecord, key)) {
+            continue;
+        }
+
+        const member = contextRecord[key];
+        if (key === 'anchor') {
+            if (typeof member !== 'string') {
+                return false;
+            }
+
+            continue;
+        }
+
+        if (!Array.isArray(member)) {
+            return false;
+        }
+
+        for (const target of member) {
+            if (!isValidLinksetTarget(target)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 /**

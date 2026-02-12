@@ -1,3 +1,9 @@
+/**
+ * API compatibility comparison for declaration entrypoints.
+ * Uses TypeScript assignability rules to detect SemVer-relevant breakage.
+ * @see https://semver.org/
+ */
+
 import path from 'node:path';
 import * as ts from 'typescript';
 import { collectApiExports } from './apiModel.js';

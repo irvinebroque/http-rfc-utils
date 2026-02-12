@@ -1,3 +1,7 @@
+/**
+ * Tests for structured fields behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -52,6 +56,33 @@ describe('Structured Fields (RFC 8941 Section 3)', () => {
         assert.equal(parsed?.length, 2);
     });
 
+    // RFC 8941 §4.2.1.2: Inner list separators are SP only.
+    it('rejects HTAB separators inside inner lists', () => {
+        assert.equal(parseSfList('(a\tb)'), null);
+    });
+
+    // RFC 8941 §4.2.1.2: Adjacent inner-list members require at least one SP.
+    it('rejects adjacent inner-list members without SP separator', () => {
+        assert.equal(parseSfList('("a""b")'), null);
+    });
+
+    // RFC 8941 §3.1.1: Inner lists permit one or more SP between members and optional edge SP.
+    it('accepts legal SP usage inside inner lists', () => {
+        const parsed = parseSfList('(  "a"   "b" )');
+        assert.deepEqual(parsed, [{ items: [{ value: 'a' }, { value: 'b' }] }]);
+    });
+
+    // RFC 8941 §3.1.1 + §3.1.2: Item parameters must not consume the required member separator SP.
+    it('parses inner-list item boolean parameter followed by another member', () => {
+        const parsed = parseSfList('("content-type";sf "cache-control")');
+        assert.deepEqual(parsed, [{
+            items: [
+                { value: 'content-type', params: { sf: true } },
+                { value: 'cache-control' },
+            ],
+        }]);
+    });
+
     it('parses dictionary values and parameters (RFC 8941 Section 3.2)', () => {
         const parsed = parseSfDict('a=1;foo=bar, b');
         assert.ok(parsed?.a);
@@ -67,6 +98,43 @@ describe('Structured Fields (RFC 8941 Section 3)', () => {
             b: { value: 10 },
         });
         assert.equal(dict, 'a, b=10');
+    });
+
+    // RFC 8941 §4.1.2: true dictionary member with parameters omits =?1.
+    it('serializes true dictionary member with parameters without explicit boolean', () => {
+        const dict = serializeSfDict({
+            key: { value: true, params: { foo: 'bar' } },
+        });
+        assert.equal(dict, 'key;foo="bar"');
+    });
+
+    // RFC 8941 §4.1.2: true member keeps canonical dictionary punctuation with others.
+    it('serializes mixed dictionary members with canonical separators', () => {
+        const dict = serializeSfDict({
+            a: { value: true, params: { foo: 'bar' } },
+            b: { value: 10 },
+            c: { value: false },
+        });
+        assert.equal(dict, 'a;foo="bar", b=10, c=?0');
+    });
+
+    // RFC 8941 §3.2 + §4.1.2: dictionary keys serialize only as sf-key.
+    it('rejects invalid dictionary keys during serialization', () => {
+        assert.throws(() => {
+            serializeSfDict({
+                BadKey: { value: true },
+            });
+        }, /Invalid Structured Field dictionary key/);
+    });
+
+    // RFC 8941 §3.1.2 + §4.1.1: parameter keys serialize only as sf-key.
+    it('rejects invalid parameter keys during serialization', () => {
+        assert.throws(() => {
+            serializeSfItem({
+                value: 'token',
+                params: { BadParam: 'x' },
+            });
+        }, /Invalid Structured Field parameter key/);
     });
 
     it('serializes items with parameters (RFC 8941 Section 3.1.2)', () => {
@@ -110,6 +178,11 @@ describe('Structured Fields (RFC 8941 Section 3)', () => {
     it('serializes SfToken values as bare tokens', () => {
         const serialized = serializeSfItem({ value: new SfToken('hello') });
         assert.equal(serialized, 'hello');
+    });
+
+    // RFC 8941 §3.3.4 + §4.1.6: sf-token serialization must validate token grammar.
+    it('rejects invalid SfToken values during serialization', () => {
+        assert.throws(() => serializeSfItem({ value: new SfToken('bad token') }), /Invalid Structured Field token value/);
     });
 
     // RFC 8941 §3.1: Trailing commas are invalid in Lists.
@@ -317,9 +390,31 @@ describe('Structured Fields Display String (RFC 9651 Section 3.3.8)', () => {
         assert.ok(first.params?.title instanceof SfDisplayString);
         assert.equal((first.params?.title as SfDisplayString).value, 'Björn Järnsida');
     });
+
+    // RFC 9651 §4.1.11: Display String input must be valid Unicode scalar values.
+    it('rejects lone surrogate Display String input during serialization', () => {
+        assert.throws(
+            () => serializeSfItem({ value: new SfDisplayString('bad\ud800') }),
+            /display string|Invalid display string value/
+        );
+    });
 });
 
 describe('Structured Fields serialization constraints (RFC 8941 Section 4)', () => {
+    // RFC 8941 §4.1.5: Decimal serialization MUST include a decimal point.
+    it('serializes rounded integral decimals with .0 suffix', () => {
+        assert.equal(serializeSfItem({ value: 1.0004 }), '1.0');
+        assert.equal(serializeSfItem({ value: -0.0004 }), '-0.0');
+        assert.equal(serializeSfItem({ value: 10.0004 }), '10.0');
+    });
+
+    // RFC 8941 §4.1.5: Decimal parse/serialize stays in decimal form when non-integral.
+    it('round-trips parsed decimal values in decimal form', () => {
+        const parsed = parseSfItem('1.25');
+        assert.ok(parsed);
+        assert.equal(serializeSfItem(parsed), '1.25');
+    });
+
     // RFC 8941 §4.1.5: Decimal range is limited to +/- 999999999999.999.
     it('rejects decimals outside the allowed range during serialization', () => {
         assert.throws(() => serializeSfItem({ value: 1_000_000_000_000.001 }));

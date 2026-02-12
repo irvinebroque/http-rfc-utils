@@ -4,9 +4,12 @@
  * @see https://www.rfc-editor.org/rfc/rfc9209.html#section-2
  */
 
+import { Buffer } from 'node:buffer';
+
 import type { ProxyStatusEntry, ProxyStatusParams, ProxyErrorType, SfBareItem, SfItem, SfList } from './types.js';
 import { SfToken } from './types.js';
 import { isEmptyHeader } from './header-utils.js';
+import { expectSfItem, isSfTokenText } from './structured-field-helpers.js';
 import { parseSfList, serializeSfList } from './structured-fields.js';
 import { isSfInteger } from './structured-field-params.js';
 import {
@@ -15,8 +18,6 @@ import {
     parseSfParamsBySchema,
     type SfParamSchemaEntry,
 } from './structured-field-schema.js';
-
-const SF_TOKEN = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:\/]*$/;
 
 /**
  * All 32 proxy error types defined in RFC 9209 §2.3.
@@ -58,6 +59,22 @@ export const PROXY_ERROR_TYPES: readonly ProxyErrorType[] = [
 
 const PROXY_ERROR_TYPE_SET = new Set<string>(PROXY_ERROR_TYPES);
 
+function decodeProxyStatusBinaryValue(value: Uint8Array): string {
+    return Buffer.from(value).toString('latin1');
+}
+
+function encodeProxyStatusBinaryValue(value: string): Uint8Array {
+    for (let index = 0; index < value.length; index++) {
+        const codePoint = value.charCodeAt(index);
+        if (codePoint > 0xFF) {
+            throw new Error(
+                `Proxy-Status param "next-protocol" must contain only Latin-1 bytes; found code point U+${codePoint.toString(16).toUpperCase().padStart(4, '0')} at index ${index}`,
+            );
+        }
+    }
+    return new Uint8Array(Buffer.from(value, 'latin1'));
+}
+
 /**
  * Type guard to check if a value is a known proxy error type.
  * RFC 9209 §2.3.
@@ -87,24 +104,49 @@ const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[
         },
         format: (value) => {
             if (typeof value !== 'string') {
-                return value as SfBareItem;
+                return value as unknown as SfBareItem;
             }
-            return SF_TOKEN.test(value) ? new SfToken(value) : value;
+            return isSfTokenText(value) ? new SfToken(value) : value;
         },
     }),
     createSfParamSchemaEntry<ProxyStatusParams, 'nextProtocol'>({
         key: 'next-protocol',
         property: 'nextProtocol',
-        parse: (value) => value instanceof SfToken ? value.value : undefined,
-        format: (value) => new SfToken(value as string),
+        parse: (value) => {
+            if (value instanceof SfToken) {
+                return value.value;
+            }
+            if (value instanceof Uint8Array) {
+                return decodeProxyStatusBinaryValue(value);
+            }
+            return undefined;
+        },
+        format: (value) => {
+            if (typeof value !== 'string') {
+                throw new Error(
+                    `Proxy-Status param "next-protocol" must be a string; received type ${typeof value}`,
+                );
+            }
+            if (isSfTokenText(value)) {
+                return new SfToken(value);
+            }
+            return encodeProxyStatusBinaryValue(value);
+        },
     }),
     createSfParamSchemaEntry<ProxyStatusParams, 'receivedStatus'>({
         key: 'received-status',
         property: 'receivedStatus',
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
-            if (typeof value !== 'number' || !isSfInteger(value)) {
-                throw new Error('Invalid Proxy-Status received-status value');
+            if (typeof value !== 'number') {
+                throw new Error(
+                    `Proxy-Status param "received-status" must be a number; received type ${typeof value}`,
+                );
+            }
+            if (!isSfInteger(value)) {
+                throw new Error(
+                    `Proxy-Status param "received-status" must be an RFC 8941 integer; received ${String(value)}`,
+                );
             }
             return value;
         },
@@ -113,7 +155,12 @@ const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[
         key: 'details',
         property: 'details',
         parse: (value) => typeof value === 'string' ? value : undefined,
-        format: (value) => value as SfBareItem,
+        format: (value) => {
+            if (typeof value !== 'string') {
+                throw new Error(`Proxy-Status param "details" must be a string; received type ${typeof value}`);
+            }
+            return value;
+        },
     }),
     createSfParamSchemaEntry<ProxyStatusParams, 'rcode'>({
         key: 'rcode',
@@ -126,8 +173,13 @@ const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[
         property: 'infoCode',
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
-            if (typeof value !== 'number' || !isSfInteger(value)) {
-                throw new Error('Invalid Proxy-Status info-code value');
+            if (typeof value !== 'number') {
+                throw new Error(`Proxy-Status param "info-code" must be a number; received type ${typeof value}`);
+            }
+            if (!isSfInteger(value)) {
+                throw new Error(
+                    `Proxy-Status param "info-code" must be an RFC 8941 integer; received ${String(value)}`,
+                );
             }
             return value;
         },
@@ -137,8 +189,13 @@ const PROXY_STATUS_PARAM_SCHEMA: readonly SfParamSchemaEntry<ProxyStatusParams>[
         property: 'alertId',
         parse: (value) => typeof value === 'number' && isSfInteger(value) ? value : undefined,
         format: (value) => {
-            if (typeof value !== 'number' || !isSfInteger(value)) {
-                throw new Error('Invalid Proxy-Status alert-id value');
+            if (typeof value !== 'number') {
+                throw new Error(`Proxy-Status param "alert-id" must be a number; received type ${typeof value}`);
+            }
+            if (!isSfInteger(value)) {
+                throw new Error(
+                    `Proxy-Status param "alert-id" must be an RFC 8941 integer; received ${String(value)}`,
+                );
             }
             return value;
         },
@@ -189,18 +246,19 @@ export function parseProxyStatus(header: string): ProxyStatusEntry[] | null {
     for (const member of list) {
         // RFC 9209 §2: Each member MUST have a type of either String or Token.
         // Inner lists are not allowed.
-        if ('items' in member) {
+        const item = expectSfItem(member);
+        if (!item) {
             return null;
         }
-        if (!(typeof member.value === 'string' || member.value instanceof SfToken)) {
+        if (!(typeof item.value === 'string' || item.value instanceof SfToken)) {
             return null;
         }
 
-        const proxy = member.value instanceof SfToken ? member.value.value : member.value;
+        const proxy = item.value instanceof SfToken ? item.value.value : item.value;
 
         entries.push({
             proxy,
-            params: parseProxyStatusParams(member.params),
+            params: parseProxyStatusParams(item.params),
         });
     }
 
@@ -212,12 +270,13 @@ export function parseProxyStatus(header: string): ProxyStatusEntry[] | null {
  * RFC 9209 §2: Proxy-Status Structured Field serialization.
  */
 export function formatProxyStatus(entries: ProxyStatusEntry[]): string {
-    const list: SfList = entries.map((entry) => {
+    const list: SfList = new Array(entries.length);
+    for (let index = 0; index < entries.length; index++) {
+        const entry = entries[index]!;
         const params = buildProxyStatusParams(entry.params ?? {});
         const proxyToken = new SfToken(entry.proxy);
-        const item: SfItem = params ? { value: proxyToken, params } : { value: proxyToken };
-        return item;
-    });
+        list[index] = params ? { value: proxyToken, params } : { value: proxyToken };
+    }
 
     return serializeSfList(list);
 }

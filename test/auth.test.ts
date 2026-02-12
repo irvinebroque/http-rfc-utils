@@ -1,3 +1,7 @@
+/**
+ * Tests for auth behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
@@ -11,6 +15,7 @@ import {
     formatBearerChallenge,
     parseBearerChallenge,
     parseWWWAuthenticate,
+    formatWWWAuthenticate,
     parseAuthorization,
     // Digest (RFC 7616)
     DIGEST_AUTH_ALGORITHMS,
@@ -51,6 +56,23 @@ describe('Basic Authentication (RFC 7617 Section 2)', () => {
         const parsed = parseBasicChallenge(header);
         assert.deepEqual(parsed, { scheme: 'Basic', realm: 'Restricted', charset: 'UTF-8' });
     });
+
+    // RFC 9110 §11.2: auth-param names MUST occur at most once per challenge.
+    it('rejects Basic challenge with duplicate auth params', () => {
+        assert.equal(parseBasicChallenge('Basic realm="one", realm="two"'), null);
+        assert.equal(parseBasicChallenge('Basic Realm="one", realm="two"'), null);
+    });
+
+    // RFC 7617 §2 and RFC 4648 §3.5: Basic credentials use canonical base64 encoding.
+    it('rejects malformed or non-canonical Basic token68 base64', () => {
+        assert.equal(parseBasicAuthorization('Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ'), null);
+        assert.equal(parseBasicAuthorization('Basic dXNlcjpwYXNz.'), null);
+    });
+
+    it('throws for semantic-invalid Basic formatter inputs', () => {
+        assert.throws(() => formatBasicAuthorization('user:name', 'secret'), /must not contain ":"/);
+        assert.throws(() => formatBasicAuthorization('user', 'bad\npass'), /control characters/);
+    });
 });
 
 describe('Bearer Authentication (RFC 6750 Section 2.1)', () => {
@@ -84,6 +106,14 @@ describe('Bearer Authentication (RFC 6750 Section 2.1)', () => {
         );
     });
 
+    it('throws for unregistered Bearer error values in formatter', () => {
+        assert.throws(() => {
+            formatBearerChallenge({
+                error: 'not_registered' as unknown as 'invalid_token',
+            });
+        }, /params\.error must be one of invalid_request, invalid_token, insufficient_scope/);
+    });
+
     // RFC 9110 §5.5: reject CR/LF and CTLs in serialized auth parameters.
     it('rejects control bytes in Bearer challenge formatting', () => {
         assert.throws(() => {
@@ -98,7 +128,13 @@ describe('Bearer Authentication (RFC 6750 Section 2.1)', () => {
                 realm: 'example',
                 params: { 'bad key': 'value' },
             });
-        }, /valid header token/);
+        }, /valid RFC 9110 token/);
+    });
+
+    it('throws for semantic-invalid Bearer formatter inputs', () => {
+        assert.throws(() => {
+            formatBearerAuthorization('not allowed spaces');
+        }, /b64token syntax/);
     });
 });
 
@@ -108,6 +144,14 @@ describe('WWW-Authenticate parsing (RFC 7235 Section 2.1)', () => {
         assert.equal(parsed.length, 2);
         assert.equal(parsed[0]?.scheme.toLowerCase(), 'basic');
         assert.equal(parsed[1]?.scheme.toLowerCase(), 'bearer');
+    });
+
+    it('formats WWW-Authenticate challenges directly', () => {
+        const header = formatWWWAuthenticate([
+            { scheme: 'Basic', params: [{ name: 'realm', value: 'docs' }] },
+            { scheme: 'Bearer', params: [{ name: 'realm', value: 'api' }] },
+        ]);
+        assert.equal(header, 'Basic realm="docs", Bearer realm="api"');
     });
 });
 
@@ -169,6 +213,19 @@ describe('Digest Authentication (RFC 7616)', () => {
             assert.deepEqual(parsed.domain, ['/api', '/admin']);
         });
 
+        it('ignores invalid optional Digest challenge tokens while preserving required fields', () => {
+            const challenges = parseWWWAuthenticate(
+                'Digest realm="test", nonce="abc123", algorithm=UNKNOWN, qop="unknown"'
+            );
+            const parsed = parseDigestChallenge(challenges[0]!);
+            assert.ok(parsed);
+            assert.deepEqual(parsed, {
+                scheme: 'Digest',
+                realm: 'test',
+                nonce: 'abc123',
+            });
+        });
+
         it('returns null for missing realm', () => {
             const challenges = parseWWWAuthenticate('Digest nonce="abc123"');
             const parsed = parseDigestChallenge(challenges[0]!);
@@ -185,6 +242,18 @@ describe('Digest Authentication (RFC 7616)', () => {
             const challenges = parseWWWAuthenticate('Basic realm="test"');
             const parsed = parseDigestChallenge(challenges[0]!);
             assert.equal(parsed, null);
+        });
+
+        // RFC 9110 §11.2 and RFC 7616 §3.3: auth-param names are unique per challenge.
+        it('rejects duplicate Digest challenge auth params', () => {
+            const duplicateNonce = parseWWWAuthenticate('Digest realm="test", nonce="n1", nonce="n2"');
+            assert.equal(parseDigestChallenge(duplicateNonce[0]!), null);
+
+            const duplicateRealmCase = parseWWWAuthenticate('Digest Realm="a", realm="b", nonce="n1"');
+            assert.equal(parseDigestChallenge(duplicateRealmCase[0]!), null);
+
+            const duplicateQop = parseWWWAuthenticate('Digest realm="test", nonce="n1", qop="auth", qop="auth-int"');
+            assert.equal(parseDigestChallenge(duplicateQop[0]!), null);
         });
     });
 
@@ -246,6 +315,34 @@ describe('Digest Authentication (RFC 7616)', () => {
             assert.deepEqual(parsed.qop, original.qop);
             assert.equal(parsed.algorithm, original.algorithm);
         });
+
+        // RFC 9110 §5.6.2: bare auth-param values must serialize as tokens.
+        it('rejects invalid bare challenge parameter tokens during formatting', () => {
+            assert.throws(() => {
+                formatDigestChallenge({
+                    scheme: 'Digest',
+                    realm: 'test',
+                    nonce: 'abc123',
+                    algorithm: 'SHA-256,evil' as unknown as 'SHA-256',
+                });
+            }, /algorithm must be one of/);
+        });
+
+        it('throws when required Digest challenge fields are missing', () => {
+            assert.throws(() => {
+                formatDigestChallenge({
+                    scheme: 'Digest',
+                    nonce: 'abc123',
+                } as unknown as DigestChallenge);
+            }, /Digest challenge realm is required/);
+
+            assert.throws(() => {
+                formatDigestChallenge({
+                    scheme: 'Digest',
+                    realm: 'test',
+                } as unknown as DigestChallenge);
+            }, /Digest challenge nonce is required/);
+        });
     });
 
     // RFC 7616 §3.4: Authorization credentials parsing
@@ -302,12 +399,66 @@ describe('Digest Authentication (RFC 7616)', () => {
             assert.equal(longParsed, null);
         });
 
+        // RFC 7616 §3.4: if qop is present, cnonce and nc are required.
+        it('rejects qop without cnonce or nc and accepts fully coupled qop inputs', () => {
+            const missingCnonceHeader =
+                'Digest username="test", realm="r", uri="/", response="abc", qop=auth, nc=00000001';
+            const missingCnonceAuth = parseAuthorization(missingCnonceHeader);
+            assert.equal(parseDigestAuthorization(missingCnonceAuth!), null);
+
+            const missingNcHeader =
+                'Digest username="test", realm="r", uri="/", response="abc", qop=auth, cnonce="xyz"';
+            const missingNcAuth = parseAuthorization(missingNcHeader);
+            assert.equal(parseDigestAuthorization(missingNcAuth!), null);
+
+            const malformedNcHeader =
+                'Digest username="test", realm="r", uri="/", response="abc", qop=auth, cnonce="xyz", nc=1';
+            const malformedNcAuth = parseAuthorization(malformedNcHeader);
+            assert.equal(parseDigestAuthorization(malformedNcAuth!), null);
+
+            const validQopHeader =
+                'Digest username="test", realm="r", uri="/", response="abc", qop=auth-int, cnonce="xyz", nc=00000001';
+            const validQopAuth = parseAuthorization(validQopHeader);
+            const validQopParsed = parseDigestAuthorization(validQopAuth!);
+            assert.ok(validQopParsed);
+            assert.equal(validQopParsed.qop, 'auth-int');
+            assert.equal(validQopParsed.cnonce, 'xyz');
+            assert.equal(validQopParsed.nc, '00000001');
+        });
+
         it('rejects both username and username* present (RFC 7616 §3.4)', () => {
             const header =
                 'Digest username="test", username*=UTF-8\'\'test, realm="r", uri="/", response="abc"';
             const auth = parseAuthorization(header);
             const parsed = parseDigestAuthorization(auth!);
             assert.equal(parsed, null);
+        });
+
+        it('ignores invalid optional algorithm tokens but rejects invalid qop values', () => {
+            const invalidAlgorithm =
+                'Digest username="u", realm="r", uri="/", response="abc", algorithm=UNKNOWN';
+            const invalidAlgorithmAuth = parseAuthorization(invalidAlgorithm);
+            const invalidAlgorithmParsed = parseDigestAuthorization(invalidAlgorithmAuth!);
+            assert.ok(invalidAlgorithmParsed);
+            assert.equal(invalidAlgorithmParsed.algorithm, undefined);
+
+            const invalidQop =
+                'Digest username="u", realm="r", uri="/", response="abc", qop=unknown';
+            const invalidQopAuth = parseAuthorization(invalidQop);
+            assert.equal(parseDigestAuthorization(invalidQopAuth!), null);
+        });
+
+        // RFC 9110 §11.2 and RFC 7616 §3.4: auth-param names MUST be unique.
+        it('rejects duplicate Digest Authorization params case-insensitively', () => {
+            const duplicateResponse =
+                'Digest username="u", realm="r", uri="/", response="abc", response="def"';
+            const duplicateResponseAuth = parseAuthorization(duplicateResponse);
+            assert.equal(parseDigestAuthorization(duplicateResponseAuth!), null);
+
+            const duplicateRealmCase =
+                'Digest username="u", Realm="r1", realm="r2", uri="/", response="abc"';
+            const duplicateRealmCaseAuth = parseAuthorization(duplicateRealmCase);
+            assert.equal(parseDigestAuthorization(duplicateRealmCaseAuth!), null);
         });
 
         it('parses username* with RFC 8187 encoding (RFC 7616 §3.4)', () => {
@@ -432,6 +583,58 @@ describe('Digest Authentication (RFC 7616)', () => {
             assert.equal(parsed.nc, original.nc);
             assert.equal(parsed.cnonce, original.cnonce);
         });
+
+        // RFC 7616 §3.4: nc is exactly 8 hexadecimal digits.
+        it('rejects invalid nc values during Digest Authorization formatting', () => {
+            assert.throws(() => {
+                formatDigestAuthorization({
+                    scheme: 'Digest',
+                    username: 'user',
+                    realm: 'example.com',
+                    uri: '/resource',
+                    response: 'deadbeef',
+                    qop: 'auth',
+                    cnonce: 'xyz789',
+                    nc: '1',
+                });
+            }, /exactly 8 hexadecimal digits/);
+        });
+
+        // RFC 9110 §5.6.2: bare qop parameter values are tokens.
+        it('rejects invalid bare qop tokens during Digest Authorization formatting', () => {
+            assert.throws(() => {
+                formatDigestAuthorization({
+                    scheme: 'Digest',
+                    username: 'user',
+                    realm: 'example.com',
+                    uri: '/resource',
+                    response: 'deadbeef',
+                    qop: 'auth,evil' as unknown as 'auth',
+                });
+            }, /qop must be "auth" or "auth-int"/);
+        });
+
+        it('throws when required Digest credential fields are missing', () => {
+            assert.throws(() => {
+                formatDigestAuthorization({
+                    scheme: 'Digest',
+                    username: 'user',
+                    realm: 'example.com',
+                    response: 'deadbeef',
+                } as unknown as DigestCredentials);
+            }, /Digest uri is required/);
+
+            assert.throws(() => {
+                formatDigestAuthorization({
+                    scheme: 'Digest',
+                    username: 'user',
+                    realm: 'example.com',
+                    uri: '/resource',
+                    response: 'deadbeef',
+                    qop: 'auth',
+                } as unknown as DigestCredentials);
+            }, /cnonce is required when qop is present/);
+        });
     });
 
     // RFC 7616 §3.5: Authentication-Info
@@ -476,6 +679,33 @@ describe('Digest Authentication (RFC 7616)', () => {
             assert.equal(parsed.nextnonce, original.nextnonce);
             assert.equal(parsed.qop, original.qop);
             assert.equal(parsed.rspauth, original.rspauth);
+        });
+
+        // RFC 9110 §11.2 and RFC 7616 §3.5: Authentication-Info params are unique by name.
+        it('rejects duplicate Authentication-Info params case-insensitively', () => {
+            assert.equal(parseDigestAuthenticationInfo('nextnonce="a", nextnonce="b"'), null);
+            assert.equal(parseDigestAuthenticationInfo('QOP=auth, qop=auth'), null);
+        });
+
+        it('ignores invalid optional Authentication-Info qop/nc values', () => {
+            const parsed = parseDigestAuthenticationInfo(
+                'nextnonce="abc123", qop=unknown, rspauth="deadbeef", nc=1'
+            );
+            assert.ok(parsed);
+            assert.deepEqual(parsed, {
+                nextnonce: 'abc123',
+                rspauth: 'deadbeef',
+            });
+        });
+
+        // RFC 7616 §3.5: nc is exactly 8 hexadecimal digits.
+        it('rejects invalid nc values during Authentication-Info formatting', () => {
+            assert.throws(() => {
+                formatDigestAuthenticationInfo({
+                    qop: 'auth',
+                    nc: 'xyz',
+                });
+            }, /exactly 8 hexadecimal digits/);
         });
     });
 
@@ -638,7 +868,7 @@ describe('Digest Authentication (RFC 7616)', () => {
         it('throws for session algorithm without nonce/cnonce', async () => {
             await assert.rejects(
                 async () => computeA1('user', 'realm', 'password', 'MD5-sess'),
-                /nonce and cnonce are required/
+                /requires both nonce and cnonce|nonce and cnonce are required/
             );
         });
     });
@@ -658,7 +888,7 @@ describe('Digest Authentication (RFC 7616)', () => {
         it('throws for qop=auth-int (out of scope)', () => {
             assert.throws(
                 () => computeA2('GET', '/', 'auth-int'),
-                /auth-int is not supported/
+                /"?auth-int"? is not supported/
             );
         });
     });

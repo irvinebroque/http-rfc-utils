@@ -17,9 +17,9 @@ const TRACEPARENT_DELIMITER = '-';
 const TRACE_ID_HEX_RE = /^[0-9a-f]{32}$/;
 const PARENT_ID_HEX_RE = /^[0-9a-f]{16}$/;
 const TRACE_FLAGS_HEX_RE = /^[0-9a-f]{2}$/;
+const FUTURE_VERSION_SUFFIX_PREFIX_RE = /^-[0-9a-f]{2}/;
 
 const SIMPLE_TRACESTATE_KEY_RE = /^[a-z][a-z0-9_\-*/]{0,255}$/;
-const TRACESTATE_VALUE_RE = /^[\x20-\x2b\x2d-\x3c\x3e-\x7e]{0,256}$/;
 const MAX_TRACESTATE_MEMBERS = 32;
 const MAX_TRACESTATE_LENGTH = 512;
 
@@ -77,26 +77,79 @@ function isValidTracestateKey(key: string): boolean {
 }
 
 function isValidTracestateValue(value: string): boolean {
-    return TRACESTATE_VALUE_RE.test(value);
+    if (value.length === 0 || value.length > 256) {
+        return false;
+    }
+
+    const isNonBlankChar = (codePoint: number): boolean => (
+        (codePoint >= 0x21 && codePoint <= 0x2b)
+        || (codePoint >= 0x2d && codePoint <= 0x3c)
+        || (codePoint >= 0x3e && codePoint <= 0x7e)
+    );
+
+    for (let i = 0; i < value.length - 1; i++) {
+        const codePoint = value.charCodeAt(i);
+        if (codePoint === 0x20) {
+            continue;
+        }
+        if (!isNonBlankChar(codePoint)) {
+            return false;
+        }
+    }
+
+    const lastCodePoint = value.charCodeAt(value.length - 1);
+    if (!isNonBlankChar(lastCodePoint)) {
+        return false;
+    }
+
+    return true;
 }
 
-function parseTraceparentParts(rawValue: string): [string, string, string, string] | null {
+interface ParsedTraceparentParts {
+    version: string;
+    traceId: string;
+    parentId: string;
+    traceFlags: string;
+    hasFutureVersionSuffix: boolean;
+    futureVersionSuffixHasValidPrefix: boolean;
+}
+
+function parseTraceparentParts(rawValue: string): ParsedTraceparentParts | null {
     const value = rawValue.trim();
     if (!value) {
         return null;
     }
 
-    const parts = value.split(TRACEPARENT_DELIMITER);
-    if (parts.length !== 4) {
+    const firstDelimiter = value.indexOf(TRACEPARENT_DELIMITER);
+    const secondDelimiter = value.indexOf(TRACEPARENT_DELIMITER, 3);
+    const thirdDelimiter = value.indexOf(TRACEPARENT_DELIMITER, 36);
+
+    if (firstDelimiter !== 2 || secondDelimiter !== 35 || thirdDelimiter !== 52) {
         return null;
     }
 
-    const [version, traceId, parentId, traceFlags] = parts;
-    if (version === undefined || traceId === undefined || parentId === undefined || traceFlags === undefined) {
+    if (value.length < 55) {
         return null;
     }
 
-    return [version, traceId, parentId, traceFlags];
+    const version = value.slice(0, 2);
+    const traceId = value.slice(3, 35);
+    const parentId = value.slice(36, 52);
+    const traceFlags = value.slice(53, 55);
+
+    const suffix = value.slice(55);
+    if (suffix !== '' && !suffix.startsWith(TRACEPARENT_DELIMITER)) {
+        return null;
+    }
+
+    return {
+        version,
+        traceId,
+        parentId,
+        traceFlags,
+        hasFutureVersionSuffix: suffix !== '',
+        futureVersionSuffixHasValidPrefix: suffix === '' || FUTURE_VERSION_SUFFIX_PREFIX_RE.test(suffix),
+    };
 }
 
 function parseTraceparentInput(input: string | Traceparent | null | undefined): Traceparent | null {
@@ -184,7 +237,12 @@ export function parseTraceparent(value: string): Traceparent | null {
         return null;
     }
 
-    const [version, traceId, parentId, traceFlags] = parts;
+    const {
+        version,
+        traceId,
+        parentId,
+        traceFlags,
+    } = parts;
     return {
         version,
         traceId,
@@ -220,14 +278,23 @@ export function validateTraceparent(value: string): TraceContextValidationResult
         return { valid: false, errors: ['traceparent must contain 4 dash-delimited fields'] };
     }
 
-    const [version, traceId, parentId, traceFlags] = parts;
+    const {
+        version,
+        traceId,
+        parentId,
+        traceFlags,
+        hasFutureVersionSuffix,
+        futureVersionSuffixHasValidPrefix,
+    } = parts;
 
     if (!TRACE_FLAGS_HEX_RE.test(version)) {
         errors.push('version must be 2 lowercase hex characters');
     } else if (version === 'ff') {
         errors.push('version ff is invalid');
-    } else if (version !== TRACEPARENT_VERSION) {
-        errors.push('only traceparent version 00 is supported');
+    } else if (version === TRACEPARENT_VERSION && hasFutureVersionSuffix) {
+        errors.push('traceparent version 00 must not include additional fields');
+    } else if (version !== TRACEPARENT_VERSION && hasFutureVersionSuffix && !futureVersionSuffixHasValidPrefix) {
+        errors.push('higher traceparent versions with additional fields must use a lowercase-hex field prefix');
     }
 
     if (!TRACE_ID_HEX_RE.test(traceId)) {

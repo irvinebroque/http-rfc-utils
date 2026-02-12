@@ -1,6 +1,7 @@
 /**
  * Forwarded header utilities per RFC 7239.
  * RFC 7239 §4.
+ * @see https://www.rfc-editor.org/rfc/rfc7239.html
  */
 
 import type { ForwardedElement } from './types.js';
@@ -8,11 +9,10 @@ import {
     assertHeaderToken,
     assertNoCtl,
     isEmptyHeader,
-    splitAndParseKeyValueSegments,
-    splitQuotedValue,
-    unquote,
     quoteIfNeeded,
+    unquote,
 } from './header-utils.js';
+import { parseParameterizedMembers } from './internal-parameterized-members.js';
 import { createObjectMap, hasOwnKey } from './object-map.js';
 
 /**
@@ -25,17 +25,18 @@ export function parseForwarded(header: string): ForwardedElement[] {
     }
 
     const elements: ForwardedElement[] = [];
-    const parts = splitQuotedValue(header, ',');
+    const members = parseParameterizedMembers(header, {
+        memberDelimiter: ',',
+        parameterDelimiter: ';',
+        hasBaseSegment: false,
+    });
 
-    for (const part of parts) {
-        const trimmed = part.trim();
-        if (!trimmed) continue;
-
-        const pairs = splitAndParseKeyValueSegments(trimmed, ';');
+    for (const member of members) {
         const element: ForwardedElement = {};
         const extensions = createObjectMap<string>();
+        let hasExtensions = false;
 
-        for (const pair of pairs) {
+        for (const pair of member.parameters) {
             if (!pair.hasEquals) continue;
 
             const key = pair.key.trim().toLowerCase();
@@ -44,7 +45,11 @@ export function parseForwarded(header: string): ForwardedElement[] {
             }
 
             const rawValue = pair.value ?? '';
-            const value = unquote(rawValue);
+            const trimmedValue = rawValue.trim();
+            const value =
+                trimmedValue.length >= 2 && trimmedValue.charCodeAt(0) === 34 && trimmedValue.charCodeAt(trimmedValue.length - 1) === 34
+                    ? unquote(trimmedValue)
+                    : trimmedValue;
 
             if (key === 'for') {
                 if (element.for === undefined) {
@@ -65,11 +70,12 @@ export function parseForwarded(header: string): ForwardedElement[] {
             } else if (key) {
                 if (!hasOwnKey(extensions, key)) {
                     extensions[key] = value;
+                    hasExtensions = true;
                 }
             }
         }
 
-        if (Object.keys(extensions).length > 0) {
+        if (hasExtensions) {
             element.extensions = extensions;
         }
 
@@ -105,7 +111,16 @@ export function formatForwarded(elements: ForwardedElement[]): string {
         }
 
         if (element.extensions) {
-            for (const [key, value] of Object.entries(element.extensions)) {
+            for (const key in element.extensions) {
+                if (!Object.prototype.hasOwnProperty.call(element.extensions, key)) {
+                    continue;
+                }
+
+                const value = element.extensions[key];
+                if (value === undefined) {
+                    continue;
+                }
+
                 assertHeaderToken(key, `Forwarded extension parameter name "${key}"`);
                 assertNoCtl(value, `Forwarded extension parameter "${key}" value`);
                 parts.push(`${key}=${quoteIfNeeded(value)}`);

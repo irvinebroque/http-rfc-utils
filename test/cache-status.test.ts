@@ -1,3 +1,7 @@
+/**
+ * Tests for cache status behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { parseCacheStatus, formatCacheStatus } from '../src/cache-status.js';
@@ -24,6 +28,15 @@ describe('Cache-Status (RFC 9211 Section 2)', () => {
         assert.deepEqual(parsed, [{
             cache: 'Edge',
             params: { fwdStatus: 504, stored: true, collapsed: true },
+        }]);
+    });
+
+    // RFC 9211 §2.8: detail accepts string or token form.
+    it('parses detail parameter in token form', () => {
+        const parsed = parseCacheStatus('Edge; detail=MEMORY');
+        assert.deepEqual(parsed, [{
+            cache: 'Edge',
+            params: { detail: 'MEMORY' },
         }]);
     });
 
@@ -79,6 +92,14 @@ describe('Cache-Status (RFC 9211 Section 2)', () => {
         assert.equal(formatted, 'Edge;fwd-status=504;stored;collapsed;key="cache-key";detail="stale response reused"');
     });
 
+    it('round-trips token-form detail as typed detail value', () => {
+        const parsed = parseCacheStatus('Edge;detail=MEMORY');
+        assert.ok(parsed);
+        const formatted = formatCacheStatus(parsed);
+        const reparsed = parseCacheStatus(formatted);
+        assert.deepEqual(reparsed, parsed);
+    });
+
     it('round-trips token cache names (RFC 9211 Section 2)', () => {
         const parsed = parseCacheStatus('Edge;hit;fwd=uri-miss');
         assert.deepEqual(parsed, [{
@@ -93,17 +114,21 @@ describe('Cache-Status (RFC 9211 Section 2)', () => {
     it('throws for invalid fwd token values (RFC 9211 Section 2.2)', () => {
         assert.throws(() => {
             formatCacheStatus([{ cache: 'Edge', params: { fwd: 'uri miss' } }]);
-        }, /Invalid Cache-Status fwd token/);
+        }, /Cache-Status param "fwd"/);
+
+        assert.throws(() => {
+            formatCacheStatus([{ cache: 'Edge', params: { fwd: 'Uri-Miss' } }]);
+        }, /Cache-Status param "fwd"/);
     });
 
     it('throws for non-integer fwd-status and ttl values (RFC 9211 Section 2.3/2.4)', () => {
         assert.throws(() => {
             formatCacheStatus([{ cache: 'Edge', params: { fwdStatus: 200.5 } }]);
-        }, /Invalid Cache-Status fwd-status value/);
+        }, /Cache-Status param "fwd-status"/);
 
         assert.throws(() => {
             formatCacheStatus([{ cache: 'Edge', params: { ttl: 1.5 } }]);
-        }, /Invalid Cache-Status ttl value/);
+        }, /Cache-Status param "ttl"/);
     });
 
     it('preserves extension parameters while protecting known keys (RFC 9211 Section 2)', () => {

@@ -1,38 +1,31 @@
 /**
  * Accept-Encoding utilities per RFC 9110.
  * RFC 9110 §12.4.2, §12.4.3, §12.5.3.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html
  */
 
 import type { EncodingRange } from './types.js';
-import { isEmptyHeader, parseQSegments, splitListValue } from './header-utils.js';
+import { parseWeightedTokenList, TOKEN_CHARS } from './header-utils.js';
+
+function normalizeEncodingToken(token: string): string {
+    const normalized = token.toLowerCase();
+    if (!TOKEN_CHARS.test(normalized)) {
+        return '';
+    }
+    return normalized;
+}
 
 /**
  * Parse an Accept-Encoding header into ranges.
  */
 // RFC 9110 §12.5.3: Accept-Encoding field-value parsing.
 export function parseAcceptEncoding(header: string): EncodingRange[] {
-    if (isEmptyHeader(header)) {
-        return [];
-    }
+    const ranges = parseWeightedTokenList(header, {
+        tokenNormalizer: normalizeEncodingToken,
+        sort: 'q-only',
+    });
 
-    const ranges: EncodingRange[] = [];
-    const parts = splitListValue(header);
-
-    for (const part of parts) {
-        const segments = part.split(';').map(segment => segment.trim());
-        const encoding = segments[0]?.toLowerCase();
-        if (!encoding) continue;
-
-        const qParts = parseQSegments(segments, 1);
-        if (qParts.invalidQ) {
-            continue;
-        }
-
-        ranges.push({ encoding, q: qParts.q });
-    }
-
-    ranges.sort((a, b) => b.q - a.q);
-    return ranges;
+    return ranges.map(({ token, q }) => ({ encoding: token, q }));
 }
 
 function buildQMap(ranges: EncodingRange[]): Map<string, number> {

@@ -1,3 +1,7 @@
+/**
+ * Tests for well known behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -11,7 +15,7 @@ import {
 } from '../src/well-known.js';
 
 // RFC 8615 §3: top-level `/.well-known/` prefix and single-segment suffix.
-describe('RFC 8615 well-known path utilities', () => {
+describe('RFC 8615 §3 well-known path utilities', () => {
     it('exposes the RFC-defined prefix constant', () => {
         assert.equal(WELL_KNOWN_PREFIX, '/.well-known/');
     });
@@ -52,7 +56,7 @@ describe('RFC 8615 well-known path utilities', () => {
 });
 
 // RFC 8615 §3: resources are rooted at the origin's top-level `/.well-known/` path.
-describe('RFC 8615 URI helpers', () => {
+describe('RFC 8615 §3 well-known URI helpers', () => {
     it('identifies valid absolute HTTP(S) well-known URIs', () => {
         assert.equal(isWellKnownUri('https://example.com/.well-known/security.txt'), true);
         assert.equal(isWellKnownUri('http://example.com/.well-known/change-password?flow=start'), true);

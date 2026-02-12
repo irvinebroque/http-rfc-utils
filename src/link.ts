@@ -97,6 +97,24 @@ function splitRelationTokens(value: string): string[] {
     return rels;
 }
 
+function hasRelationWhitespace(value: string): boolean {
+    for (let index = 0; index < value.length; index++) {
+        const code = value.charCodeAt(index);
+        if (
+            code === 0x20
+            || code === 0x09
+            || code === 0x0d
+            || code === 0x0a
+            || code === 0x0c
+            || code === 0x0b
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /**
  * Quote a value if needed for Link header attribute.
  * Values containing special characters must be quoted.
@@ -131,13 +149,16 @@ export function unquote(value: string): string {
 // RFC 8288 §3.1, §3.2, §3.3, §3.4: Link-value formatting and parameters.
 export function formatLink(link: LinkDefinition): string {
     assertNoCtl(link.href, 'Link href');
+    const rel = typeof link.rel === 'string' ? link.rel.trim() : '';
+    if (rel.length === 0) {
+        throw new Error(`Link parameter "rel" must be a non-empty string (received: ${String(link.rel)})`);
+    }
+
+    assertNoCtl(rel, 'Link rel');
     const parts: string[] = [`<${link.href}>`];
 
     // rel is always first and always quoted per convention
-    if (link.rel) {
-        assertNoCtl(link.rel, 'Link rel');
-        parts.push(`rel="${link.rel}"`);
-    }
+    parts.push(`rel="${rel}"`);
 
     // Add other parameters in a consistent order
     // Always quote values for consistency
@@ -161,11 +182,15 @@ export function formatLink(link: LinkDefinition): string {
     }
 
     // Add any extension attributes (skip titleLang as it's metadata)
-    for (const [key, value] of Object.entries(link)) {
+    for (const key in link) {
+        if (!Object.prototype.hasOwnProperty.call(link, key)) {
+            continue;
+        }
         if (FORMAT_LINK_SKIP_KEYS.has(key)) {
             continue;
         }
         assertLinkParamName(key);
+        const value = (link as Record<string, unknown>)[key];
         if (value !== undefined) {
             if (typeof value === 'string') {
                 assertNoCtl(value, `Link extension parameter "${key}" value`);
@@ -192,7 +217,14 @@ export function formatLink(link: LinkDefinition): string {
  */
 // RFC 8288 §3: Link header field-value formatting.
 export function formatLinkHeader(links: LinkDefinition[]): string {
-    return links.map(formatLink).join(', ');
+    let serialized = '';
+    for (let index = 0; index < links.length; index++) {
+        if (index > 0) {
+            serialized += ', ';
+        }
+        serialized += formatLink(links[index]!);
+    }
+    return serialized;
 }
 
 /**
@@ -399,13 +431,20 @@ export function parseLinkHeader(header: string): LinkDefinition[] {
                 return;
             }
 
-            const rels = splitRelationTokens(currentLink.rel);
-
-            for (const rel of rels) {
+            if (!hasRelationWhitespace(currentLink.rel)) {
                 results.push({
                     ...(currentLink as LinkDefinition),
-                    rel,
+                    rel: currentLink.rel,
                 });
+            } else {
+                const rels = splitRelationTokens(currentLink.rel);
+
+                for (const rel of rels) {
+                    results.push({
+                        ...(currentLink as LinkDefinition),
+                        rel,
+                    });
+                }
             }
         }
         currentLink = createLinkAccumulator();
@@ -518,9 +557,9 @@ export function parseLinkHeader(header: string): LinkDefinition[] {
         saveParam();
         saveLink();
     } else if (state === State.IN_QUOTED_VALUE) {
-        // Unclosed quote - save what we have anyway
-        saveParam();
-        saveLink();
+        // RFC 8288 §3.2: unterminated quoted-string is malformed.
+        // Fail closed for the current link-value and preserve prior parsed links.
+        currentLink = createLinkAccumulator();
     }
 
     return results;

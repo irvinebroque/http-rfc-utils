@@ -1,6 +1,7 @@
 /**
  * Pagination helpers with RFC 8288 Link header usage.
  * RFC 8288 §3, §3.3.
+ * @see https://www.rfc-editor.org/rfc/rfc8288.html
  */
 
 import type { 
@@ -29,24 +30,33 @@ export const MAX_LIMIT = 100;
 export function decodeCursor(cursor: string): DecodedCursor | null {
     try {
         const decoded = atob(cursor);
-        const parsed = JSON.parse(decoded);
-        
-        if (typeof parsed.offset !== 'number') {
+        const parsed: unknown = JSON.parse(decoded);
+
+        if (!isDecodedCursorPayload(parsed)) {
             return null;
         }
-        
+
         if (parsed.offset < 0) {
             return null;
         }
-        
+
         if (!Number.isInteger(parsed.offset)) {
             return null;
         }
-        
+
         return { offset: parsed.offset };
     } catch {
         return null;
     }
+}
+
+function isDecodedCursorPayload(value: unknown): value is { offset: number } {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return false;
+    }
+
+    const record = value as Record<string, unknown>;
+    return typeof record.offset === 'number';
 }
 
 /**

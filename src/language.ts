@@ -1,10 +1,25 @@
 /**
  * Accept-Language utilities per RFC 9110 + RFC 4647 (basic filtering).
  * RFC 9110 §12.4.2, §12.5.4; RFC 4647 §3.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html
  */
 
 import type { LanguageRange } from './types.js';
-import { isEmptyHeader, parseQSegments, splitListValue } from './header-utils.js';
+import { parseWeightedTokenList } from './header-utils.js';
+
+const BASIC_LANGUAGE_RANGE_REGEX = /^[A-Za-z]{1,8}(?:-[A-Za-z0-9]{1,8})*$/;
+
+function normalizeLanguageRange(token: string): string {
+    if (token === '*') {
+        return token;
+    }
+
+    if (!BASIC_LANGUAGE_RANGE_REGEX.test(token)) {
+        return '';
+    }
+
+    return token.toLowerCase();
+}
 
 function languageSpecificity(tag: string): number {
     if (tag === '*') {
@@ -26,40 +41,13 @@ function languageSpecificity(tag: string): number {
  */
 // RFC 9110 §12.5.4: Accept-Language field-value parsing.
 export function parseAcceptLanguage(header: string): LanguageRange[] {
-    if (isEmptyHeader(header)) {
-        return [];
-    }
-
-    const ranges: Array<LanguageRange & { specificity: number }> = [];
-    const parts = splitListValue(header);
-
-    for (let i = 0; i < parts.length; i++) {
-        const part = parts[i]!;
-        const segments = part.split(';').map(segment => segment.trim());
-        const tag = segments[0]?.toLowerCase();
-        if (!tag) continue;
-
-        const qParts = parseQSegments(segments, 1);
-        if (qParts.invalidQ) {
-            continue;
-        }
-
-        ranges.push({ tag, q: qParts.q, specificity: languageSpecificity(tag) });
-    }
-
-    ranges.sort((a, b) => {
-        if (a.q !== b.q) {
-            return b.q - a.q;
-        }
-
-        if (a.specificity !== b.specificity) {
-            return b.specificity - a.specificity;
-        }
-
-        return 0;
+    const ranges = parseWeightedTokenList(header, {
+        tokenNormalizer: normalizeLanguageRange,
+        sort: 'q-then-specificity',
+        specificity: languageSpecificity,
     });
 
-    return ranges.map(({ tag, q }) => ({ tag, q }));
+    return ranges.map(({ token, q }) => ({ tag: token, q }));
 }
 
 // RFC 4647 §3: Basic filtering.

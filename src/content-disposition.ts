@@ -14,11 +14,11 @@ import {
     assertHeaderToken,
     assertNoCtl,
     isEmptyHeader,
-    parseKeyValueSegment,
-    splitQuotedValue,
-    unquote,
+    TOKEN_CHARS,
     quoteIfNeeded,
+    unquote,
 } from './header-utils.js';
+import { parseParameterizedMember } from './internal-parameterized-members.js';
 import {
     decodeExtValue,
     encodeExtValue,
@@ -48,21 +48,25 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
         return null;
     }
 
-    const parts = splitQuotedValue(header, ';');
-    const type = parts[0]?.trim();
-    if (!type) {
+    const parsedMember = parseParameterizedMember(header, {
+        parameterDelimiter: ';',
+        hasBaseSegment: true,
+        baseFromFirstSegment: true,
+    });
+    if (!parsedMember.base || parsedMember.base.hasEquals) {
+        return null;
+    }
+
+    const type = parsedMember.base.key.trim();
+    if (!type || !TOKEN_CHARS.test(type)) {
         return null;
     }
 
     const params = createObjectMap<string>();
     let hasValidFilenameStar = false;
+    const seenParamNames = new Set<string>();
 
-    for (let i = 1; i < parts.length; i++) {
-        const item = parseKeyValueSegment(parts[i] ?? '');
-        if (!item) {
-            continue;
-        }
-
+    for (const item of parsedMember.parameters) {
         if (!item.hasEquals) {
             continue;
         }
@@ -73,6 +77,11 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
         if (!key) {
             continue;
         }
+
+        if (seenParamNames.has(key)) {
+            return null;
+        }
+        seenParamNames.add(key);
 
         if (key === 'filename*') {
             if (params['filename*'] !== undefined) {
@@ -100,10 +109,6 @@ export function parseContentDisposition(header: string): ContentDisposition | nu
                 continue;
             }
             params.filename = value;
-            continue;
-        }
-
-        if (params[key] !== undefined) {
             continue;
         }
 

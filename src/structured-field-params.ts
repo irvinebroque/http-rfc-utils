@@ -1,6 +1,7 @@
 /**
  * Shared helpers for Structured Field parameter mapping.
  * RFC 8941 §3.3.1 (integers) and extension parameter handling patterns.
+ * @see https://www.rfc-editor.org/rfc/rfc8941.html
  */
 
 import type { SfBareItem } from './types.js';

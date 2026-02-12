@@ -1,6 +1,7 @@
 /**
  * JSONPath built-in function metadata.
  * RFC 9535 §2.4.
+ * @see https://www.rfc-editor.org/rfc/rfc9535.html
  */
 
 import type { JsonPathFunctionName } from '../types/jsonpath.js';

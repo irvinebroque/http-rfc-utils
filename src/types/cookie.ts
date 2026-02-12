@@ -1,5 +1,6 @@
 /**
  * Cookie types per RFC 6265.
+ * @see https://www.rfc-editor.org/rfc/rfc6265.html
  */
 
 export interface CookieAttributes {

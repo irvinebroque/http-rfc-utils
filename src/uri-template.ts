@@ -15,10 +15,11 @@ import type {
     CompiledUriTemplate,
 } from './types.js';
 import {
+    createAsciiAllowTable,
+    encodeRfc3986,
+} from './internal-uri-encoding.js';
+import {
     isHexDigit,
-    isHexDigitByte,
-    pushPercentEncodedByte,
-    toUpperHexChar,
 } from './internal-percent-encoding.js';
 
 // Re-export types for convenience
@@ -63,20 +64,8 @@ const UNRESERVED = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567
 // RFC 3986 §2.2: Reserved characters
 const RESERVED = ':/?#[]@!$&\'()*+,;=';
 
-const UNRESERVED_TABLE = createAsciiTable(UNRESERVED);
-const RESERVED_TABLE = createAsciiTable(RESERVED);
-const UTF8_ENCODER = new TextEncoder();
-
-function createAsciiTable(chars: string): boolean[] {
-    const table = Array<boolean>(128).fill(false);
-    for (let i = 0; i < chars.length; i++) {
-        const code = chars.charCodeAt(i);
-        if (code < 128) {
-            table[code] = true;
-        }
-    }
-    return table;
-}
+const SIMPLE_ALLOW_TABLE = createAsciiAllowTable(UNRESERVED);
+const RESERVED_ALLOW_TABLE = createAsciiAllowTable(UNRESERVED + RESERVED);
 
 // =============================================================================
 // Character validation (RFC 6570 §2.3)
@@ -124,42 +113,11 @@ function isOperator(char: string): char is UriTemplateOperator {
  * @returns Percent-encoded string
  */
 function encodeValue(str: string, allowReserved: boolean): string {
-    const result: string[] = [];
-    const bytes = UTF8_ENCODER.encode(str);
-
-    for (let i = 0; i < bytes.length; i++) {
-        const byte = bytes[i]!;
-
-        if (byte < 128) {
-            // Always allow unreserved
-            if (UNRESERVED_TABLE[byte]) {
-                result.push(String.fromCharCode(byte));
-                continue;
-            }
-
-            // Allow reserved if operator permits
-            if (allowReserved && RESERVED_TABLE[byte]) {
-                result.push(String.fromCharCode(byte));
-                continue;
-            }
-
-            // Allow already percent-encoded sequences if allowReserved
-            if (allowReserved && byte === 0x25 && i + 2 < bytes.length) {
-                const hex1 = bytes[i + 1]!;
-                const hex2 = bytes[i + 2]!;
-                if (isHexDigitByte(hex1) && isHexDigitByte(hex2)) {
-                    result.push('%', toUpperHexChar(hex1), toUpperHexChar(hex2));
-                    i += 2;
-                    continue;
-                }
-            }
-        }
-
-        // Percent-encode the byte with uppercase hex
-        pushPercentEncodedByte(result, byte);
-    }
-
-    return result.join('');
+    return encodeRfc3986(str, {
+        allowTable: allowReserved ? RESERVED_ALLOW_TABLE : SIMPLE_ALLOW_TABLE,
+        preservePctTriplets: allowReserved,
+        normalizePctHexUppercase: true,
+    });
 }
 
 // =============================================================================
@@ -408,6 +366,7 @@ function expandVariable(
 
     const { name, prefix, explode } = varSpec;
     const { named, ifEmpty, allowReserved } = config;
+    const encodedName = named ? encodeValue(name, false) : '';
 
     // String value
     if (typeof value === 'string') {
@@ -423,9 +382,9 @@ function expandVariable(
         if (named) {
             // RFC 6570 §3.2.7-3.2.9: Named expansion
             if (value === '') {
-                return `${encodeValue(name, false)}${ifEmpty}`;
+                return `${encodedName}${ifEmpty}`;
             }
-            return `${encodeValue(name, false)}=${encoded}`;
+            return `${encodedName}=${encoded}`;
         }
 
         return encoded;
@@ -444,9 +403,9 @@ function expandVariable(
                 const encoded = encodeValue(v, allowReserved);
                 if (named) {
                     if (v === '') {
-                        return `${encodeValue(name, false)}${ifEmpty}`;
+                        return `${encodedName}${ifEmpty}`;
                     }
-                    return `${encodeValue(name, false)}=${encoded}`;
+                    return `${encodedName}=${encoded}`;
                 }
                 return encoded;
             });
@@ -454,8 +413,9 @@ function expandVariable(
         } else {
             // Non-exploded: join with comma
             const encoded = value.map(v => encodeValue(v, allowReserved)).join(',');
+
             if (named) {
-                return `${encodeValue(name, false)}=${encoded}`;
+                return `${encodedName}=${encoded}`;
             }
             return encoded;
         }
@@ -493,7 +453,7 @@ function expandVariable(
             }
             const encoded = parts.join(',');
             if (named) {
-                return `${encodeValue(name, false)}=${encoded}`;
+                return `${encodedName}=${encoded}`;
             }
             return encoded;
         }

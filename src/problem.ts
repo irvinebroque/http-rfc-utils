@@ -1,10 +1,30 @@
 /**
  * Problem Details utilities per RFC 9457.
  * RFC 9457 §3.1, §3.2, §4.1.
+ * @see https://www.rfc-editor.org/rfc/rfc9457.html
  */
 
 import type { ProblemDetails, ProblemOptions } from './types.js';
 import { defaultCorsHeaders } from './cors.js';
+
+const BLOCKED_EXTENSION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+type CompleteProblemDetails = ProblemDetails & {
+    type: string;
+    title: string;
+    status: number;
+    detail: string;
+};
+
+function applyProblemExtensions(problem: ProblemDetails, extensions: Record<string, unknown>): void {
+    for (const [key, value] of Object.entries(extensions)) {
+        if (BLOCKED_EXTENSION_KEYS.has(key)) {
+            continue;
+        }
+
+        problem[key] = value;
+    }
+}
 
 /**
  * Create a Problem Details object per RFC 9457.
@@ -22,8 +42,8 @@ import { defaultCorsHeaders } from './cors.js';
  * Extension members from options.extensions are spread into the result.
  */
 // RFC 9457 §3.1, §3.2: Problem Details members and extensions.
-export function createProblem(options: ProblemOptions): ProblemDetails {
-    const problem: ProblemDetails = {
+export function createProblem(options: ProblemOptions): CompleteProblemDetails {
+    const problem: CompleteProblemDetails = {
         type: options.type ?? 'about:blank',
         title: options.title,
         status: options.status,
@@ -35,7 +55,7 @@ export function createProblem(options: ProblemOptions): ProblemDetails {
     }
 
     if (options.extensions) {
-        Object.assign(problem, options.extensions);
+        applyProblemExtensions(problem, options.extensions);
     }
 
     return problem;
@@ -87,13 +107,18 @@ export function problemResponse(
         cors = (titleOrCorsHeaders as Record<string, string> | undefined) ?? defaultCorsHeaders;
     }
 
-    return new Response(JSON.stringify(problem), {
-        status: problem.status,
+    const responseInit: ResponseInit = {
         headers: {
             'Content-Type': 'application/problem+json',
             ...cors,
         },
-    });
+    };
+
+    if (problem.status !== undefined) {
+        responseInit.status = problem.status;
+    }
+
+    return new Response(JSON.stringify(problem), responseInit);
 }
 
 function createCommonProblemOptions(

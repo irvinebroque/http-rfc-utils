@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   changeset:
     name: Changeset
@@ -17,9 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Ensure changeset exists
         run: |
@@ -48,19 +52,23 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Generate API extraction artifact
         run: pnpm api:extract
@@ -81,7 +89,7 @@ jobs:
 
       - name: Upload SemVer report artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: semver-report
           path: temp/semver/report.json
@@ -92,16 +100,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Structure checks
         run: pnpm check:structure
@@ -111,19 +121,151 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Security checks
         run: pnpm security:ci
+
+  lint_type_aware:
+    name: Lint (type-aware)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Type-aware lint checks
+        run: pnpm lint:ci
+
+  lint_type_aware_combined:
+    name: Lint (type-aware + type-check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Type-aware lint + type-check checks
+        run: pnpm lint:type-aware:combined
+
+  lint_autofix:
+    name: Lint autofix (same-repo PR)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Apply safe type-aware lint fixes
+        run: pnpm lint:type-aware:fix
+
+      - name: Detect autofix changes
+        id: detect_changes
+        run: |
+          if git diff --quiet; then
+            echo 'has_changes=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'has_changes=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push autofix changes
+        if: steps.detect_changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore(lint): apply safe type-aware oxlint fixes'
+          git push
+
+  lint_autofix_fork:
+    name: Lint autofix (fork PR patch)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Apply safe type-aware lint fixes
+        run: pnpm lint:type-aware:fix
+
+      - name: Generate autofix patch
+        id: generate_patch
+        run: |
+          git diff --binary > oxlint-autofix.patch
+          if [ -s oxlint-autofix.patch ]; then
+            echo 'has_patch=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'has_patch=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload autofix patch artifact
+        if: always() && steps.generate_patch.outputs.has_patch == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: oxlint-autofix-patch
+          path: oxlint-autofix.patch
+
+      - name: Enforce type-aware lint after autofix
+        run: pnpm lint:ci
 
   typecheck:
     name: Typecheck (${{ matrix.label }})
@@ -140,16 +282,18 @@ jobs:
           - label: lib
             check: typecheck:lib
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Run ${{ matrix.check }}
         run: pnpm ${{ matrix.check }}
@@ -159,21 +303,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Test with coverage
         run: pnpm test:coverage
 
       - name: Coverage threshold checks
+        env:
+          COVERAGE_ENFORCE_HOTSPOTS: 'true'
         run: pnpm test:coverage:check
 
   build:
@@ -181,16 +329,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build
         run: pnpm build
@@ -203,6 +353,8 @@ jobs:
       - api_semver
       - structure
       - security
+      - lint_type_aware
+      - lint_type_aware_combined
       - typecheck
       - coverage
       - build
@@ -212,11 +364,21 @@ jobs:
       - name: Verify required job results
         run: |
           failures=0
+          event_name='${{ github.event_name }}'
+
+          allow_skipped='false'
+          if [ "$event_name" != 'pull_request' ]; then
+            allow_skipped='true'
+          fi
 
           check_result() {
             local name="$1"
             local result="$2"
-            if [ "$result" = "success" ] || [ "$result" = "skipped" ]; then
+            local allow_skipped_for_job="$3"
+
+            if [ "$result" = 'success' ]; then
+              echo "$name: $result"
+            elif [ "$result" = 'skipped' ] && [ "$allow_skipped_for_job" = 'true' ]; then
               echo "$name: $result"
             else
               echo "$name: $result"
@@ -224,13 +386,15 @@ jobs:
             fi
           }
 
-          check_result 'changeset' '${{ needs.changeset.result }}'
-          check_result 'api_semver' '${{ needs.api_semver.result }}'
-          check_result 'structure' '${{ needs.structure.result }}'
-          check_result 'security' '${{ needs.security.result }}'
-          check_result 'typecheck' '${{ needs.typecheck.result }}'
-          check_result 'Run tests + audit coverage' '${{ needs.coverage.result }}'
-          check_result 'build' '${{ needs.build.result }}'
+          check_result 'changeset' '${{ needs.changeset.result }}' "$allow_skipped"
+          check_result 'api_semver' '${{ needs.api_semver.result }}' "$allow_skipped"
+          check_result 'structure' '${{ needs.structure.result }}' 'false'
+          check_result 'security' '${{ needs.security.result }}' 'false'
+          check_result 'lint_type_aware' '${{ needs.lint_type_aware.result }}' 'false'
+          check_result 'lint_type_aware_combined' '${{ needs.lint_type_aware_combined.result }}' 'false'
+          check_result 'typecheck' '${{ needs.typecheck.result }}' 'false'
+          check_result 'Run tests + audit coverage' '${{ needs.coverage.result }}' 'false'
+          check_result 'build' '${{ needs.build.result }}' 'false'
 
           if [ "$failures" -ne 0 ]; then
             echo 'One or more required jobs failed.'

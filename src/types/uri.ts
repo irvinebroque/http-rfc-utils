@@ -1,6 +1,7 @@
 /**
  * URI and URI-derived types.
  * RFC 3986, RFC 6570, RFC 6920, RFC 8615.
+ * @see https://www.rfc-editor.org/rfc/rfc3986.html
  */
 
 // URI (RFC 3986)

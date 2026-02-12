@@ -1,3 +1,9 @@
+/**
+ * Changeset frontmatter parser for SemVer intent checks.
+ * Reads changed `.changeset/*.md` files and derives declared bump intent.
+ * @see https://github.com/changesets/changesets
+ */
+
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { maxSemverBump } from './types.js';

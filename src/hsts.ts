@@ -9,10 +9,9 @@ import {
     TOKEN_CHARS,
     isEmptyHeader,
     parseDeltaSeconds,
-    parseKeyValueSegment,
     parseQuotedStringStrict,
-    splitQuotedValue,
 } from './header-utils.js';
+import { parseParameterizedMember } from './internal-parameterized-members.js';
 
 function parseDirectiveValue(value: string): string | null {
     const trimmed = value.trim();
@@ -40,16 +39,15 @@ export function parseStrictTransportSecurity(header: string): StrictTransportSec
         return null;
     }
 
-    const directives = splitQuotedValue(header, ';');
+    const parsedField = parseParameterizedMember(header, {
+        parameterDelimiter: ';',
+        hasBaseSegment: false,
+    });
     const seen = new Set<string>();
     let maxAge: number | null = null;
     let includeSubDomains = false;
 
-    for (const directive of directives) {
-        const parsedDirective = parseKeyValueSegment(directive);
-        if (!parsedDirective) {
-            continue;
-        }
+    for (const parsedDirective of parsedField.parameters) {
 
         const name = parsedDirective.key.trim();
         if (!name || !TOKEN_CHARS.test(name)) {
@@ -109,7 +107,10 @@ export function parseStrictTransportSecurity(header: string): StrictTransportSec
  */
 // RFC 6797 §6.1: STS field-value formatting.
 export function formatStrictTransportSecurity(options: StrictTransportSecurityOptions): string {
-    const maxAge = Math.max(0, Math.floor(options.maxAge));
+    const maxAge = options.maxAge;
+    if (!Number.isFinite(maxAge) || !Number.isInteger(maxAge) || maxAge < 0) {
+        throw new Error(`Strict-Transport-Security maxAge must be a finite non-negative integer; received ${String(maxAge)}`);
+    }
     const parts = [`max-age=${maxAge}`];
     if (options.includeSubDomains) {
         parts.push('includeSubDomains');

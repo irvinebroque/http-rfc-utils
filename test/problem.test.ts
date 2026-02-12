@@ -1,3 +1,7 @@
+/**
+ * Tests for problem behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -5,6 +9,16 @@ import {
     problemResponse,
     Problems,
 } from '../src/problem.js';
+import type { ProblemDetails } from '../src/types.js';
+
+// RFC 9457 §3.1: Standard problem members are optional on wire format objects.
+const extensionOnlyProblem: ProblemDetails = {
+    requestId: 'req-optional-1',
+};
+assert.equal(extensionOnlyProblem.type, undefined);
+assert.equal(extensionOnlyProblem.title, undefined);
+assert.equal(extensionOnlyProblem.status, undefined);
+assert.equal(extensionOnlyProblem.detail, undefined);
 
 // RFC 9457 §3.1, §3.2: Problem Details members and extensions.
 describe('createProblem', () => {
@@ -82,6 +96,56 @@ describe('createProblem', () => {
             { field: 'age', message: 'Must be positive' },
         ]);
         assert.equal(problem.traceId, 'abc-123');
+    });
+
+    it('ignores __proto__ extension key and keeps safe keys', () => {
+        const extensions = Object.create(null) as Record<string, unknown>;
+        Object.defineProperty(extensions, '__proto__', {
+            value: { polluted: true },
+            enumerable: true,
+            configurable: true,
+            writable: true,
+        });
+        extensions.traceId = 'req-safe-123';
+
+        const problem = createProblem({
+            status: 400,
+            title: 'Bad Request',
+            detail: 'Invalid payload',
+            extensions,
+        });
+
+        assert.equal(problem.traceId, 'req-safe-123');
+        assert.equal(Object.prototype.hasOwnProperty.call(problem, '__proto__'), false);
+        assert.equal('polluted' in ({} as Record<string, unknown>), false);
+    });
+
+    it('ignores constructor and prototype extension keys and keeps safe keys', () => {
+        const extensions = Object.create(null) as Record<string, unknown>;
+        Object.defineProperty(extensions, 'constructor', {
+            value: 'malicious-constructor',
+            enumerable: true,
+            configurable: true,
+            writable: true,
+        });
+        Object.defineProperty(extensions, 'prototype', {
+            value: 'malicious-prototype',
+            enumerable: true,
+            configurable: true,
+            writable: true,
+        });
+        extensions.requestId = 'req-safe-456';
+
+        const problem = createProblem({
+            status: 400,
+            title: 'Bad Request',
+            detail: 'Invalid payload',
+            extensions,
+        });
+
+        assert.equal(problem.requestId, 'req-safe-456');
+        assert.equal(Object.prototype.hasOwnProperty.call(problem, 'constructor'), false);
+        assert.equal(Object.prototype.hasOwnProperty.call(problem, 'prototype'), false);
     });
 });
 
@@ -344,7 +408,7 @@ describe('Problems helpers', () => {
     });
 });
 
-// RFC 9457 §3.1, §3.2: Required members and extension placement.
+// RFC 9457 §3.1, §3.2: Optional standard members and extension placement.
 describe('Response validation', () => {
     it('response body can be parsed as JSON', async () => {
         const response = problemResponse({
@@ -357,7 +421,7 @@ describe('Response validation', () => {
         assert.doesNotThrow(() => JSON.parse(text));
     });
 
-    it('response body has all required RFC 9457 fields', async () => {
+    it('helper responses populate common RFC 9457 members', async () => {
         const response = problemResponse({
             status: 418,
             title: "I'm a Teapot",
@@ -366,7 +430,7 @@ describe('Response validation', () => {
 
         const body = await response.json();
 
-        // Required RFC 9457 members
+        // Common members this helper intentionally includes by default
         assert.ok('type' in body, 'Missing type field');
         assert.ok('title' in body, 'Missing title field');
         assert.ok('status' in body, 'Missing status field');

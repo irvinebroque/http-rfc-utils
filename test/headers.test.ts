@@ -1,3 +1,7 @@
+/**
+ * Tests for headers behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { parseRetryAfter, formatRetryAfter, mergeVary, parseSunset, formatSunset, isSunsetImminent } from '../src/headers.js';
@@ -18,9 +22,26 @@ describe('Retry-After + Vary (RFC 9110 Sections 10.2.3, 12.5.5)', () => {
         assert.equal(formatRetryAfter(60), '60');
     });
 
+    it('throws for semantic-invalid Retry-After numeric values', () => {
+        assert.throws(() => formatRetryAfter(Number.POSITIVE_INFINITY), /must be finite/);
+        assert.throws(() => formatRetryAfter(1.5), /must be an integer/);
+        assert.throws(() => formatRetryAfter(-1), /must be non-negative/);
+    });
+
     it('merges Vary values and honors * (RFC 9110 Section 12.5.5)', () => {
         assert.equal(mergeVary('Accept-Encoding', 'Accept-Language'), 'Accept-Encoding, Accept-Language');
         assert.equal(mergeVary('*', 'Accept-Encoding'), '*');
+    });
+
+    // RFC 9110 §5.1 + §12.5.5: Vary list members are field-name tokens.
+    it('rejects invalid Vary field-name tokens', () => {
+        assert.throws(() => mergeVary('Accept-Encoding', 'Bad Name'), /Invalid Vary field-name/);
+        assert.throws(() => mergeVary('Accept-Encoding, ', 'Accept-Language'), /Invalid Vary field-name/);
+    });
+
+    // RFC 9110 §12.5.5: wildcard form is a standalone field-value.
+    it('rejects Vary values that mix wildcard with other members', () => {
+        assert.throws(() => mergeVary('Accept-Encoding', ['*', 'Accept-Language']), /must be the only entry/);
     });
 });
 
@@ -28,9 +49,13 @@ describe('Retry-After + Vary (RFC 9110 Sections 10.2.3, 12.5.5)', () => {
 describe('parseSunset (RFC 8594 Section 3)', () => {
     // RFC 8594 §3: Sunset = HTTP-date
     it('parses valid IMF-fixdate', () => {
-        const result = parseSunset('Sat, 31 Dec 2018 23:59:59 GMT');
+        const result = parseSunset('Mon, 31 Dec 2018 23:59:59 GMT');
         assert.ok(result instanceof Date);
         assert.equal(result!.toUTCString(), 'Mon, 31 Dec 2018 23:59:59 GMT');
+    });
+
+    it('returns null for weekday/date mismatch', () => {
+        assert.equal(parseSunset('Sat, 31 Dec 2018 23:59:59 GMT'), null);
     });
 
     // RFC 8594 §9: Example from spec

@@ -1,3 +1,9 @@
+/**
+ * Human-readable and JSON reporting for SemVer checks.
+ * Converts raw policy/comparison outputs into CI-friendly diagnostics.
+ * @see https://semver.org/
+ */
+
 import type {
     ChangesetIssue,
     CompatibilityFinding,

@@ -11,3 +11,6 @@ export * from '../content-disposition.js';
 export * from '../ext-value.js';
 export * from '../alt-svc.js';
 export * from '../compression-dictionary.js';
+export * from '../clear-site-data.js';
+export * from '../referrer-policy.js';
+export * from '../reporting.js';

@@ -1,5 +1,6 @@
 /**
  * Range request utilities per RFC 9110 (13.2.1, 14.2).
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html
  */
 
 import type { ByteRange, RangeSpec, ContentRange, RangeDecision } from './types.js';
@@ -106,16 +107,17 @@ export function parseContentRange(header: string): ContentRange | null {
     }
 
     const trimmed = header.trim();
-    if (!trimmed.toLowerCase().startsWith('bytes')) {
+    const firstSpace = trimmed.indexOf(' ');
+    if (firstSpace === -1) {
         return null;
     }
 
-    const parts = trimmed.split(' ');
-    if (parts.length < 2) {
+    const unit = trimmed.slice(0, firstSpace).trim().toLowerCase();
+    if (unit !== 'bytes') {
         return null;
     }
 
-    const rangeAndSize = parts.slice(1).join(' ').trim();
+    const rangeAndSize = trimmed.slice(firstSpace + 1).trim();
     const [rangePart, sizePart] = rangeAndSize.split('/');
 
     if (!rangePart || sizePart === undefined) {
@@ -133,6 +135,11 @@ export function parseContentRange(header: string): ContentRange | null {
     }
 
     if (rangePart.trim() === '*') {
+        // RFC 9110 §14.4: unsatisfied-range = "*/" complete-length (digits only).
+        if (size === '*') {
+            return null;
+        }
+
         return {
             unit: 'bytes',
             size,
@@ -156,6 +163,11 @@ export function parseContentRange(header: string): ContentRange | null {
     const end = parseInt(endToken, 10);
 
     if (isNaN(start) || isNaN(end) || start < 0 || end < start) {
+        return null;
+    }
+
+    // RFC 9110 §14.4: for known complete-length, last-pos MUST be less than complete-length.
+    if (size !== '*' && end >= size) {
         return null;
     }
 
@@ -271,7 +283,8 @@ export function evaluateRange(
         return { type: 'none' };
     }
 
-    if (method !== 'GET' && method !== 'HEAD') {
+    // RFC 9110 §14.2: GET is the only method for which range handling is defined.
+    if (method !== 'GET') {
         return { type: 'ignored' };
     }
 

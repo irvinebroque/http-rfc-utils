@@ -1,6 +1,7 @@
 /**
  * Caching and validator-related types.
  * RFC 9110, RFC 9111, RFC 9211, RFC 9209.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html
  */
 
 import type { SfBareItem, SfDictionary } from './structured-fields.js';

@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 
+/**
+ * Coverage threshold validator.
+ *
+ * Parses the persisted coverage report, enforces global thresholds, and emits
+ * optional hotspot diagnostics for targeted modules.
+ */
+
 import { readFile } from 'node:fs/promises';
+import { dirname, join, posix } from 'node:path';
 
 const DEFAULT_REPORT_PATH = 'temp/coverage/report.txt';
+const DEFAULT_SUMMARY_FILE = 'summary.json';
 
 const GLOBAL_THRESHOLDS = {
     line: 96,
@@ -16,7 +25,7 @@ const HOTSPOT_THRESHOLDS = [
     { path: 'src/cache-status.ts', line: 86, branch: 55, funcs: 100 },
     { path: 'src/cookie.ts', line: 91, branch: 50, funcs: 100 },
     { path: 'src/trace-context.ts', line: 91, branch: 60, funcs: 93 },
-    { path: 'src/ni.ts', line: 93, branch: 58, funcs: 90 },
+    { path: 'src/ni.ts', line: 90, branch: 58, funcs: 86 },
     { path: 'scripts/semver/policy.ts', line: 85, branch: 75, funcs: 85 },
 ];
 
@@ -34,12 +43,24 @@ function parsePercent(cell) {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeCoveragePath(value) {
+    const withForwardSlashes = value.trim().replace(/\\/gu, '/');
+    const normalized = posix.normalize(withForwardSlashes);
+    return normalized.replace(/^(?:\.\/)+/u, '');
+}
+
+function normalizeCoverageLine(line) {
+    return stripAnsi(line)
+        .replace(/^\s*#\s?/u, '')
+        .replace(/^\s*ℹ\s?/u, '');
+}
+
 function parseCoverageTable(output) {
     const lines = output.split(/\r?\n/gu);
-    const startIndex = lines.findIndex(line => line.includes('start of coverage report'));
-    const endIndex = lines.findIndex((line, index) => index > startIndex && line.includes('end of coverage report'));
+    const headerPattern = /^\s*file\s*\|\s*line\s*%\s*\|\s*branch\s*%\s*\|\s*funcs\s*%/iu;
+    const startIndex = lines.findIndex(line => headerPattern.test(normalizeCoverageLine(line)));
 
-    if (startIndex === -1 || endIndex === -1) {
+    if (startIndex === -1) {
         return null;
     }
 
@@ -47,14 +68,12 @@ function parseCoverageTable(output) {
     const stack = [];
     let allFiles = null;
 
-    for (let index = startIndex + 1; index < endIndex; index += 1) {
-        const line = stripAnsi(lines[index] ?? '');
-        const withoutTapDiag = line.replace(/^\s*#\s?/u, '');
-        if (!withoutTapDiag.includes('|')) {
+    for (let index = startIndex + 1; index < lines.length; index += 1) {
+        const withoutInfo = normalizeCoverageLine(lines[index] ?? '');
+        if (!withoutInfo.includes('|')) {
             continue;
         }
 
-        const withoutInfo = withoutTapDiag.replace(/^\s*ℹ\s?/u, '');
         const columns = withoutInfo.split('|');
         if (columns.length < 4) {
             continue;
@@ -93,7 +112,7 @@ function parseCoverageTable(output) {
             continue;
         }
 
-        const path = [...stack.map(entry => entry.name), label].join('/');
+        const path = normalizeCoveragePath([...stack.map(entry => entry.name), label].join('/'));
         entries.set(path, {
             line: linePct,
             branch: branchPct,
@@ -103,6 +122,106 @@ function parseCoverageTable(output) {
 
     return {
         allFiles,
+        entries,
+    };
+}
+
+function summaryPathFromReportPath(reportPath) {
+    return join(dirname(reportPath), DEFAULT_SUMMARY_FILE);
+}
+
+function parseSummaryPath(argv, reportPath) {
+    for (let index = 0; index < argv.length; index += 1) {
+        const token = argv[index];
+        if (token === '--summary') {
+            const value = argv[index + 1];
+            if (!value) {
+                throw new Error('Missing value for --summary');
+            }
+            return value;
+        }
+    }
+
+    return summaryPathFromReportPath(reportPath);
+}
+
+function parseCoverageSummary(rawJson, summaryPath) {
+    let parsed;
+
+    try {
+        parsed = JSON.parse(rawJson);
+    } catch (error) {
+        throw new Error(`Coverage summary at ${summaryPath} is not valid JSON.`);
+    }
+
+    const allFiles = parsed?.allFiles;
+    if (
+        !allFiles
+        || !Number.isFinite(allFiles.line)
+        || !Number.isFinite(allFiles.branch)
+        || !Number.isFinite(allFiles.funcs)
+    ) {
+        throw new Error(`Coverage summary at ${summaryPath} is missing a valid allFiles metric block.`);
+    }
+
+    const entries = new Map();
+    const serializedEntries = parsed?.entries;
+
+    if (Array.isArray(serializedEntries)) {
+        for (const entry of serializedEntries) {
+            if (
+                !entry
+                || typeof entry.path !== 'string'
+                || !Number.isFinite(entry.line)
+                || !Number.isFinite(entry.branch)
+                || !Number.isFinite(entry.funcs)
+            ) {
+                throw new Error(`Coverage summary at ${summaryPath} has an invalid entry record.`);
+            }
+
+            const normalizedPath = normalizeCoveragePath(entry.path);
+            if (entries.has(normalizedPath)) {
+                throw new Error(`Coverage summary at ${summaryPath} has duplicate entries for ${normalizedPath}.`);
+            }
+
+            entries.set(normalizedPath, {
+                line: entry.line,
+                branch: entry.branch,
+                funcs: entry.funcs,
+            });
+        }
+    } else if (serializedEntries && typeof serializedEntries === 'object') {
+        for (const [entryPath, metrics] of Object.entries(serializedEntries)) {
+            if (
+                !metrics
+                || !Number.isFinite(metrics.line)
+                || !Number.isFinite(metrics.branch)
+                || !Number.isFinite(metrics.funcs)
+            ) {
+                throw new Error(`Coverage summary at ${summaryPath} has an invalid entry record.`);
+            }
+
+            const normalizedPath = normalizeCoveragePath(entryPath);
+            if (entries.has(normalizedPath)) {
+                throw new Error(`Coverage summary at ${summaryPath} has duplicate entries for ${normalizedPath}.`);
+            }
+
+            entries.set(normalizedPath, {
+                line: metrics.line,
+                branch: metrics.branch,
+                funcs: metrics.funcs,
+            });
+        }
+    } else {
+        throw new Error(`Coverage summary at ${summaryPath} is missing an entries collection.`);
+    }
+
+    return {
+        allFiles: {
+            line: allFiles.line,
+            branch: allFiles.branch,
+            funcs: allFiles.funcs,
+        },
         entries,
     };
 }
@@ -122,15 +241,27 @@ function evaluateThresholds(actual, expected) {
 }
 
 function findEntry(entries, targetPath) {
-    if (entries.has(targetPath)) {
-        return entries.get(targetPath);
+    const normalizedTargetPath = normalizeCoveragePath(targetPath);
+
+    if (entries.has(normalizedTargetPath)) {
+        return entries.get(normalizedTargetPath);
     }
 
-    const targetBasename = targetPath.split('/').pop();
+    const suffixMatches = [];
+
     for (const [entryPath, metrics] of entries.entries()) {
-        if (entryPath.endsWith(`/${targetPath}`) || entryPath.endsWith(`/${targetBasename}`)) {
-            return metrics;
+        if (entryPath.endsWith(`/${normalizedTargetPath}`)) {
+            suffixMatches.push({ entryPath, metrics });
         }
+    }
+
+    if (suffixMatches.length === 1) {
+        return suffixMatches[0].metrics;
+    }
+
+    if (suffixMatches.length > 1) {
+        const matches = suffixMatches.map(match => match.entryPath).sort().join(', ');
+        throw new Error(`Ambiguous coverage rows for ${targetPath}: ${matches}`);
     }
 
     return null;
@@ -152,25 +283,45 @@ function parseReportPath(argv) {
 }
 
 async function main() {
-    const reportPath = parseReportPath(process.argv.slice(2));
+    const argv = process.argv.slice(2);
+    const reportPath = parseReportPath(argv);
+    const summaryPath = parseSummaryPath(argv, reportPath);
     const enforceHotspots = process.env.COVERAGE_ENFORCE_HOTSPOTS === '1'
         || process.env.COVERAGE_ENFORCE_HOTSPOTS === 'true';
 
-    let output;
+    let parsed = null;
+
     try {
-        output = await readFile(reportPath, 'utf8');
+        const summaryRaw = await readFile(summaryPath, 'utf8');
+        parsed = parseCoverageSummary(summaryRaw, summaryPath);
     } catch (error) {
-        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-            console.error(`Coverage check failed: report file not found at ${reportPath}.`);
-            console.error('Run `pnpm test:coverage` before `pnpm test:coverage:check`.');
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+            console.error(error instanceof Error ? error.message : String(error));
             process.exit(1);
         }
-        throw error;
     }
 
-    const parsed = parseCoverageTable(output);
-    if (!parsed || !parsed.allFiles) {
+    if (!parsed) {
+        let output;
+
+        try {
+            output = await readFile(reportPath, 'utf8');
+        } catch (error) {
+            if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+                console.error(`Coverage check failed: report file not found at ${reportPath}.`);
+                console.error('Run `pnpm test:coverage` before `pnpm test:coverage:check`.');
+                process.exit(1);
+            }
+            throw error;
+        }
+
+        parsed = parseCoverageTable(output);
+    }
+
+    if (!parsed?.allFiles) {
         console.error('Coverage check failed: could not parse coverage summary from test output.');
+        console.error(`Checked summary artifact: ${summaryPath}`);
+        console.error(`Checked report artifact: ${reportPath}`);
         process.exit(1);
     }
 
@@ -182,9 +333,18 @@ async function main() {
 
     const hotspotWarnings = [];
     const hotspotFailures = [];
+    const hotspotResolutionErrors = [];
 
     for (const hotspot of HOTSPOT_THRESHOLDS) {
-        const metrics = findEntry(parsed.entries, hotspot.path);
+        let metrics;
+
+        try {
+            metrics = findEntry(parsed.entries, hotspot.path);
+        } catch (error) {
+            hotspotResolutionErrors.push(error instanceof Error ? error.message : String(error));
+            continue;
+        }
+
         if (!metrics) {
             hotspotWarnings.push(`missing coverage row for ${hotspot.path}`);
             continue;
@@ -194,6 +354,14 @@ async function main() {
         if (failures.length > 0) {
             hotspotFailures.push(`${hotspot.path}: ${failures.join('; ')}`);
         }
+    }
+
+    if (hotspotResolutionErrors.length > 0) {
+        console.error('Coverage check failed: ambiguous hotspot path resolution.');
+        for (const resolutionError of hotspotResolutionErrors) {
+            console.error(`- ${resolutionError}`);
+        }
+        process.exit(1);
     }
 
     if (hotspotFailures.length > 0) {

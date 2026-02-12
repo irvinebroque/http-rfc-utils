@@ -1,3 +1,10 @@
+/**
+ * Repository structure guard.
+ *
+ * Enforces public facade presence, barrel wiring, and module layout invariants
+ * expected by CI and contributor workflows.
+ */
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -67,6 +74,8 @@ async function main() {
     await assertExists('src/types.ts');
     await assertExists('src/auth.ts');
     await assertExists('src/jsonpath.ts');
+    await assertExists('src/openapi.ts');
+    await assertExists('src/openapi/index.ts');
 
     await assertDirectoryLayout('src/types', [
         'shared.ts',
@@ -81,10 +90,16 @@ async function main() {
         'uri.ts',
         'digest.ts',
         'discovery.ts',
+        'status.ts',
+        'json-patch.ts',
+        'json-merge-patch.ts',
+        'json-canonicalization.ts',
         'security.ts',
         'structured-fields.ts',
+        'reporting.ts',
         'jsonpath.ts',
         'signature.ts',
+        'openapi.ts',
     ]);
 
     await assertDirectoryLayout('src/auth', [
@@ -93,6 +108,7 @@ async function main() {
         'basic.ts',
         'bearer.ts',
         'digest.ts',
+        'pkce.ts',
     ]);
 
     await assertDirectoryLayout('src/jsonpath', [
@@ -104,6 +120,8 @@ async function main() {
         'builtins.ts',
     ]);
 
+    await assertDirectoryLayout('src/openapi', ['index.ts']);
+
     await assertDirectoryLayout('src/headers', ['index.ts']);
     await assertDirectoryLayout('src/linking', ['index.ts']);
     await assertDirectoryLayout('src/security', ['index.ts']);
@@ -112,11 +130,13 @@ async function main() {
     await assertFileContains('src/types.ts', "export * from './types/shared.js';");
     await assertFileContains('src/auth.ts', "export * from './auth/index.js';");
     await assertFileContains('src/jsonpath.ts', "from './jsonpath/index.js';");
+    await assertFileContains('src/openapi.ts', "from './openapi/index.js';");
 
     await assertFileContains('src/auth/index.ts', "from './shared.js';");
     await assertFileContains('src/auth/index.ts', "from './basic.js';");
     await assertFileContains('src/auth/index.ts', "from './bearer.js';");
     await assertFileContains('src/auth/index.ts', "from './digest.js';");
+    await assertFileContains('src/auth/index.ts', "from './pkce.js';");
 
     await assertFileContains('src/jsonpath/index.ts', "from './parser.js';");
     await assertFileContains('src/jsonpath/index.ts', "from './evaluator.js';");
@@ -124,6 +144,7 @@ async function main() {
     await assertFileContains('src/auth/shared.ts', "from '../types/auth.js';");
     await assertFileContains('src/auth/basic.ts', "from '../types/auth.js';");
     await assertFileContains('src/auth/digest.ts', "from '../types/auth.js';");
+    await assertFileContains('src/auth/pkce.ts', "from '../types/auth.js';");
 
     await assertFileContains('src/jsonpath/parser.ts', "from '../types/jsonpath.js';");
     await assertFileContains('src/jsonpath/evaluator.ts', "from '../types/jsonpath.js';");
@@ -133,6 +154,7 @@ async function main() {
     await assertFileContains('src/index.ts', "from './types.js';");
     await assertFileContains('src/index.ts', "from './auth.js';");
     await assertFileContains('src/index.ts', "from './jsonpath.js';");
+    await assertFileContains('src/index.ts', "from './openapi.js';");
     await assertIndexExportsAllRootModules();
 
     console.log('Structure check passed.');

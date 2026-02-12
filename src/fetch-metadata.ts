@@ -102,7 +102,9 @@ export function parseSecFetchDest(value: string | null | undefined): NonNullable
  */
 export function formatSecFetchDest(value: NonNullable<FetchMetadata['dest']>): string {
     if (!SEC_FETCH_DEST_VALUES.has(value)) {
-        throw new Error('Invalid Sec-Fetch-Dest token');
+        throw new Error(
+            `Sec-Fetch-Dest must be one of ${Array.from(SEC_FETCH_DEST_VALUES).join(', ')}; received ${String(value)}`,
+        );
     }
 
     return serializeSfItem({ value: new SfToken(value) });
@@ -121,7 +123,9 @@ export function parseSecFetchMode(value: string | null | undefined): NonNullable
  */
 export function formatSecFetchMode(value: NonNullable<FetchMetadata['mode']>): string {
     if (!SEC_FETCH_MODE_VALUES.has(value)) {
-        throw new Error('Invalid Sec-Fetch-Mode token');
+        throw new Error(
+            `Sec-Fetch-Mode must be one of ${Array.from(SEC_FETCH_MODE_VALUES).join(', ')}; received ${String(value)}`,
+        );
     }
 
     return serializeSfItem({ value: new SfToken(value) });
@@ -140,7 +144,9 @@ export function parseSecFetchSite(value: string | null | undefined): NonNullable
  */
 export function formatSecFetchSite(value: NonNullable<FetchMetadata['site']>): string {
     if (!SEC_FETCH_SITE_VALUES.has(value)) {
-        throw new Error('Invalid Sec-Fetch-Site token');
+        throw new Error(
+            `Sec-Fetch-Site must be one of ${Array.from(SEC_FETCH_SITE_VALUES).join(', ')}; received ${String(value)}`,
+        );
     }
 
     return serializeSfItem({ value: new SfToken(value) });

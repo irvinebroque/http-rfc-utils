@@ -1,5 +1,9 @@
-// Header-focused shared types (RFC 7239, RFC 6266, RFC 8187, RFC 9842,
-// RFC 7838, RFC 8470, RFC 8942, RFC 9218)
+/**
+ * Shared header-focused type contracts.
+ * RFC 7239, RFC 6266, RFC 8187, RFC 7838, RFC 8470, RFC 8942, RFC 9218,
+ * RFC 9842.
+ * @see https://github.com/irvinebroque/http-rfc-utils/blob/main/docs/reference/rfc-map.md
+ */
 
 // Forwarded (RFC 7239)
 export interface ForwardedElement {

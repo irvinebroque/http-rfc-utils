@@ -127,15 +127,15 @@ Recipe D: Link header parsing
 
 4) Documentation deliverables
 
-- packages/http-rfc-utils/README.md
+- README.md
   - Purpose and supported RFCs.
   - RFC map table.
   - Usage recipes.
   - API reference summary.
-  - Node 25+ requirement.
+  - Node.js >=22 requirement (matches `package.json` engines and `AGENTS.md`).
   - Examples for ETag/conditional, Cache-Control, Link header, Accept negotiation.
 
-- packages/http-rfc-utils/AGENTS.md
+- AGENTS.md
   - How to run tests.
   - Code style conventions.
   - Review checklist focusing on RFC compliance.

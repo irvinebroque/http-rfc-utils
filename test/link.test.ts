@@ -1,3 +1,7 @@
+/**
+ * Tests for link behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -150,6 +154,32 @@ describe('formatLink', () => {
         assert.equal(result, '<https://example.com>; rel="next"');
     });
 
+    // RFC 8288 §3.3: rel parameter MUST be present in each link-value.
+    it('throws when rel is missing, empty, or whitespace-only', () => {
+        assert.throws(() => {
+            formatLink({ href: 'https://example.com', rel: '' });
+        }, /non-empty/);
+
+        assert.throws(() => {
+            formatLink({ href: 'https://example.com', rel: '   ' });
+        }, /non-empty/);
+
+        assert.throws(() => {
+            formatLink({ href: 'https://example.com' } as unknown as { href: string; rel: string });
+        }, /non-empty/);
+    });
+
+    // RFC 8288 §3.3: rel is required; formatter emits rel first.
+    it('emits rel first and preserves extension parameters', () => {
+        const result = formatLink({
+            href: 'https://example.com',
+            rel: 'alternate',
+            title: 'English Version',
+            foo: 'bar',
+        });
+        assert.equal(result, '<https://example.com>; rel="alternate"; title="English Version"; foo=bar');
+    });
+
     it('formats link with type attribute', () => {
         const result = formatLink({
             href: 'https://example.com',
@@ -236,7 +266,7 @@ describe('formatLink', () => {
                 rel: 'next',
                 'bad key': 'value',
             });
-        }, /valid header token/);
+        }, /valid RFC 9110 token/);
     });
 });
 
@@ -426,6 +456,22 @@ describe('parseLinkHeader', () => {
             assert.equal(result.length, 2);
             assert.equal(result[0].title, 'A, B');
             assert.equal(result[1].rel, 'prev');
+        });
+
+        // RFC 8288 §3.2: malformed unterminated quoted-string must not be salvaged.
+        it('drops only the malformed current link-value at EOF and preserves prior valid links', () => {
+            const result = parseLinkHeader(
+                '<https://example.com/ok>; rel="self", <https://example.com/bad>; rel="next"; title="unterminated'
+            );
+            assert.equal(result.length, 1);
+            assert.equal(result[0].href, 'https://example.com/ok');
+            assert.equal(result[0].rel, 'self');
+        });
+
+        // RFC 8288 §3.2: do not fail-open on a lone malformed link-value.
+        it('returns no link-values for a single unterminated quoted-string link', () => {
+            const result = parseLinkHeader('<https://example.com/bad>; rel="next"; title="unterminated');
+            assert.deepEqual(result, []);
         });
     });
 

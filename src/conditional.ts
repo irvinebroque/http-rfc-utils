@@ -52,33 +52,56 @@ export function parseIfNoneMatch(header: string): ETag[] | '*' {
         return '*';
     }
 
-    if (trimmed.includes('*')) {
+    if (trimmed === '') {
         return [];
     }
 
     const etags: ETag[] = [];
+    let index = 0;
 
-    // ETags are in format: "value" or W/"value"
-    const regex = /(?:W\/)?\"[^\"]*\"/g;
-    let match: RegExpExecArray | null;
+    while (index < trimmed.length) {
+        const isWeak = trimmed.startsWith('W/"', index);
+        const startsWithStrong = trimmed[index] === '"';
 
-    while ((match = regex.exec(trimmed)) !== null) {
-        const value = match[0]?.trim();
-        const index = match.index;
-        if (!value) {
-            continue;
+        if (!isWeak && !startsWithStrong) {
+            return [];
         }
 
-        if (value.startsWith('"') && index >= 2) {
-            const prefix = trimmed.slice(index - 2, index);
-            if (prefix === 'w/') {
-                continue;
-            }
+        const valueStart = isWeak ? index + 2 : index;
+        const closingQuoteIndex = trimmed.indexOf('"', valueStart + 1);
+        if (closingQuoteIndex === -1) {
+            return [];
         }
 
-        const parsed = parseETag(value);
-        if (parsed) {
-            etags.push(parsed);
+        const token = trimmed.slice(index, closingQuoteIndex + 1);
+        const parsed = parseETag(token);
+        if (parsed === null) {
+            return [];
+        }
+        etags.push(parsed);
+
+        index = closingQuoteIndex + 1;
+
+        while (index < trimmed.length && (trimmed[index] === ' ' || trimmed[index] === '\t')) {
+            index += 1;
+        }
+
+        if (index === trimmed.length) {
+            return etags;
+        }
+
+        if (trimmed[index] !== ',') {
+            return [];
+        }
+
+        index += 1;
+
+        while (index < trimmed.length && (trimmed[index] === ' ' || trimmed[index] === '\t')) {
+            index += 1;
+        }
+
+        if (index === trimmed.length) {
+            return [];
         }
     }
 

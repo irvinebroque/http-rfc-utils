@@ -13,29 +13,71 @@ export type { WellKnownPathParts } from './types.js';
  */
 export const WELL_KNOWN_PREFIX = '/.well-known/';
 
-const PCHAR_PATTERN = /^[A-Za-z0-9\-._~!$&'()*+,;=:@]$/;
-const HEX_PAIR_PATTERN = /^[0-9A-Fa-f]{2}$/;
+function isHexCode(code: number): boolean {
+    return (code >= 0x30 && code <= 0x39)
+        || (code >= 0x41 && code <= 0x46)
+        || (code >= 0x61 && code <= 0x66);
+}
+
+function isPcharCode(code: number): boolean {
+    return (
+        // ALPHA
+        (code >= 0x41 && code <= 0x5a)
+        || (code >= 0x61 && code <= 0x7a)
+        // DIGIT
+        || (code >= 0x30 && code <= 0x39)
+        // - . _ ~
+        || code === 0x2d
+        || code === 0x2e
+        || code === 0x5f
+        || code === 0x7e
+        // sub-delims ! $ & ' ( ) * + , ; =
+        || code === 0x21
+        || code === 0x24
+        || code === 0x26
+        || code === 0x27
+        || code === 0x28
+        || code === 0x29
+        || code === 0x2a
+        || code === 0x2b
+        || code === 0x2c
+        || code === 0x3b
+        || code === 0x3d
+        // : @
+        || code === 0x3a
+        || code === 0x40
+    );
+}
 
 /**
  * RFC 8615 §3 + RFC 3986 §3.3: suffix MUST be a single `segment-nz`.
  */
 export function validateWellKnownSuffix(suffix: string): boolean {
-    if (!suffix || suffix.includes('/')) {
+    if (!suffix) {
         return false;
     }
 
     for (let i = 0; i < suffix.length; i++) {
-        const char = suffix.charAt(i);
-        if (char === '%') {
-            const hex = suffix.slice(i + 1, i + 3);
-            if (!HEX_PAIR_PATTERN.test(hex)) {
+        const code = suffix.charCodeAt(i);
+
+        if (code === 0x2f) {
+            return false;
+        }
+
+        if (code === 0x25) {
+            if (i + 2 >= suffix.length) {
+                return false;
+            }
+            const hex1 = suffix.charCodeAt(i + 1);
+            const hex2 = suffix.charCodeAt(i + 2);
+            if (!isHexCode(hex1) || !isHexCode(hex2)) {
                 return false;
             }
             i += 2;
             continue;
         }
 
-        if (!PCHAR_PATTERN.test(char)) {
+        if (!isPcharCode(code)) {
             return false;
         }
     }
@@ -95,7 +137,9 @@ export function isWellKnownUri(uri: string | URL): boolean {
  */
 export function buildWellKnownPath(suffix: string): string {
     if (!validateWellKnownSuffix(suffix)) {
-        throw new Error('Invalid well-known suffix: expected a single non-empty RFC 3986 segment');
+        throw new Error(
+            `Invalid well-known suffix "${suffix}": expected a single non-empty RFC 3986 segment`,
+        );
     }
 
     return `${WELL_KNOWN_PREFIX}${suffix}`;
@@ -111,11 +155,15 @@ export function buildWellKnownUri(origin: string | URL, suffix: string): string 
     try {
         parsedOrigin = origin instanceof URL ? new URL(origin.toString()) : new URL(origin);
     } catch {
-        throw new Error('Invalid origin for well-known URI builder');
+        throw new Error(
+            `Well-known URI builder origin must be a valid absolute URL; received ${String(origin)}`,
+        );
     }
 
     if (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') {
-        throw new Error('Well-known URI builder supports only http and https origins');
+        throw new Error(
+            `Well-known URI builder origin must use http or https; received protocol ${parsedOrigin.protocol}`,
+        );
     }
 
     return `${parsedOrigin.origin}${path}`;

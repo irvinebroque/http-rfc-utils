@@ -1,3 +1,7 @@
+/**
+ * Tests for ext value behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -148,6 +152,23 @@ describe('decodeExtValue', () => {
         assert.equal(decodeExtValue("utf-8'envalue"), null);
     });
 
+    // RFC 8187 §3.2.1: optional language must follow BCP47-like syntax.
+    it('returns null for malformed language token', () => {
+        assert.equal(decodeExtValue("utf-8'en--US'test"), null);
+        assert.equal(decodeExtValue("utf-8'9en'test"), null);
+    });
+
+    // RFC 8187 §3.2.1: value-chars are attr-char / pct-encoded only.
+    it('returns null for disallowed unescaped value characters', () => {
+        assert.equal(decodeExtValue("utf-8''hello world"), null);
+        assert.equal(decodeExtValue("utf-8''abc'xyz"), null);
+    });
+
+    it('returns null for stray percent signs', () => {
+        assert.equal(decodeExtValue("utf-8''abc%"), null);
+        assert.equal(decodeExtValue("utf-8''abc%2"), null);
+    });
+
     it('handles value containing single quotes', () => {
         // Value after second quote can contain quotes
         const result = decodeExtValue("utf-8''it%27s");
@@ -209,6 +230,12 @@ describe('encodeExtValue', () => {
     it('includes language tag when provided', () => {
         const result = encodeExtValue('test', { language: 'de' });
         assert.equal(result, "UTF-8'de'test");
+    });
+
+    // RFC 8187 §3.2.1: language field follows language-tag syntax when present.
+    it('rejects invalid language tags during encoding', () => {
+        assert.throws(() => encodeExtValue('test', { language: 'en--US' }), /Invalid RFC 8187 language tag/);
+        assert.throws(() => encodeExtValue('test', { language: '9en' }), /Invalid RFC 8187 language tag/);
     });
 
     it('uses empty language when not provided', () => {

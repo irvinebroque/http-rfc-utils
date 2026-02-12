@@ -1,6 +1,7 @@
 /**
  * Basic authentication utilities.
  * RFC 7617 §2, §2.1.
+ * @see https://www.rfc-editor.org/rfc/rfc7617.html
  */
 
 import { Buffer } from 'node:buffer';
@@ -16,6 +17,43 @@ import {
     parseAuthorization,
     parseWWWAuthenticate,
 } from './shared.js';
+import {
+    AUTH_PARAM_SCHEMA_SKIP,
+    buildAuthParamsBySchema,
+    createAuthParamSchemaEntry,
+    parseAuthParamsBySchema,
+} from './internal-auth-param-schema.js';
+
+const CANONICAL_BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+interface BasicChallengeParamsSchema {
+    realm?: string;
+    charset?: 'UTF-8';
+}
+
+const BASIC_CHALLENGE_SCHEMA = [
+    createAuthParamSchemaEntry<BasicChallengeParamsSchema>({
+        key: 'realm',
+        property: 'realm',
+    }),
+    createAuthParamSchemaEntry<BasicChallengeParamsSchema>({
+        key: 'charset',
+        property: 'charset',
+        parse: (value) => value.toLowerCase() === 'utf-8' ? 'UTF-8' : AUTH_PARAM_SCHEMA_SKIP,
+    }),
+] as const;
+
+function isCanonicalBasicBase64(token68: string): boolean {
+    if (!CANONICAL_BASE64_RE.test(token68)) {
+        return false;
+    }
+
+    try {
+        return Buffer.from(token68, 'base64').toString('base64') === token68;
+    } catch {
+        return false;
+    }
+}
 /**
  * Parse Basic Authorization header.
  */
@@ -29,6 +67,12 @@ export function parseBasicAuthorization(
         return null;
     }
     if (!isToken68(parsed.token68)) {
+        return null;
+    }
+
+    // RFC 7617 §2 and RFC 4648 §4: Basic credentials use canonical base64.
+    // Reject permissive/non-canonical token68 forms accepted by some decoders.
+    if (!isCanonicalBasicBase64(parsed.token68)) {
         return null;
     }
 
@@ -62,9 +106,13 @@ export function formatBasicAuthorization(
     username: string,
     password: string,
     options: { encoding?: 'utf-8' | 'latin1' } = {}
-): string | null {
-    if (username.includes(':') || hasCtl(username) || hasCtl(password)) {
-        return null;
+): string {
+    if (username.includes(':')) {
+        throw new Error(`Basic username must not contain ":"; received ${JSON.stringify(username)}`);
+    }
+
+    if (hasCtl(username) || hasCtl(password)) {
+        throw new Error('Basic username and password must not contain control characters');
     }
 
     const encoding = options.encoding ?? 'utf-8';
@@ -85,33 +133,20 @@ export function parseBasicChallenge(header: string): BasicChallenge | null {
         return null;
     }
 
-    const seen = new Set<string>();
-    let realm: string | undefined;
-    let charset: 'UTF-8' | undefined;
-
-    for (const param of challenge.params) {
-        const name = param.name.toLowerCase();
-        if (seen.has(name)) {
-            continue;
+    const parsed = parseAuthParamsBySchema<BasicChallengeParamsSchema>(
+        challenge.params,
+        BASIC_CHALLENGE_SCHEMA,
+        {
+            validate: (params) => Boolean(params.realm),
         }
-        seen.add(name);
-
-        if (name === 'realm') {
-            realm = param.value;
-        } else if (name === 'charset') {
-            if (param.value.toLowerCase() === 'utf-8') {
-                charset = 'UTF-8';
-            }
-        }
-    }
-
-    if (!realm) {
+    );
+    if (!parsed || !parsed.realm) {
         return null;
     }
 
-    const basicChallenge: BasicChallenge = { scheme: 'Basic', realm };
-    if (charset !== undefined) {
-        basicChallenge.charset = charset;
+    const basicChallenge: BasicChallenge = { scheme: 'Basic', realm: parsed.realm };
+    if (parsed.charset !== undefined) {
+        basicChallenge.charset = parsed.charset;
     }
 
     return basicChallenge;
@@ -122,9 +157,14 @@ export function parseBasicChallenge(header: string): BasicChallenge | null {
  */
 // RFC 7617 §2, §2.1: Basic challenge formatting.
 export function formatBasicChallenge(realm: string, options: { charset?: 'UTF-8' } = {}): string {
-    const params: AuthParam[] = [{ name: 'realm', value: realm }];
-    if (options.charset === 'UTF-8') {
-        params.push({ name: 'charset', value: 'UTF-8' });
+    const schemaInput: BasicChallengeParamsSchema = { realm };
+    if (options.charset !== undefined) {
+        schemaInput.charset = options.charset;
     }
+
+    const params: AuthParam[] = buildAuthParamsBySchema<BasicChallengeParamsSchema>(
+        schemaInput,
+        BASIC_CHALLENGE_SCHEMA
+    );
     return `Basic ${formatAuthParams(params)}`;
 }

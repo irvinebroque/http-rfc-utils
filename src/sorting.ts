@@ -45,36 +45,25 @@ export function parseSortString(sort: string): SortField[] {
         });
 }
 
-function getNestedValueByParts(obj: Record<string, unknown>, parts: string[]): unknown {
-    let current: unknown = obj;
-
-    for (const part of parts) {
-        if (current === null || current === undefined) {
-            return undefined;
-        }
-        if (typeof current !== 'object') {
-            return undefined;
-        }
-        current = (current as Record<string, unknown>)[part];
-    }
-
-    return current;
-}
-
 function compileNestedAccessor(path: string): (obj: Record<string, unknown>) => unknown {
     const parts = path.split('.');
-    return (obj: Record<string, unknown>) => getNestedValueByParts(obj, parts);
+    return (obj: Record<string, unknown>) => {
+        let current: unknown = obj;
+
+        for (const part of parts) {
+            if (current === null || current === undefined) {
+                return undefined;
+            }
+            if (typeof current !== 'object') {
+                return undefined;
+            }
+            current = (current as Record<string, unknown>)[part];
+        }
+
+        return current;
+    };
 }
 
-/**
- * Compare two values for sorting.
- * Internal helper exposed for custom comparators.
- *
- * @param a - First value
- * @param b - Second value
- * @param direction - Sort direction
- * @returns Comparison result (-1, 0, 1)
- */
 export function compareValues(a: unknown, b: unknown, direction: SortDirection): number {
     const multiplier = direction === 'desc' ? -1 : 1;
 

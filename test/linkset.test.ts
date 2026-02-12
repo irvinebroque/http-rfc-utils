@@ -1,3 +1,7 @@
+/**
+ * Tests for linkset behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -125,18 +129,18 @@ describe('formatLinkset', () => {
 
 // RFC 9264 §4.2: application/linkset+json format
 describe('parseLinksetJson', () => {
-    // RFC 9264 §4.2.1: linkset as sole member (profile allowed for api-catalog)
-    it('rejects JSON with extra top-level members (except profile)', () => {
+    // RFC 9264 §4.2.1: linkset is the sole top-level member.
+    it('rejects JSON with extra top-level members', () => {
         const json = '{"linkset": [], "extra": true}';
         const result = parseLinksetJson(json);
         assert.equal(result, null);
     });
 
-    // RFC 9727 §4.2: profile is allowed for API catalogs
-    it('accepts JSON with profile member', () => {
+    // RFC 9264 §4.2.1: profile is not valid in base linkset JSON.
+    it('rejects JSON with profile member in base parser', () => {
         const json = '{"linkset": [], "profile": "https://www.rfc-editor.org/info/rfc9727"}';
         const result = parseLinksetJson(json);
-        assert.ok(result !== null);
+        assert.equal(result, null);
     });
 
     // RFC 9264 §4.2.1: linkset array wrapping
@@ -222,6 +226,23 @@ describe('parseLinksetJson', () => {
                 },
             ],
         };
+        const result = parseLinksetJson(json);
+        assert.equal(result, null);
+    });
+
+    it('rejects target objects with inherited href', () => {
+        const prototypeTarget = { href: 'https://example.com/inherited' };
+        const inheritedTarget = Object.create(prototypeTarget) as Record<string, unknown>;
+        inheritedTarget.type = 'text/html';
+
+        const json = {
+            linkset: [
+                {
+                    next: [inheritedTarget],
+                },
+            ],
+        };
+
         const result = parseLinksetJson(json);
         assert.equal(result, null);
     });
@@ -421,13 +442,13 @@ describe('isValidLinkset', () => {
         assert.equal(isValidLinkset({}), false);
     });
 
-    it('rejects extra top-level members (except profile)', () => {
+    it('rejects extra top-level members', () => {
         assert.equal(isValidLinkset({ linkset: [], extra: true }), false);
     });
 
-    // RFC 9727 §4.2: profile allowed for API catalogs
-    it('accepts profile as top-level member', () => {
-        assert.ok(isValidLinkset({ linkset: [], profile: 'https://www.rfc-editor.org/info/rfc9727' }));
+    // RFC 9264 §4.2.1: linkset MUST be sole top-level member.
+    it('rejects profile as top-level member in base validation', () => {
+        assert.equal(isValidLinkset({ linkset: [], profile: 'https://www.rfc-editor.org/info/rfc9727' }), false);
     });
 
     it('rejects non-array linkset', () => {
@@ -437,6 +458,16 @@ describe('isValidLinkset', () => {
     it('rejects target without href', () => {
         assert.equal(isValidLinkset({
             linkset: [{ next: [{ type: 'text/html' }] }],
+        }), false);
+    });
+
+    it('rejects target with inherited href', () => {
+        const prototypeTarget = { href: 'https://example.com/inherited' };
+        const inheritedTarget = Object.create(prototypeTarget) as Record<string, unknown>;
+        inheritedTarget.type = 'text/html';
+
+        assert.equal(isValidLinkset({
+            linkset: [{ next: [inheritedTarget] }],
         }), false);
     });
 
@@ -730,6 +761,16 @@ describe('parseApiCatalog', () => {
 
     it('returns null for invalid JSON', () => {
         const result = parseApiCatalog('not valid json');
+        assert.equal(result, null);
+    });
+
+    // RFC 9727 §4.2: profile handling is API-catalog specific.
+    it('returns null when unexpected top-level members are present', () => {
+        const result = parseApiCatalog({
+            linkset: [],
+            profile: API_CATALOG_PROFILE,
+            extra: true,
+        });
         assert.equal(result, null);
     });
 });

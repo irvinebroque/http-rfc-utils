@@ -1,9 +1,11 @@
 /**
  * Date/time utilities for HTTP headers.
  * RFC 3339 §5.6, RFC 9110 §5.6.7, RFC 850 §2.
+ * @see https://www.rfc-editor.org/rfc/rfc3339.html
  */
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**
@@ -197,62 +199,114 @@ export function formatHTTPDate(date: Date): string {
 export function parseHTTPDate(str: string): Date | null {
     // Try IMF-fixdate: "Sun, 06 Nov 1994 08:49:37 GMT"
     const imfMatch = str.match(
-        /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/
+        /^((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/
     );
     if (imfMatch) {
-        const [, day, month, year, hours, minutes, seconds] = imfMatch;
+        const [, weekday, day, month, year, hours, minutes, seconds] = imfMatch;
         const monthIndex = MONTH_NAMES.indexOf(month!);
-        const date = new Date(Date.UTC(
+        const expectedWeekday = DAY_NAMES.indexOf(weekday!);
+        return buildValidatedHTTPDate(
             parseInt(year!, 10),
             monthIndex,
             parseInt(day!, 10),
             parseInt(hours!, 10),
             parseInt(minutes!, 10),
-            parseInt(seconds!, 10)
-        ));
-        return isNaN(date.getTime()) ? null : date;
+            parseInt(seconds!, 10),
+            expectedWeekday
+        );
     }
 
     // Try RFC 850: "Sunday, 06-Nov-94 08:49:37 GMT"
     const rfc850Match = str.match(
-        /^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), (\d{2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{2}) (\d{2}):(\d{2}):(\d{2}) GMT$/
+        /^((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)), (\d{2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{2}) (\d{2}):(\d{2}):(\d{2}) GMT$/
     );
     if (rfc850Match) {
-        const [, day, month, year2digit, hours, minutes, seconds] = rfc850Match;
+        const [, weekday, day, month, year2digit, hours, minutes, seconds] = rfc850Match;
         const monthIndex = MONTH_NAMES.indexOf(month!);
+        const expectedWeekday = FULL_DAY_NAMES.indexOf(weekday!);
         // RFC 850 uses 2-digit years; interpret with sliding 50-year window.
         const year = resolveRFC850Year(parseInt(year2digit!, 10));
-        const date = new Date(Date.UTC(
+        return buildValidatedHTTPDate(
             year,
             monthIndex,
             parseInt(day!, 10),
             parseInt(hours!, 10),
             parseInt(minutes!, 10),
-            parseInt(seconds!, 10)
-        ));
-        return isNaN(date.getTime()) ? null : date;
+            parseInt(seconds!, 10),
+            expectedWeekday
+        );
     }
 
     // Try ANSI C asctime(): "Sun Nov  6 08:49:37 1994"
     // Note: day can be space-padded (single digit has leading space)
     const asctimeMatch = str.match(
-        /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([ \d]\d) (\d{2}):(\d{2}):(\d{2}) (\d{4})$/
+        /^((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([ \d]\d) (\d{2}):(\d{2}):(\d{2}) (\d{4})$/
     );
     if (asctimeMatch) {
-        const [, month, day, hours, minutes, seconds, year] = asctimeMatch;
+        const [, weekday, month, day, hours, minutes, seconds, year] = asctimeMatch;
         const monthIndex = MONTH_NAMES.indexOf(month!);
-        const date = new Date(Date.UTC(
+        const expectedWeekday = DAY_NAMES.indexOf(weekday!);
+        return buildValidatedHTTPDate(
             parseInt(year!, 10),
             monthIndex,
             parseInt(day!, 10),
             parseInt(hours!, 10),
             parseInt(minutes!, 10),
-            parseInt(seconds!, 10)
-        ));
-        return isNaN(date.getTime()) ? null : date;
+            parseInt(seconds!, 10),
+            expectedWeekday
+        );
     }
 
     return null;
+}
+
+function buildValidatedHTTPDate(
+    year: number,
+    monthIndex: number,
+    day: number,
+    hours: number,
+    minutes: number,
+    seconds: number,
+    expectedWeekday: number
+): Date | null {
+    if (monthIndex < 0 || monthIndex > 11) {
+        return null;
+    }
+
+    if (hours < 0 || hours > 23) {
+        return null;
+    }
+
+    if (minutes < 0 || minutes > 59) {
+        return null;
+    }
+
+    if (seconds < 0 || seconds > 59) {
+        return null;
+    }
+
+    const time = Date.UTC(year, monthIndex, day, hours, minutes, seconds);
+    if (isNaN(time)) {
+        return null;
+    }
+
+    const date = new Date(time);
+    if (
+        date.getUTCFullYear() !== year
+        || date.getUTCMonth() !== monthIndex
+        || date.getUTCDate() !== day
+        || date.getUTCHours() !== hours
+        || date.getUTCMinutes() !== minutes
+        || date.getUTCSeconds() !== seconds
+    ) {
+        return null;
+    }
+
+    if (date.getUTCDay() !== expectedWeekday) {
+        return null;
+    }
+
+    return date;
 }
 
 /**

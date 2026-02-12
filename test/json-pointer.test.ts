@@ -1,3 +1,7 @@
+/**
+ * Tests for json pointer behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -10,7 +14,7 @@ import {
 } from '../src/json-pointer.js';
 
 // RFC 6901 §3-7: JSON Pointer syntax, evaluation, and URI fragment representation.
-describe('RFC 6901 JSON Pointer', () => {
+describe('RFC 6901 JSON Pointer (§3-§7)', () => {
     // RFC 6901 §3: Syntax
     describe('parseJsonPointer', () => {
         // RFC 6901 §3: Empty string is valid, references entire document
@@ -288,6 +292,34 @@ describe('RFC 6901 JSON Pointer', () => {
             assert.equal(result, undefined);
         });
 
+        // RFC 6901 §4 + RFC 8259 §4: Object member lookup uses own members only.
+        it('returns undefined for inherited Object.prototype property', () => {
+            const result = evaluateJsonPointer('/toString', {});
+            assert.equal(result, undefined);
+        });
+
+        it('returns undefined for inherited custom prototype property', () => {
+            const proto = { inherited: 'secret' };
+            const obj = Object.create(proto) as Record<string, unknown>;
+            const result = evaluateJsonPointer('/inherited', obj);
+            assert.equal(result, undefined);
+        });
+
+        it('resolves own property on object with custom prototype', () => {
+            const proto = { inherited: 'secret' };
+            const obj = Object.create(proto) as Record<string, unknown>;
+            obj.own = 'ok';
+            const result = evaluateJsonPointer('/own', obj);
+            assert.equal(result, 'ok');
+        });
+
+        it('resolves own property on null-prototype object', () => {
+            const obj = Object.create(null) as Record<string, unknown>;
+            obj.foo = 1;
+            const result = evaluateJsonPointer('/foo', obj);
+            assert.equal(result, 1);
+        });
+
         it('returns undefined for array index out of bounds', () => {
             const result = evaluateJsonPointer('/foo/99', doc);
             assert.equal(result, undefined);
@@ -336,6 +368,11 @@ describe('RFC 6901 JSON Pointer', () => {
 
         it('returns undefined for pointer on primitive document', () => {
             const result = evaluateJsonPointer('/foo', 'primitive');
+            assert.equal(result, undefined);
+        });
+
+        it('does not resolve inherited prototype properties', () => {
+            const result = evaluateJsonPointer('/toString', {});
             assert.equal(result, undefined);
         });
     });
@@ -397,6 +434,11 @@ describe('RFC 6901 JSON Pointer', () => {
             const result = toUriFragment('/a~1b');
             assert.equal(result, '#/a~1b');
         });
+
+        it('keeps JSON Pointer fragment encoding stable for non-ASCII and reserved bytes', () => {
+            const result = toUriFragment('/caf\u00E9/[]?');
+            assert.equal(result, '#/caf%C3%A9/%5B%5D%3F');
+        });
     });
 
     describe('fromUriFragment', () => {
@@ -427,6 +469,11 @@ describe('RFC 6901 JSON Pointer', () => {
 
         it('returns null for invalid percent-encoding', () => {
             const result = fromUriFragment('#/%ZZ');
+            assert.equal(result, null);
+        });
+
+        it('returns null for malformed percent escapes in shared decode helper call paths', () => {
+            const result = fromUriFragment('#/%2');
             assert.equal(result, null);
         });
 

@@ -1,3 +1,8 @@
+/**
+ * Shared types for SemVer compatibility tooling.
+ * @see https://semver.org/
+ */
+
 export type SemverBump = 'patch' | 'minor' | 'major';
 
 export const SEMVER_BUMP_ORDER: Record<SemverBump, number> = {

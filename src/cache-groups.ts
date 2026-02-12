@@ -5,6 +5,7 @@
  */
 
 import { parseSfList, serializeSfList } from './structured-fields.js';
+import { expectSfItem } from './structured-field-helpers.js';
 import type { SfItem } from './types.js';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
@@ -21,11 +22,10 @@ function parseCacheGroupList(value: string): string[] | null {
 
     const groups: string[] = [];
     for (const member of list) {
-        if ('items' in member) {
+        const item = expectSfItem(member);
+        if (!item) {
             return null;
         }
-
-        const item = member as SfItem;
         if (typeof item.value !== 'string') {
             return null;
         }
@@ -38,9 +38,9 @@ function parseCacheGroupList(value: string): string[] | null {
 }
 
 function formatCacheGroupList(groups: readonly string[]): string {
-    const list = groups.map((group): SfItem => {
+    const list = groups.map((group, index): SfItem => {
         if (typeof group !== 'string') {
-            throw new Error('Cache group members must be strings');
+            throw new Error(`Cache group member at index ${index} must be a string; received ${String(group)}`);
         }
 
         return { value: group };

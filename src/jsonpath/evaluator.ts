@@ -1,6 +1,7 @@
 /**
  * JSONPath evaluator.
  * RFC 9535 §2.1.2, §2.3-§2.7.
+ * @see https://www.rfc-editor.org/rfc/rfc9535.html
  */
 
 import type {
@@ -66,6 +67,13 @@ interface EvalNode {
     segments: (string | number)[];
 }
 
+const NOTHING = Symbol('JSONPathNothing');
+type JsonPathNothing = typeof NOTHING;
+
+function isNothing(value: unknown): value is JsonPathNothing {
+    return value === NOTHING;
+}
+
 /**
  * Execute a JSONPath query against a JSON document.
  * Returns an array of matching values (nodelist).
@@ -128,7 +136,12 @@ export function queryJsonPathNodes(
     options?: JsonPathOptions
 ): JsonPathNode[] | null {
     const ast = parseJsonPath(query);
-    if (ast === null) return null;
+    if (ast === null) {
+        if (options?.throwOnError) {
+            throw new Error(`Invalid JSONPath query: ${query}`);
+        }
+        return null;
+    }
 
     try {
         return evaluateQuery(ast, document, options).map(materializeNodePath);
@@ -173,14 +186,56 @@ export function formatNormalizedPath(segments: (string | number)[]): string {
         if (typeof seg === 'number') {
             pathParts.push(`[${seg}]`);
         } else {
-            // Escape single quotes and backslashes
-            const escaped = seg
-                .replace(/\\/g, '\\\\')
-                .replace(/'/g, "\\'");
+            const escaped = escapeNormalizedPathString(seg);
             pathParts.push(`['${escaped}']`);
         }
     }
     return pathParts.join('');
+}
+
+function escapeNormalizedPathString(value: string): string {
+    let escaped = '';
+
+    for (let i = 0; i < value.length; i++) {
+        const ch = value[i]!;
+        const code = ch.charCodeAt(0);
+
+        if (ch === '\\') {
+            escaped += '\\\\';
+            continue;
+        }
+        if (ch === '\'') {
+            escaped += "\\'";
+            continue;
+        }
+
+        if (code <= 0x1F) {
+            switch (code) {
+                case 0x08:
+                    escaped += '\\b';
+                    continue;
+                case 0x09:
+                    escaped += '\\t';
+                    continue;
+                case 0x0A:
+                    escaped += '\\n';
+                    continue;
+                case 0x0C:
+                    escaped += '\\f';
+                    continue;
+                case 0x0D:
+                    escaped += '\\r';
+                    continue;
+                default:
+                    escaped += `\\u${code.toString(16).padStart(4, '0').toUpperCase()}`;
+                    continue;
+            }
+        }
+
+        escaped += ch;
+    }
+
+    return escaped;
 }
 
 /**
@@ -693,7 +748,7 @@ function evaluateNotExpr(expr: JsonPathNotExpr, ctx: EvalContext): boolean {
 function evaluateComparisonExpr(expr: JsonPathComparisonExpr, ctx: EvalContext): boolean {
     const left = evaluateComparable(expr.left, ctx);
     const right = evaluateComparable(expr.right, ctx);
-    return compare(left, expr.operator, right);
+    return compare(left, expr.operator, right, ctx);
 }
 
 function evaluateTestExpr(expr: JsonPathTestExpr, ctx: EvalContext): boolean {
@@ -719,7 +774,7 @@ function evaluateComparable(comp: JsonPathComparable, ctx: EvalContext): unknown
     }
 }
 
-function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): unknown {
+function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): unknown | JsonPathNothing {
     const startValue = query.root === '$' ? ctx.root : ctx.current;
     const startPath = query.root === '$' ? [] : [...ctx.currentPath];
 
@@ -736,7 +791,7 @@ function evaluateSingularQuery(query: JsonPathSingularQuery, ctx: EvalContext): 
 
     // RFC 9535 §2.3.5.1: Singular query produces at most one node
     if (nodes.length !== 1) {
-        return undefined;
+        return NOTHING;
     }
 
     const [onlyNode] = nodes;
@@ -765,14 +820,18 @@ function evaluateFilterQuery(query: JsonPathQuery, ctx: EvalContext): EvalNode[]
 // Comparison
 // =============================================================================
 
-function compare(left: unknown, op: JsonPathComparisonOp, right: unknown): boolean {
+function compare(left: unknown, op: JsonPathComparisonOp, right: unknown, ctx: EvalContext): boolean {
     // RFC 9535 §2.3.5.2.2: Comparison semantics
+    // Any comparison involving Nothing evaluates to false.
+    if (isNothing(left) || isNothing(right)) {
+        return false;
+    }
 
     switch (op) {
         case '==':
-            return deepEqual(left, right);
+            return deepEqual(left, right, ctx);
         case '!=':
-            return !deepEqual(left, right);
+            return !deepEqual(left, right, ctx);
         case '<':
             return compareLessThan(left, right);
         case '<=':
@@ -784,37 +843,100 @@ function compare(left: unknown, op: JsonPathComparisonOp, right: unknown): boole
     }
 }
 
-function deepEqual(a: unknown, b: unknown): boolean {
-    if (a === b) return true;
+interface DeepEqualFrame {
+    left: unknown;
+    right: unknown;
+    depth: number;
+}
 
-    if (typeof a !== typeof b) return false;
+function deepEqual(a: unknown, b: unknown, ctx: EvalContext): boolean {
+    const stack: DeepEqualFrame[] = [{ left: a, right: b, depth: 0 }];
+    const seenPairs = new WeakMap<object, WeakSet<object>>();
 
-    if (a === null || b === null) return a === b;
+    while (stack.length > 0) {
+        const frame = stack.pop()!;
+        trackNodeVisit(ctx, frame.depth);
 
-    if (Array.isArray(a) && Array.isArray(b)) {
-        if (a.length !== b.length) return false;
-        for (let i = 0; i < a.length; i++) {
-            if (!deepEqual(a[i], b[i])) return false;
+        const left = frame.left;
+        const right = frame.right;
+
+        if (left === right) {
+            continue;
         }
-        return true;
+
+        if (typeof left !== typeof right) {
+            return false;
+        }
+
+        if (left === null || right === null) {
+            return false;
+        }
+
+        if (typeof left !== 'object' || typeof right !== 'object') {
+            return false;
+        }
+
+        const leftObj = left as object;
+        const rightObj = right as object;
+
+        const seenRights = seenPairs.get(leftObj);
+        if (seenRights?.has(rightObj)) {
+            continue;
+        }
+
+        if (seenRights) {
+            seenRights.add(rightObj);
+        } else {
+            seenPairs.set(leftObj, new WeakSet([rightObj]));
+        }
+
+        const leftIsArray = Array.isArray(leftObj);
+        const rightIsArray = Array.isArray(rightObj);
+        if (leftIsArray !== rightIsArray) {
+            return false;
+        }
+
+        if (leftIsArray && rightIsArray) {
+            const leftArray = leftObj as unknown[];
+            const rightArray = rightObj as unknown[];
+            if (leftArray.length !== rightArray.length) {
+                return false;
+            }
+
+            for (let i = 0; i < leftArray.length; i++) {
+                stack.push({
+                    left: leftArray[i],
+                    right: rightArray[i],
+                    depth: frame.depth + 1,
+                });
+            }
+
+            continue;
+        }
+
+        const leftRecord = leftObj as Record<string, unknown>;
+        const rightRecord = rightObj as Record<string, unknown>;
+        const keysLeft = Object.keys(leftRecord);
+        const keysRight = Object.keys(rightRecord);
+
+        if (keysLeft.length !== keysRight.length) {
+            return false;
+        }
+
+        for (const key of keysLeft) {
+            if (!Object.hasOwn(rightRecord, key)) {
+                return false;
+            }
+
+            stack.push({
+                left: leftRecord[key],
+                right: rightRecord[key],
+                depth: frame.depth + 1,
+            });
+        }
     }
 
-    if (typeof a === 'object' && typeof b === 'object') {
-        const keysA = Object.keys(a as object);
-        const keysB = Object.keys(b as object);
-        if (keysA.length !== keysB.length) return false;
-        const keySetB = new Set(keysB);
-        for (const key of keysA) {
-            if (!keySetB.has(key)) return false;
-            if (!deepEqual(
-                (a as Record<string, unknown>)[key],
-                (b as Record<string, unknown>)[key]
-            )) return false;
-        }
-        return true;
-    }
-
-    return false;
+    return true;
 }
 
 function compareLessThan(left: unknown, right: unknown): boolean {
@@ -858,12 +980,12 @@ function evaluateFunction(expr: JsonPathFunctionExpr, ctx: EvalContext): unknown
 }
 
 // RFC 9535 §2.4.4: length() function
-function fnLength(args: JsonPathFunctionArg[], ctx: EvalContext): number | null {
-    if (args.length !== 1) return null;
+function fnLength(args: JsonPathFunctionArg[], ctx: EvalContext): number | JsonPathNothing {
+    if (args.length !== 1) return NOTHING;
 
     const [arg] = args;
     if (!arg) {
-        return null;
+        return NOTHING;
     }
 
     const value = evaluateFunctionArg(arg, ctx);
@@ -878,7 +1000,7 @@ function fnLength(args: JsonPathFunctionArg[], ctx: EvalContext): number | null 
         return Object.keys(value).length;
     }
 
-    return null;
+    return NOTHING;
 }
 
 // RFC 9535 §2.4.5: count() function
@@ -898,6 +1020,232 @@ function fnCount(args: JsonPathFunctionArg[], ctx: EvalContext): number {
     return 0;
 }
 
+function parseRepeatingQuantifierLength(pattern: string, start: number): number {
+    const ch = pattern[start];
+    if (!ch) {
+        return 0;
+    }
+
+    if (ch === '+' || ch === '*') {
+        return 1;
+    }
+
+    if (ch !== '{') {
+        return 0;
+    }
+
+    let cursor = start + 1;
+    let minDigits = '';
+    while (cursor < pattern.length) {
+        const digit = pattern[cursor];
+        if (digit === undefined || digit < '0' || digit > '9') {
+            break;
+        }
+
+        minDigits += digit;
+        cursor += 1;
+    }
+
+    if (minDigits.length === 0) {
+        return 0;
+    }
+
+    const next = pattern[cursor];
+    if (next === '}') {
+        const exact = Number.parseInt(minDigits, 10);
+        return exact > 1 ? cursor - start + 1 : 0;
+    }
+
+    if (next !== ',') {
+        return 0;
+    }
+
+    cursor += 1;
+    let maxDigits = '';
+    while (cursor < pattern.length) {
+        const digit = pattern[cursor];
+        if (digit === undefined || digit < '0' || digit > '9') {
+            break;
+        }
+
+        maxDigits += digit;
+        cursor += 1;
+    }
+
+    if (pattern[cursor] !== '}') {
+        return 0;
+    }
+
+    if (maxDigits.length === 0) {
+        return cursor - start + 1;
+    }
+
+    const max = Number.parseInt(maxDigits, 10);
+    return max > 1 ? cursor - start + 1 : 0;
+}
+
+function normalizeQuantifiedGroupBody(groupBody: string): string {
+    if (groupBody.startsWith('?:')) {
+        return groupBody.slice(2);
+    }
+
+    if (groupBody.startsWith('?<')) {
+        const endName = groupBody.indexOf('>');
+        if (endName >= 0) {
+            return groupBody.slice(endName + 1);
+        }
+    }
+
+    return groupBody;
+}
+
+function findQuantifiedGroups(pattern: string): string[] {
+    const quantifiedGroups: string[] = [];
+    const groupStartStack: number[] = [];
+    let escaped = false;
+    let inCharClass = false;
+
+    for (let i = 0; i < pattern.length; i++) {
+        const ch = pattern[i]!;
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (inCharClass) {
+            if (ch === ']') {
+                inCharClass = false;
+            }
+            continue;
+        }
+
+        if (ch === '[') {
+            inCharClass = true;
+            continue;
+        }
+
+        if (ch === '(') {
+            groupStartStack.push(i);
+            continue;
+        }
+
+        if (ch === ')' && groupStartStack.length > 0) {
+            const start = groupStartStack.pop()!;
+            const quantifierLength = parseRepeatingQuantifierLength(pattern, i + 1);
+            if (quantifierLength > 0) {
+                quantifiedGroups.push(normalizeQuantifiedGroupBody(pattern.slice(start + 1, i)));
+            }
+        }
+    }
+
+    return quantifiedGroups;
+}
+
+function splitTopLevelAlternatives(groupBody: string): string[] {
+    const alternatives: string[] = [];
+    let start = 0;
+    let depth = 0;
+    let escaped = false;
+    let inCharClass = false;
+
+    for (let i = 0; i < groupBody.length; i++) {
+        const ch = groupBody[i]!;
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (inCharClass) {
+            if (ch === ']') {
+                inCharClass = false;
+            }
+            continue;
+        }
+
+        if (ch === '[') {
+            inCharClass = true;
+            continue;
+        }
+
+        if (ch === '(') {
+            depth += 1;
+            continue;
+        }
+
+        if (ch === ')' && depth > 0) {
+            depth -= 1;
+            continue;
+        }
+
+        if (ch === '|' && depth === 0) {
+            alternatives.push(groupBody.slice(start, i));
+            start = i + 1;
+        }
+    }
+
+    alternatives.push(groupBody.slice(start));
+    return alternatives;
+}
+
+function extractSimpleLiteralAlternative(alt: string): string | null {
+    let value = '';
+    for (let i = 0; i < alt.length; i++) {
+        const ch = alt[i]!;
+        if (ch === '\\') {
+            i += 1;
+            const escaped = alt[i];
+            if (!escaped) {
+                return null;
+            }
+            value += escaped;
+            continue;
+        }
+
+        if ('^$.*+?()[]{}|'.includes(ch)) {
+            return null;
+        }
+
+        value += ch;
+    }
+
+    return value;
+}
+
+function alternativesHavePrefixOverlap(alternatives: string[]): boolean {
+    const literalAlternatives: string[] = [];
+    for (const alt of alternatives) {
+        const literal = extractSimpleLiteralAlternative(alt);
+        if (literal === null) {
+            return false;
+        }
+        literalAlternatives.push(literal);
+    }
+
+    for (let i = 0; i < literalAlternatives.length; i++) {
+        const left = literalAlternatives[i]!;
+        for (let j = i + 1; j < literalAlternatives.length; j++) {
+            const right = literalAlternatives[j]!;
+            if (left.startsWith(right) || right.startsWith(left)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 function hasUnsafeRegexConstructs(pattern: string): boolean {
     // Backreferences are frequently involved in catastrophic backtracking.
     if (/\\[1-9]/.test(pattern)) {
@@ -907,6 +1255,16 @@ function hasUnsafeRegexConstructs(pattern: string): boolean {
     // Heuristic nested quantifier detection, e.g. (a+)+, (a*){2,}.
     if (/\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]/.test(pattern)) {
         return true;
+    }
+
+    // Quantified groups with overlapping top-level alternatives are prone to
+    // catastrophic backtracking, e.g. (a|aa)+$.
+    const quantifiedGroups = findQuantifiedGroups(pattern);
+    for (const groupBody of quantifiedGroups) {
+        const alternatives = splitTopLevelAlternatives(groupBody);
+        if (alternatives.length > 1 && alternativesHavePrefixOverlap(alternatives)) {
+            return true;
+        }
     }
 
     return false;
@@ -996,24 +1354,24 @@ function fnSearch(args: JsonPathFunctionArg[], ctx: EvalContext): boolean {
 
 // RFC 9535 §2.4.8: value() function
 function fnValue(args: JsonPathFunctionArg[], ctx: EvalContext): unknown {
-    if (args.length !== 1) return null;
+    if (args.length !== 1) return NOTHING;
 
     const [arg] = args;
     if (!arg) {
-        return null;
+        return NOTHING;
     }
 
     if (arg.type === 'query') {
         const nodes = evaluateFilterQuery(arg, ctx);
         if (nodes.length !== 1) {
-            return null;
+            return NOTHING;
         }
 
         const [onlyNode] = nodes;
-        return onlyNode?.value ?? null;
+        return onlyNode?.value;
     }
 
-    return null;
+    return NOTHING;
 }
 
 function evaluateFunctionArg(arg: JsonPathFunctionArg, ctx: EvalContext): unknown {
@@ -1024,7 +1382,7 @@ function evaluateFunctionArg(arg: JsonPathFunctionArg, ctx: EvalContext): unknow
             // For value-type arguments, get the singular value
             const nodes = evaluateFilterQuery(arg, ctx);
             if (nodes.length !== 1) {
-                return undefined;
+                return NOTHING;
             }
 
             return nodes[0]?.value;

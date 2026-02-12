@@ -1,4 +1,12 @@
 #!/usr/bin/env node
+
+/**
+ * CLI entrypoint for SemVer API checks.
+ * Compares emitted declaration surfaces against a base ref and validates
+ * changeset bump intent for release safety.
+ * @see https://semver.org/
+ */
+
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { createSemverWorkspaceRoot, emitDeclarationsForRef, emitHeadDeclarations } from './buildDts.js';

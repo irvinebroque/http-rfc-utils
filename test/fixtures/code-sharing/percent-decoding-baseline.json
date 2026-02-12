@@ -1,0 +1,55 @@
+{
+    "decodePercentComponent": [
+        {
+            "name": "decodes valid UTF-8 percent triplets",
+            "input": "hello%20world",
+            "expected": "hello world"
+        },
+        {
+            "name": "rejects malformed UTF-8 percent triplets",
+            "input": "%E0%A4%A",
+            "expected": null
+        },
+        {
+            "name": "rejects non-hex escapes",
+            "input": "%ZZ",
+            "expected": null
+        }
+    ],
+    "percentDecode": [
+        {
+            "name": "leniently preserves malformed escapes while decoding valid bytes",
+            "input": "a%GG%20",
+            "expected": "a%GG "
+        },
+        {
+            "name": "returns input when UTF-8 decode fails",
+            "input": "%E0%A4%A",
+            "expected": "%E0%A4%A"
+        }
+    ],
+    "decodeExtValue": [
+        {
+            "name": "decodes valid ext-value",
+            "input": "utf-8''%C2%A3%20rates",
+            "expected": {
+                "charset": "utf-8",
+                "language": null,
+                "value": "\u00a3 rates"
+            }
+        },
+        {
+            "name": "fails closed on malformed percent escapes",
+            "input": "utf-8''%ZZ",
+            "expected": null
+        }
+    ],
+    "openApiPathParams": {
+        "template": "/stores/{storeId}",
+        "path": "/stores/%E0%A4%A",
+        "decodeTrueExpected": null,
+        "decodeFalseExpected": {
+            "storeId": "%E0%A4%A"
+        }
+    }
+}

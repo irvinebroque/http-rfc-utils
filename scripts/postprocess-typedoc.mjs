@@ -1,3 +1,10 @@
+/**
+ * TypeDoc post-processing helper.
+ *
+ * Adds minimal frontmatter metadata to generated markdown pages so docs
+ * tooling can render titles consistently.
+ */
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 

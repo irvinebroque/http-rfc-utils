@@ -1,3 +1,7 @@
+/**
+ * Tests for targeted cache control behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -7,6 +11,7 @@ import {
     formatCdnCacheControl,
     selectTargetedCacheControl,
 } from '../src/targeted-cache-control.js';
+import { cacheControl, parseCacheControl } from '../src/cache.js';
 
 // RFC 9213 §2.1: Targeted cache-control fields are SF dictionaries.
 describe('parseTargetedCacheControl', () => {
@@ -86,6 +91,60 @@ describe('formatTargetedCacheControl', () => {
             () => formatTargetedCacheControl({ maxAge: 10.5 }),
             /max-age/
         );
+    });
+
+    // RFC 9213 §2.1 + RFC 9111 §5.2.2.9/§5.2.2.10: shared stale extensions stay ordered.
+    it('keeps stale-if-error and stale-while-revalidate formatting order aligned across formats', () => {
+        const classic = cacheControl({
+            staleWhileRevalidate: 30,
+            staleIfError: 60,
+        });
+        const targeted = formatTargetedCacheControl({
+            staleWhileRevalidate: 30,
+            staleIfError: 60,
+        });
+
+        assert.equal(classic, 'stale-while-revalidate=30, stale-if-error=60');
+        assert.equal(targeted, 'stale-while-revalidate=30, stale-if-error=60');
+    });
+
+    // RFC 9111 §5.2.2.7: field-name list applies to classic Cache-Control private only.
+    it('keeps private field-list behavior limited to classic Cache-Control', () => {
+        assert.equal(
+            cacheControl({ private: true, privateFields: ['authorization'] }),
+            'private="authorization"'
+        );
+        assert.equal(
+            formatTargetedCacheControl({ private: true }),
+            'private'
+        );
+    });
+});
+
+// RFC 9111 §1.2.2 + RFC 9213 §2.1: shared schema keeps cross-format numeric handling consistent.
+describe('cache-control schema alignment', () => {
+    it('keeps classic and targeted max-age parsing aligned for integer values', () => {
+        assert.deepEqual(parseCacheControl('max-age=60'), { maxAge: 60 });
+        assert.deepEqual(parseTargetedCacheControl('max-age=60'), { maxAge: 60 });
+    });
+
+    it('continues to ignore invalid numeric members consistently in both parsers', () => {
+        assert.deepEqual(parseCacheControl('max-age=10.5, stale-if-error=-1, s-maxage=300'), {
+            sMaxAge: 300,
+        });
+        assert.deepEqual(parseTargetedCacheControl('max-age=10.5, stale-if-error=-1, s-maxage=300'), {
+            sMaxAge: 300,
+        });
+    });
+
+    it('preserves targeted extension members when known directive schema is shared', () => {
+        assert.deepEqual(parseTargetedCacheControl('max-age=60, ext=(1 2);a=?1, feature;flag'), {
+            maxAge: 60,
+            extensions: {
+                ext: { items: [{ value: 1 }, { value: 2 }], params: { a: true } },
+                feature: { value: true, params: { flag: true } },
+            },
+        });
     });
 });
 

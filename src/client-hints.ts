@@ -7,9 +7,8 @@
 import type { ClientHintList } from './types.js';
 import { SfToken } from './types.js';
 import { mergeVary } from './headers.js';
+import { expectSfItem, hasNoSfParams, isSfKeyText } from './structured-field-helpers.js';
 import { parseSfList, serializeSfList } from './structured-fields.js';
-
-const SF_TOKEN = /^[a-z*][a-z0-9_\-\.\*]*$/;
 
 /**
  * Parse Accept-CH header value into a list of client hints.
@@ -30,19 +29,20 @@ export function parseAcceptCH(value: string | string[]): ClientHintList | null {
         }
 
         for (const member of list) {
-            if ('items' in member) {
+            const item = expectSfItem(member);
+            if (!item) {
                 return null;
             }
-            if (member.params && Object.keys(member.params).length > 0) {
+            if (!hasNoSfParams(item)) {
                 return null;
             }
-            if (!(member.value instanceof SfToken)) {
+            if (!(item.value instanceof SfToken)) {
                 return null;
             }
-            if (!SF_TOKEN.test(member.value.value)) {
+            if (!isSfKeyText(item.value.value)) {
                 return null;
             }
-            hints.push(member.value.value.toLowerCase());
+            hints.push(item.value.value.toLowerCase());
         }
     }
 
@@ -65,8 +65,8 @@ export function parseAcceptCH(value: string | string[]): ClientHintList | null {
 export function formatAcceptCH(hints: ClientHintList): string {
     const list = hints.map((hint) => {
         const token = hint.toLowerCase();
-        if (!SF_TOKEN.test(token)) {
-            throw new Error('Invalid client hint token');
+        if (!isSfKeyText(token)) {
+            throw new Error(`Accept-CH hint must be a valid RFC 8941 key token; received ${String(hint)}`);
         }
         return { value: new SfToken(token) };
     });

@@ -1,3 +1,10 @@
+/**
+ * Shared fast-check fuzzing harness utilities.
+ *
+ * Provides deterministic run configuration, corpus mutation helpers, and
+ * failure artifact persistence for reproducible parser/security fuzz tests.
+ */
+
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import fc from 'fast-check';

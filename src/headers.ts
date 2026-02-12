@@ -7,6 +7,30 @@
 
 import type { RetryAfterValue } from './types.js';
 import { parseHTTPDate, formatHTTPDate } from './datetime.js';
+import { TOKEN_CHARS } from './header-utils.js';
+
+function parseVaryFieldNames(input: string | string[], context: string): string[] {
+    const rawValues = Array.isArray(input) ? input : input.split(',');
+    const values: string[] = [];
+
+    for (let i = 0; i < rawValues.length; i++) {
+        const rawValue = rawValues[i];
+        const value = rawValue?.trim() ?? '';
+        if (!value) {
+            throw new Error(`Invalid Vary field-name at ${context} index ${i}: empty value`);
+        }
+        if (value !== '*' && !TOKEN_CHARS.test(value)) {
+            throw new Error(`Invalid Vary field-name at ${context} index ${i}: ${rawValue}`);
+        }
+        values.push(value);
+    }
+
+    if (values.includes('*') && values.length > 1) {
+        throw new Error(`Invalid Vary value at ${context}: '*' must be the only entry`);
+    }
+
+    return values;
+}
 
 /**
  * Parse Retry-After header value.
@@ -37,8 +61,16 @@ export function parseRetryAfter(value: string): RetryAfterValue | null {
 // RFC 9110 §10.2.3: Retry-After formatting.
 export function formatRetryAfter(value: Date | number): string {
     if (typeof value === 'number') {
-        const seconds = Math.max(0, Math.floor(value));
-        return String(seconds);
+        if (!Number.isFinite(value)) {
+            throw new Error(`Retry-After delay-seconds must be finite; received ${String(value)}`);
+        }
+        if (!Number.isInteger(value)) {
+            throw new Error(`Retry-After delay-seconds must be an integer; received ${value}`);
+        }
+        if (value < 0) {
+            throw new Error(`Retry-After delay-seconds must be non-negative; received ${value}`);
+        }
+        return String(value);
     }
 
     return formatHTTPDate(value);
@@ -49,10 +81,8 @@ export function formatRetryAfter(value: Date | number): string {
  */
 // RFC 9110 §12.5.5: Vary field-value combination.
 export function mergeVary(existing: string | null, add: string | string[]): string {
-    const existingValues = existing ? existing.split(',').map(v => v.trim()).filter(Boolean) : [];
-    const addValues = Array.isArray(add)
-        ? add
-        : add.split(',').map(v => v.trim()).filter(Boolean);
+    const existingValues = existing === null ? [] : parseVaryFieldNames(existing, 'existing');
+    const addValues = parseVaryFieldNames(add, 'add');
 
     if (existingValues.includes('*') || addValues.includes('*')) {
         return '*';

@@ -1,3 +1,7 @@
+/**
+ * Tests for webfinger behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -12,7 +16,7 @@ import {
 import type { WebFingerResponse } from '../src/types.js';
 
 // RFC 7033 §4: WebFinger JSON Resource Descriptor (JRD).
-describe('RFC 7033 WebFinger', () => {
+describe('WebFinger JRD helpers (RFC 7033 Sections 4, 4.2-4.4)', () => {
     const sampleJrd: WebFingerResponse = {
         subject: 'acct:bob@example.com',
         aliases: [
@@ -61,15 +65,28 @@ describe('RFC 7033 WebFinger', () => {
             assert.equal(result.links, undefined);
         });
 
-        it('throws on missing subject', () => {
+        it('throws when subject is missing', () => {
             assert.throws(() => parseJrd('{}'), /subject/);
+        });
+
+        it('throws when subject is non-string', () => {
+            assert.throws(() => parseJrd('{"subject":123}'), /subject/);
         });
 
         // RFC 7033 §4.4 + security hardening: non-throwing parse path for untrusted input.
         it('provides tryParseJrd for malformed or invalid JRD input', () => {
             assert.equal(tryParseJrd('{'), null);
             assert.equal(tryParseJrd('{}'), null);
+            assert.equal(tryParseJrd('{"subject":123}'), null);
             assert.throws(() => parseJrd('{'));
+        });
+
+        // RFC 7033 §4.4.4.1: links MUST include a non-empty rel member.
+        it('throws when link rel is missing, empty, or non-string', () => {
+            assert.throws(() => parseJrd('{"subject":"acct:test@example.com","links":[{"href":"https://example.com"}]}'), /rel/);
+            assert.throws(() => parseJrd('{"subject":"acct:test@example.com","links":[{"rel":"   "}]}'), /rel/);
+            assert.throws(() => parseJrd('{"subject":"acct:test@example.com","links":[{"rel":123}]}'), /rel/);
+            assert.equal(tryParseJrd('{"subject":"acct:test@example.com","links":[{"href":"https://example.com"}]}'), null);
         });
 
         it('parses links with titles and properties', () => {
@@ -131,10 +148,11 @@ describe('RFC 7033 WebFinger', () => {
             assert.equal(issues.length, 0);
         });
 
-        it('reports missing subject', () => {
-            const response = { subject: '' } as WebFingerResponse;
+        // RFC 7033 §4.4.1: subject is SHOULD.
+        it('reports missing subject as SHOULD guidance', () => {
+            const response = {} as WebFingerResponse;
             const issues = validateJrd(response);
-            assert.ok(issues.some(i => i.includes('subject')));
+            assert.ok(issues.some(i => i.includes('should include a "subject"')));
         });
 
         it('reports link without rel', () => {

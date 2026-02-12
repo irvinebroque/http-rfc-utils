@@ -1,3 +1,10 @@
+/**
+ * Public package entrypoint.
+ * Re-exports stable APIs grouped by RFC/topic area while preserving
+ * compatibility facades and canonical import paths.
+ * @see https://github.com/irvinebroque/http-rfc-utils/blob/main/docs/reference/imports-by-task.md
+ */
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -22,6 +29,83 @@ export type {
     AcceptPatchMediaType,
     MediaType,
     OptionsResponseOptions,
+    OpenApiParameterLocation,
+    OpenApiParameterStyle,
+    OpenApiParameterPrimitive,
+    OpenApiParameterValue,
+    OpenApiParameterValueType,
+    OpenApiSchemaParameterSpec,
+    NormalizedOpenApiSchemaParameterSpec,
+    OpenApiQueryEntry,
+    OpenApiCookiePair,
+    OpenApiRuntimeEvaluationContext,
+    OpenApiRuntimeExpressionType,
+    OpenApiRuntimeExpression,
+    OpenApiRuntimeExpressionEvaluationOptions,
+    OpenApiRuntimeResolutionMode,
+    OpenApiRuntimeResolutionOptions,
+    OpenApiRuntimeResolutionIssueCode,
+    OpenApiRuntimeResolutionIssue,
+    OpenApiLinkObjectLike,
+    OpenApiLinkMaterializationResult,
+    OpenApiCallbackUrlResolutionResult,
+    OpenApiSecuritySchemeType,
+    OpenApiApiKeyLocation,
+    OpenApiSecurityRequirement,
+    OpenApiSecurityRequirements,
+    OpenApiApiKeySecurityScheme,
+    OpenApiHttpSecurityScheme,
+    OpenApiOAuthScopes,
+    OpenApiOAuthImplicitFlowObject,
+    OpenApiOAuthPasswordFlowObject,
+    OpenApiOAuthClientCredentialsFlowObject,
+    OpenApiOAuthAuthorizationCodeFlowObject,
+    OpenApiOAuthFlowsObject,
+    OpenApiOAuth2SecurityScheme,
+    OpenApiOpenIdConnectSecurityScheme,
+    OpenApiMutualTlsSecurityScheme,
+    OpenApiSecuritySchemeMetadata,
+    OpenApiSecuritySchemeRegistry,
+    OpenApiUnknownSchemeHandling,
+    OpenApiSecurityValidationMode,
+    OpenApiSecurityValidationOptions,
+    OpenApiSecurityCredentialObject,
+    OpenApiSecurityCredential,
+    OpenApiSecurityCredentials,
+    OpenApiSecurityEvaluationSchemeCode,
+    OpenApiSecuritySchemeEvaluationResult,
+    OpenApiSecurityRequirementEvaluationResult,
+    OpenApiSecurityEvaluationResult,
+    OpenApiDiagnosticSeverity,
+    OpenApiDiagnostic,
+    OpenApiLintRuleCode,
+    OpenApiLintOptions,
+    OpenApiPathPatternKind,
+    OpenApiPathTemplateLiteralSegment,
+    OpenApiPathTemplateParamSegment,
+    OpenApiPathMatcherTemplateSegment,
+    OpenApiPathVariableMap,
+    OpenApiPathItemHttpMethod,
+    OpenApiServerVariableObject,
+    OpenApiServerObject,
+    OpenApiOperationObjectLike,
+    OpenApiPathItemObjectLike,
+    OpenApiDocumentLike,
+    OpenApiPathTemplateMatchOptions,
+    OpenApiPathMatcherOptions,
+    OpenApiPathMatch,
+    OpenApiPathMatchCandidate,
+    OpenApiPathMatcherExplainResult,
+    OpenApiPathMatcher,
+    OpenApiServerCandidateLevel,
+    OpenApiServerCandidate,
+    OpenApiServerVariableValue,
+    OpenApiServerVariableMap,
+    OpenApiServerVariableOverridesByLevel,
+    OpenApiPathServerResolverOverrides,
+    OpenApiPathServerResolverOptions,
+    OpenApiServerResolutionInput,
+    OpenApiServerResolutionResult,
     CorsOptions,
     ConditionalResult,
     ByteRange,
@@ -43,6 +127,32 @@ export type {
     StoredDictionary,
     DictionaryMatchOptions,
     RetryAfterValue,
+    Rfc6585StatusCode,
+    Rfc6585StatusInfo,
+    Rfc6585HeadersOptions,
+    JsonPatchPrimitive,
+    JsonPatchArray,
+    JsonPatchValue,
+    JsonPatchObject,
+    JsonPatchOperationType,
+    JsonPatchBaseOperation,
+    JsonPatchAddOperation,
+    JsonPatchRemoveOperation,
+    JsonPatchReplaceOperation,
+    JsonPatchMoveOperation,
+    JsonPatchCopyOperation,
+    JsonPatchTestOperation,
+    JsonPatchOperation,
+    JsonPatchDocument,
+    JsonMergePatchPrimitive,
+    JsonMergePatchArray,
+    JsonMergePatchValue,
+    JsonMergePatchObject,
+    JsonMergePatchDocument,
+    CanonicalJsonPrimitive,
+    CanonicalJsonArray,
+    CanonicalJsonObject,
+    CanonicalJsonValue,
     AltSvcAlternative,
     AltSvcRecord,
     AltUsed,
@@ -51,6 +161,22 @@ export type {
     FetchMetadata,
     FetchMetadataPolicy,
     FetchMetadataPolicyDecision,
+    ClearSiteDataType,
+    ClearSiteDataDirective,
+    ReferrerPolicyToken,
+    ReferrerPolicy,
+    CspDirectiveName,
+    CspSourceKeyword,
+    CspHashAlgorithm,
+    CspSourceExpression,
+    ContentSecurityPolicy,
+    ReportingEndpoint,
+    ReportingEndpointDefinition,
+    ProcessReportingEndpointsOptions,
+    ReportingReportBody,
+    ReportingReport,
+    ReportingSerializedReport,
+    ReportingSerializationOptions,
     Traceparent,
     TracestateEntry,
     ParsedTraceContext,
@@ -87,6 +213,36 @@ export type {
     DigestCredentials,
     DigestAuthenticationInfo,
     DigestComputeOptions,
+    PkceCodeChallengeMethod,
+    PkceCodeVerifierGenerationOptions,
+    PkceAuthorizationRequestParams,
+    PkceAuthorizationRequestInput,
+    PkceTokenRequestParams,
+    WebauthnAuthenticatorAttachment,
+    WebauthnResidentKeyRequirement,
+    WebauthnUserVerificationRequirement,
+    WebauthnAttestationConveyancePreference,
+    WebauthnPublicKeyCredentialRpEntity,
+    WebauthnPublicKeyCredentialRpEntityJson,
+    WebauthnPublicKeyCredentialUserEntity,
+    WebauthnPublicKeyCredentialUserEntityJson,
+    WebauthnPublicKeyCredentialParameters,
+    WebauthnPublicKeyCredentialDescriptor,
+    WebauthnPublicKeyCredentialDescriptorJson,
+    WebauthnAuthenticatorSelectionCriteria,
+    WebauthnPublicKeyCredentialCreationOptions,
+    WebauthnPublicKeyCredentialCreationOptionsJson,
+    WebauthnPublicKeyCredentialRequestOptions,
+    WebauthnPublicKeyCredentialRequestOptionsJson,
+    WebauthnCreationOptionsValidationOptions,
+    WebauthnRequestOptionsValidationOptions,
+    WebauthnClientData,
+    WebauthnClientDataFormatOptions,
+    WebauthnClientDataValidationOptions,
+    WebauthnAuthenticatorFlags,
+    WebauthnAttestedCredentialData,
+    WebauthnAuthenticatorData,
+    WebauthnAuthenticatorDataValidationOptions,
     UriComponent,
     DigestAlgorithm,
     DigestAlgorithmAny,
@@ -380,7 +536,7 @@ export {
 } from './cookie.js';
 
 // =============================================================================
-// Authorization (RFC 7617 + RFC 6750 + RFC 7616)
+// Authorization (RFC 7617 + RFC 6750 + RFC 7616 + RFC 7636 + W3C WebAuthn)
 // =============================================================================
 export {
     parseAuthorization,
@@ -407,6 +563,33 @@ export {
     computeA1,
     computeA2,
     hashDigestUsername,
+    // PKCE (RFC 7636)
+    generatePkceCodeVerifier,
+    derivePkceCodeChallenge,
+    verifyPkceCodeVerifier,
+    validatePkceCodeVerifier,
+    validatePkceCodeChallenge,
+    parsePkceAuthorizationRequestParams,
+    formatPkceAuthorizationRequestParams,
+    parsePkceTokenRequestParams,
+    formatPkceTokenRequestParams,
+    // WebAuthn (W3C WebAuthn Level 3)
+    parseWebauthnBase64url,
+    formatWebauthnBase64url,
+    validateWebauthnBase64url,
+    parseWebauthnCreationOptionsFromJson,
+    formatWebauthnCreationOptionsToJson,
+    validateWebauthnCreationOptions,
+    parseWebauthnRequestOptionsFromJson,
+    formatWebauthnRequestOptionsToJson,
+    validateWebauthnRequestOptions,
+    parseWebauthnClientDataJson,
+    formatWebauthnClientDataJson,
+    validateWebauthnClientData,
+    parseWebauthnAuthenticatorData,
+    validateWebauthnAuthenticatorData,
+    validateWebauthnCoseAlgorithm,
+    WEBAUTHN_COSE_ALGORITHM_IDS,
 } from './auth.js';
 
 // =============================================================================
@@ -482,6 +665,17 @@ export {
 } from './headers.js';
 
 // =============================================================================
+// Additional Status Codes (RFC 6585)
+// =============================================================================
+export {
+    parseRfc6585StatusCode,
+    formatRfc6585StatusCode,
+    validateRfc6585StatusCode,
+    getRfc6585StatusInfo,
+    formatRfc6585Headers,
+} from './additional-status.js';
+
+// =============================================================================
 // Early-Data + 425 Too Early (RFC 8470)
 // =============================================================================
 export {
@@ -490,6 +684,18 @@ export {
     hasEarlyDataSignal,
     canSend425,
 } from './early-data.js';
+
+// =============================================================================
+// Early Hints 103 (RFC 8297)
+// =============================================================================
+export {
+    EARLY_HINTS_STATUS,
+    parseEarlyHintsLinks,
+    formatEarlyHintsLinks,
+    validateEarlyHintsLinks,
+    extractPreloadLinks,
+    mergeEarlyHintsLinks,
+} from './early-hints.js';
 
 // =============================================================================
 // Alt-Svc + Alt-Used (RFC 7838)
@@ -517,6 +723,55 @@ export {
     evaluateFetchMetadataPolicy,
     fetchMetadataVary,
 } from './fetch-metadata.js';
+
+// =============================================================================
+// W3C Clear Site Data
+// =============================================================================
+export {
+    parseClearSiteData,
+    formatClearSiteData,
+    validateClearSiteData,
+} from './clear-site-data.js';
+
+// =============================================================================
+// W3C Referrer Policy
+// =============================================================================
+export {
+    parseReferrerPolicy,
+    parseReferrerPolicyHeader,
+    formatReferrerPolicy,
+    validateReferrerPolicy,
+    selectEffectiveReferrerPolicy,
+} from './referrer-policy.js';
+
+// =============================================================================
+// W3C Reporting API
+// =============================================================================
+export {
+    REPORTS_MEDIA_TYPE,
+    parseReportingEndpoints,
+    formatReportingEndpoints,
+    processReportingEndpointsForResponse,
+    stripUrlForReport,
+    serializeReports,
+    formatReportsJson,
+    parseReportsJson,
+} from './reporting.js';
+
+// =============================================================================
+// W3C Content Security Policy Level 3 (subset)
+// =============================================================================
+export {
+    parseContentSecurityPolicy,
+    formatContentSecurityPolicy,
+    parseContentSecurityPolicyReportOnly,
+    formatContentSecurityPolicyReportOnly,
+    parseContentSecurityPolicies,
+    validateContentSecurityPolicy,
+    parseCspSourceList,
+    formatCspSourceList,
+    validateCspSourceList,
+} from './csp.js';
 
 // =============================================================================
 // W3C Trace Context
@@ -571,6 +826,39 @@ export {
 } from './json-pointer.js';
 
 // =============================================================================
+// JSON Patch (RFC 6902)
+// =============================================================================
+export {
+    JSON_PATCH_MEDIA_TYPE,
+    parseJsonPatch,
+    tryParseJsonPatch,
+    formatJsonPatch,
+    validateJsonPatch,
+    applyJsonPatch,
+} from './json-patch.js';
+
+// =============================================================================
+// JSON Merge Patch (RFC 7396)
+// =============================================================================
+export {
+    MERGE_PATCH_CONTENT_TYPE,
+    parseJsonMergePatch,
+    formatJsonMergePatch,
+    validateJsonMergePatch,
+    applyJsonMergePatch,
+} from './json-merge-patch.js';
+
+// =============================================================================
+// JSON Canonicalization Scheme (RFC 8785)
+// =============================================================================
+export {
+    formatCanonicalJson,
+    formatCanonicalJsonUtf8,
+    validateCanonicalJson,
+    parseCanonicalJson,
+} from './json-canonicalization.js';
+
+// =============================================================================
 // JSONPath (RFC 9535)
 // =============================================================================
 export type {
@@ -589,6 +877,38 @@ export {
     formatNormalizedPath,
     compileJsonPath,
 } from './jsonpath.js';
+
+// =============================================================================
+// OpenAPI
+// =============================================================================
+export {
+    normalizeOpenApiParameterSpec,
+    formatQueryParameter,
+    parseQueryParameter,
+    formatPathParameter,
+    parsePathParameter,
+    formatHeaderParameter,
+    parseHeaderParameter,
+    formatCookieParameter,
+    parseCookieParameter,
+    parseOpenApiRuntimeExpression,
+    formatOpenApiRuntimeExpression,
+    isOpenApiRuntimeExpression,
+    evaluateOpenApiRuntimeExpression,
+    materializeOpenApiLinkValues,
+    resolveOpenApiCallbackUrl,
+    parseOpenApiSecurityRequirements,
+    tryParseOpenApiSecurityRequirements,
+    validateOpenApiSecurityRequirements,
+    normalizeOpenApiSecurityRequirements,
+    resolveEffectiveOpenApiSecurity,
+    evaluateOpenApiSecurity,
+    compileOpenApiPathMatcher,
+    extractOpenApiPathParams,
+    resolveOpenApiServerUrl,
+    listOpenApiServerCandidates,
+    lintOpenApiDocument,
+} from './openapi.js';
 
 // =============================================================================
 // URI (RFC 3986)
@@ -768,6 +1088,26 @@ export {
     tryParseHostMetaJson,
     formatHostMetaJson,
 } from './host-meta.js';
+
+// =============================================================================
+// RFC 8414 — OAuth 2.0 Authorization Server Metadata
+// =============================================================================
+export type {
+    AuthorizationServerMetadata,
+    AuthorizationServerMetadataParseOptions,
+    AuthorizationServerMetadataValidationOptions,
+    AuthorizationServerMetadataFormatOptions,
+} from './types.js';
+
+export {
+    OAUTH_AUTHORIZATION_SERVER_WELL_KNOWN_SUFFIX,
+    parseAuthorizationServerMetadata,
+    parseAuthorizationServerMetadataObject,
+    formatAuthorizationServerMetadata,
+    validateAuthorizationServerMetadata,
+    buildAuthorizationServerMetadataUrl,
+    mergeSignedAuthorizationServerMetadata,
+} from './oauth-authorization-server-metadata.js';
 
 // =============================================================================
 // RFC 8615 — Well-Known URIs

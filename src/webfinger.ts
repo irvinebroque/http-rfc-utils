@@ -76,8 +76,14 @@ function parseJrdObject(obj: unknown): WebFingerResponse {
  * Parse a single JRD link object.
  */
 function parseJrdLink(obj: Record<string, unknown>): WebFingerLink {
+    // RFC 7033 §4.4.4.1: each link object MUST contain a rel member.
+    const rel = typeof obj.rel === 'string' ? obj.rel.trim() : '';
+    if (rel.length === 0) {
+        throw new Error('JRD link object must include a non-empty "rel" string');
+    }
+
     const link: WebFingerLink = {
-        rel: String(obj.rel ?? ''),
+        rel,
     };
 
     if (typeof obj.type === 'string') link.type = obj.type;
@@ -144,7 +150,7 @@ export function validateJrd(response: WebFingerResponse): string[] {
     const issues: string[] = [];
 
     if (!response.subject || typeof response.subject !== 'string') {
-        issues.push('JRD must have a "subject" string (RFC 7033 §4.4.1)');
+        issues.push('JRD should include a "subject" string (RFC 7033 §4.4.1)');
     }
 
     if (response.links) {
@@ -155,7 +161,7 @@ export function validateJrd(response: WebFingerResponse): string[] {
             }
 
             if (!link.rel || typeof link.rel !== 'string') {
-                issues.push(`Link at index ${i} must have a "rel" string (RFC 7033 §4.4.4)`);
+                issues.push(`Link at index ${i} must include a non-empty "rel" string (RFC 7033 §4.4.4.1)`);
             }
         }
     }

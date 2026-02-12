@@ -1,6 +1,7 @@
 /**
  * Shared authorization parsing and formatting utilities.
  * RFC 7235 §2.1.
+ * @see https://www.rfc-editor.org/rfc/rfc7235.html
  */
 
 import type {
@@ -14,8 +15,8 @@ import {
     quoteString,
     TOKEN_CHARS,
 } from '../header-utils.js';
-const TOKEN68_RE = /^[A-Za-z0-9\-._~+\/]+={0,}$/;
-const B64TOKEN_RE = /^[A-Za-z0-9\-._~+\/]+={0,}$/;
+const TOKEN68_RE = /^[A-Za-z0-9\-._~+/]+={0,}$/;
+const B64TOKEN_RE = /^[A-Za-z0-9\-._~+/]+={0,}$/;
 
 function isToken(value: string): boolean {
     return TOKEN_CHARS.test(value);
@@ -257,6 +258,27 @@ export function formatAuthParams(params: AuthParam[]): string {
     return params.map((param) => {
         assertHeaderToken(param.name, `Authorization parameter name "${param.name}"`);
         assertNoCtl(param.value, `Authorization parameter "${param.name}" value`);
+        return `${param.name}=${quoteAuthParamValue(param.value)}`;
+    }).join(', ');
+}
+
+export function formatAuthParamsWithBareValues(
+    params: readonly AuthParam[],
+    bareValueNames: ReadonlySet<string>,
+    validateBareValue?: (param: Readonly<AuthParam>) => void
+): string {
+    return params.map((param) => {
+        assertHeaderToken(param.name, `Authorization parameter name "${param.name}"`);
+        assertNoCtl(param.value, `Authorization parameter "${param.name}" value`);
+        const normalizedName = param.name.toLowerCase();
+        if (bareValueNames.has(normalizedName)) {
+            if (validateBareValue) {
+                validateBareValue(param);
+            } else {
+                assertHeaderToken(param.value, `Authorization parameter "${param.name}" bare value`);
+            }
+            return `${param.name}=${param.value}`;
+        }
         return `${param.name}=${quoteAuthParamValue(param.value)}`;
     }).join(', ');
 }

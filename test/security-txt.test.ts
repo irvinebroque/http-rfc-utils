@@ -1,3 +1,7 @@
+/**
+ * Tests for security txt behavior.
+ * Spec references are cited inline for each assertion group when applicable.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -87,10 +91,57 @@ describe('RFC 9116 security.txt', () => {
             // Falls back to epoch.
             assert.equal(config.expires.getTime(), 0);
         });
+
+        // RFC 9116 §2.5.3: invalid Expires must not be treated as fresh.
+        it('treats invalid Expires values as expired', () => {
+            const config = parseSecurityTxt(
+                'Contact: mailto:test@example.com\nExpires: definitely-not-a-date\n'
+            );
+            assert.equal(Number.isNaN(config.expires.getTime()), true);
+            assert.equal(isSecurityTxtExpired(config, new Date('2026-01-01T00:00:00.000Z')), true);
+        });
     });
 
     // RFC 9116 §2.3: CRLF line endings.
     describe('formatSecurityTxt', () => {
+        // RFC 9116 §2.5.3: Contact field is REQUIRED.
+        it('throws when Contact is missing', () => {
+            assert.throws(() => {
+                formatSecurityTxt({
+                    contact: [],
+                    expires: new Date('2027-01-31T23:59:59.000Z'),
+                });
+            }, /config\.contact/);
+        });
+
+        it('throws contextual error for invalid Expires date', () => {
+            assert.throws(() => {
+                formatSecurityTxt({
+                    contact: ['mailto:test@example.com'],
+                    expires: new Date('not-a-date'),
+                });
+            }, /config\.expires must be a valid Date/);
+        });
+
+        it('throws for blank Contact entries with field context', () => {
+            assert.throws(() => {
+                formatSecurityTxt({
+                    contact: ['mailto:test@example.com', '   '],
+                    expires: new Date('2027-01-31T23:59:59.000Z'),
+                });
+            }, /config\.contact\[1\] must not be empty or whitespace/);
+        });
+
+        // RFC 9116 §2.3: generated lines must not allow CR/LF line injection.
+        it('throws for CRLF injection in Contact values', () => {
+            assert.throws(() => {
+                formatSecurityTxt({
+                    contact: ['mailto:test@example.com\r\nExpires: 2099-01-01T00:00:00.000Z'],
+                    expires: new Date('2027-01-31T23:59:59.000Z'),
+                });
+            }, /config\.contact\[0\] must not contain control characters or newlines/);
+        });
+
         it('formats with CRLF line endings', () => {
             const config = {
                 contact: ['mailto:test@example.com'],
@@ -122,6 +173,18 @@ describe('RFC 9116 security.txt', () => {
             assert.ok(text.includes('Canonical: https://example.com/.well-known/security.txt'));
             assert.ok(text.includes('Policy: https://example.com/policy'));
             assert.ok(text.includes('Hiring: https://example.com/jobs'));
+        });
+
+        it('preserves Contact ordering when multiple values are provided', () => {
+            const text = formatSecurityTxt({
+                contact: ['mailto:first@example.com', 'mailto:second@example.com'],
+                expires: new Date('2027-01-31T23:59:59.000Z'),
+            });
+
+            const lines = text.trim().split('\r\n');
+            assert.equal(lines[0], 'Contact: mailto:first@example.com');
+            assert.equal(lines[1], 'Contact: mailto:second@example.com');
+            assert.equal(lines[2], 'Expires: 2027-01-31T23:59:59.000Z');
         });
 
         it('round-trips a parsed file', () => {
@@ -161,6 +224,15 @@ describe('RFC 9116 security.txt', () => {
             assert.equal(isSecurityTxtExpired(config, new Date('2025-01-01T00:00:00.000Z')), false);
             assert.equal(isSecurityTxtExpired(config, new Date('2025-12-01T00:00:00.000Z')), true);
         });
+
+        // RFC 9116 §2.5.3: consumers must fail closed on invalid or expired Expires values.
+        it('returns true for invalid Expires dates', () => {
+            const config = {
+                contact: ['mailto:test@example.com'],
+                expires: new Date('invalid-date'),
+            };
+            assert.equal(isSecurityTxtExpired(config), true);
+        });
     });
 
     // RFC 9116 §2.5: Validation.
@@ -194,6 +266,16 @@ describe('RFC 9116 security.txt', () => {
             };
             const issues = validateSecurityTxt(config);
             assert.ok(issues.some(i => i.field === 'contact' && i.severity === 'warning'));
+        });
+
+        it('accepts uppercase recommended Contact URI schemes without warnings', () => {
+            const config = {
+                contact: ['MAILTO:sec@example.com', 'HTTPS://example.com/security', 'TEL:+1-555-0100'],
+                expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+                canonical: ['https://example.com/.well-known/security.txt'],
+            };
+            const issues = validateSecurityTxt(config);
+            assert.equal(issues.some(i => i.field === 'contact' && i.severity === 'warning'), false);
         });
 
         // RFC 9116 §2.5.3: Expires more than 1 year out.

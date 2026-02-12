@@ -6,33 +6,10 @@
 
 import type { CookieAttributes, CookieHeaderOptions, SetCookie, StoredCookie } from './types.js';
 import { formatHTTPDate } from './datetime.js';
-import { assertHeaderToken, assertNoCtl, quoteString } from './header-utils.js';
+import { assertHeaderToken, assertNoCtl, quoteString, unquoteLenient } from './header-utils.js';
 import { createObjectMap } from './object-map.js';
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-
-function unquoteCookieValue(value: string): string {
-    const trimmed = value.trim();
-    if (!trimmed.startsWith('"') || !trimmed.endsWith('"') || trimmed.length < 2) {
-        return trimmed;
-    }
-
-    const inner = trimmed.slice(1, -1);
-    let result = '';
-    let i = 0;
-
-    while (i < inner.length) {
-        if (inner[i] === '\\' && i + 1 < inner.length) {
-            result += inner[i + 1];
-            i += 2;
-        } else {
-            result += inner[i];
-            i++;
-        }
-    }
-
-    return result;
-}
 
 function formatCookieValue(value: string): string {
     assertNoCtl(value, 'Cookie value');
@@ -40,6 +17,12 @@ function formatCookieValue(value: string): string {
         return value;
     }
     return quoteString(value);
+}
+
+function assertNoSetCookieAttributeDelimiter(value: string, context: string): void {
+    if (value.includes(';')) {
+        throw new Error(`${context} must not contain ';' delimiter`);
+    }
 }
 
 function isDelimiter(char: string): boolean {
@@ -183,7 +166,7 @@ export function parseCookie(header: string): Map<string, string> {
             continue;
         }
 
-        const value = unquoteCookieValue(trimmed.slice(eqIndex + 1));
+        const value = unquoteLenient(trimmed.slice(eqIndex + 1));
         if (!cookies.has(name)) {
             cookies.set(name, value);
         }
@@ -229,7 +212,7 @@ export function parseSetCookie(header: string): SetCookie | null {
         return null;
     }
 
-    const value = unquoteCookieValue(cookiePair.slice(eqIndex + 1).trim());
+    const value = unquoteLenient(cookiePair.slice(eqIndex + 1).trim());
     const attributes: CookieAttributes = {};
 
     for (const part of parts) {
@@ -320,10 +303,12 @@ export function formatSetCookie(value: SetCookie): string {
     }
     if (attributes.domain) {
         assertNoCtl(attributes.domain, 'Set-Cookie Domain attribute');
+        assertNoSetCookieAttributeDelimiter(attributes.domain, 'Set-Cookie Domain attribute');
         parts.push(`Domain=${attributes.domain}`);
     }
     if (attributes.path) {
         assertNoCtl(attributes.path, 'Set-Cookie Path attribute');
+        assertNoSetCookieAttributeDelimiter(attributes.path, 'Set-Cookie Path attribute');
         parts.push(`Path=${attributes.path}`);
     }
     if (attributes.secure) {
@@ -339,6 +324,7 @@ export function formatSetCookie(value: SetCookie): string {
                 parts.push(key);
             } else {
                 assertNoCtl(extValue, `Set-Cookie extension attribute "${key}" value`);
+                assertNoSetCookieAttributeDelimiter(extValue, `Set-Cookie extension attribute "${key}" value`);
                 parts.push(`${key}=${extValue}`);
             }
         }
@@ -409,8 +395,20 @@ export function parseCookieDate(value: string): Date | null {
         return null;
     }
 
-    const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-    if (Number.isNaN(date.getTime())) {
+    const utcMillis = Date.UTC(year, month - 1, day, hour, minute, second);
+    if (Number.isNaN(utcMillis)) {
+        return null;
+    }
+
+    const date = new Date(utcMillis);
+    if (
+        date.getUTCFullYear() !== year
+        || date.getUTCMonth() !== month - 1
+        || date.getUTCDate() !== day
+        || date.getUTCHours() !== hour
+        || date.getUTCMinutes() !== minute
+        || date.getUTCSeconds() !== second
+    ) {
         return null;
     }
 

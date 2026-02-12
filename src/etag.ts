@@ -5,11 +5,11 @@
  */
 
 import type { ETag } from './types.js';
+import { encodeUtf8, toUint8ArrayView } from './internal-unicode.js';
 
 export type { ETag } from './types.js';
 
 const MAX_ETAG_CHAR = 0xFF;
-const UTF8_ENCODER = new TextEncoder();
 
 // RFC 9110 §8.8.3: etagc character set validation.
 function isValidETagValue(value: string): boolean {
@@ -68,10 +68,10 @@ function dataToString(data: unknown): string {
 
 function asByteView(data: unknown): Uint8Array | null {
     if (data instanceof ArrayBuffer) {
-        return new Uint8Array(data);
+        return toUint8ArrayView(data);
     }
     if (ArrayBuffer.isView(data)) {
-        return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+        return toUint8ArrayView(data);
     }
     return null;
 }
@@ -80,7 +80,11 @@ function toBufferSource(data: ArrayBuffer | ArrayBufferView): BufferSource {
     if (data instanceof ArrayBuffer) {
         return data;
     }
-    return new Uint8Array(data.buffer as ArrayBuffer, data.byteOffset, data.byteLength) as BufferSource;
+
+    const bytes = toUint8ArrayView(data);
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    return copy;
 }
 
 /**
@@ -114,7 +118,7 @@ export async function generateETagAsync(
         dataBuffer = toBufferSource(data);
     } else {
         const str = dataToString(data);
-        dataBuffer = UTF8_ENCODER.encode(str);
+        dataBuffer = encodeUtf8(str).slice();
     }
 
     const hashBuffer = await globalThis.crypto.subtle.digest(algorithm, dataBuffer);
@@ -173,6 +177,9 @@ export function parseETag(etag: string): ETag | null {
  */
 // RFC 9110 §8.8.3: Entity-tag field formatting.
 export function formatETag(etag: ETag): string {
+    if (!isValidETagValue(etag.value)) {
+        throw new Error(`Invalid ETag value: ${etag.value}`);
+    }
     return etag.weak ? `W/"${etag.value}"` : `"${etag.value}"`;
 }
 
