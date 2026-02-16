@@ -1,6 +1,6 @@
 {
     "name": "@irvinebroque/http-rfc-utils",
-    "version": "0.3.1",
+    "version": "0.4.0",
     "description": "RFC-compliant HTTP utilities for APIs (9110, 8288, 7231, 9457, 9111)",
     "type": "module",
     "exports": {
