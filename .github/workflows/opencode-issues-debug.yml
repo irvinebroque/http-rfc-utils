@@ -75,13 +75,14 @@ jobs:
               printf '%s\n' "$issue_body"
               echo
               echo "research deeply"
-              echo "then write plan to markdown"
-              echo "then review your plan and improve it"
-              echo "then implement your plan"
-              echo "then review your implementation and improve it"
-              echo "when you are done commit and push and make a pull request"
-              echo "$delim"
-          } >> "$GITHUB_ENV"
+               echo "then write plan to markdown"
+               echo "then review your plan and improve it"
+               echo "then implement your plan"
+               echo "then review your implementation and improve it"
+               echo "when you are done commit and push and make a pull request"
+               echo "the pull request description must include: Closes #${{ github.event.inputs.issue_number }}"
+               echo "$delim"
+           } >> "$GITHUB_ENV"
 
       - name: Run OpenCode with debug logging
         env:
@@ -90,6 +91,35 @@ jobs:
           MODEL: ${{ github.event.inputs.model }}
           SHARE: 'false'
         run: opencode --print-logs --log-level DEBUG github run
+
+      - name: Ensure created PR links issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          issue_number='${{ github.event.inputs.issue_number }}'
+          current_branch="$(git branch --show-current)"
+          pr_number="$(gh pr list --repo '${{ github.repository }}' --head "$current_branch" --json number --jq 'if length > 0 then .[0].number else "" end')"
+
+          if [ -z "$pr_number" ]; then
+            echo "No PR found for branch $current_branch; skipping issue link update."
+            exit 0
+          fi
+
+          pr_body="$(gh pr view "$pr_number" --repo '${{ github.repository }}' --json body --jq .body)"
+          if [[ "$pr_body" == *"#${issue_number}"* ]]; then
+            echo "PR #$pr_number already references issue #$issue_number."
+            exit 0
+          fi
+
+          updated_body="$pr_body"
+          if [ -n "$updated_body" ]; then
+            updated_body="$updated_body\n\nCloses #${issue_number}"
+          else
+            updated_body="Closes #${issue_number}"
+          fi
+
+          gh pr edit "$pr_number" --repo '${{ github.repository }}' --body "$updated_body"
+          echo "Updated PR #$pr_number to include Closes #$issue_number."
 
       - name: Upload OpenCode logs
         if: always()
