@@ -17,8 +17,9 @@ All plans are plan-only artifacts (no code edits embedded in these docs). They a
 - `docs/plans/spec-implementation/w3c-csp3-subset.md`
 - `docs/plans/spec-implementation/w3c-referrer-policy.md`
 - `docs/plans/spec-implementation/w3c-reporting-api.md`
+- `docs/plans/spec-implementation/w3c-webmention.md`
 
 ## Notes
 
 - Existing plans that were already produced earlier (RFC 8297, RFC 6902, RFC 7396, RFC 8785, W3C CSP3 subset) are also persisted here.
-- Newly researched plans in this pass are: RFC 6585, RFC 7636, RFC 8414, W3C Referrer Policy, W3C Clear Site Data, and W3C Reporting API.
+- Newly researched plans in this pass are: RFC 6585, RFC 7636, RFC 8414, W3C Referrer Policy, W3C Clear Site Data, W3C Reporting API, and W3C Webmention.

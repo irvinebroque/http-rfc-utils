@@ -1,6 +1,6 @@
 /**
  * Discovery and metadata document types.
- * RFC 9309, RFC 9116, RFC 7033, RFC 6415, RFC 8414.
+ * RFC 9309, RFC 9116, RFC 7033, RFC 6415, RFC 8414, W3C Webmention.
  * @see https://www.rfc-editor.org/rfc/rfc9309.html
  */
 
@@ -51,6 +51,31 @@ export interface WebFingerResponse {
     aliases?: string[];
     properties?: Record<string, string | null>;
     links?: WebFingerLink[];
+}
+
+// Webmention (W3C Recommendation)
+export type WebmentionDiscoverySource = 'http-link' | 'html-link' | 'html-a';
+
+export interface WebmentionRequest {
+    source: string;
+    target: string;
+}
+
+export interface WebmentionValidationOptions {
+    supportedSchemes?: readonly string[];
+}
+
+export interface WebmentionEndpointDiscoveryInput {
+    target: string | URL;
+    linkHeader?: string | string[] | null;
+    html?: string | null;
+    contentType?: string | null;
+    allowLegacyRelationUri?: boolean;
+}
+
+export interface WebmentionEndpointDiscoveryResult {
+    endpoint: string;
+    source: WebmentionDiscoverySource;
 }
 
 // Host Metadata (RFC 6415)

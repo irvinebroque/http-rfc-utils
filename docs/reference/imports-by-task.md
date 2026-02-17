@@ -22,6 +22,7 @@ All symbols are exported from `@irvinebroque/http-rfc-utils`.
 | JSON canonicalization (RFC 8785) | `formatCanonicalJson`, `formatCanonicalJsonUtf8`, `validateCanonicalJson`, `parseCanonicalJson` |
 | Language and encoding negotiation | `parseAcceptLanguage`, `negotiateLanguage`, `parseAcceptEncoding`, `negotiateEncoding` |
 | Link header parsing and formatting | `parseLinkHeader`, `formatLinkHeader`, `buildLinkHeader` |
+| Webmention endpoint discovery and source/target request handling | `WEBMENTION_REL`, `WEBMENTION_CONTENT_TYPE`, `discoverWebmentionEndpoint`, `parseWebmentionRequest`, `validateWebmentionRequest`, `formatWebmentionRequest`, `isWebmentionSuccessStatus` |
 | Early Hints (`103`) Link batching and preload extraction | `EARLY_HINTS_STATUS`, `parseEarlyHintsLinks`, `formatEarlyHintsLinks`, `validateEarlyHintsLinks`, `extractPreloadLinks`, `mergeEarlyHintsLinks` |
 | Link-Template parsing, formatting, and expansion | `parseLinkTemplateHeader`, `formatLinkTemplateHeader`, `expandLinkTemplate`, `resolveTemplateVariableUri` |
 | Linkset and API catalog documents | `parseLinksetJson`, `formatLinksetJson`, `createApiCatalog`, `parseApiCatalog` |
