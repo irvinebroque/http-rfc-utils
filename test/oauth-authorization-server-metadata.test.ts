@@ -69,6 +69,7 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
             token_endpoint: 'https://server.example.com/token',
             response_types_supported: ['code', 'code token'],
             scopes_supported: ['openid', 'profile'],
+            protected_resources: ['https://resource.example.com'],
             extension_claim: {
                 nested: true,
             },
@@ -249,6 +250,28 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
                     token_endpoint: 'https://as.example.com/token',
                     response_types_supported: ['code'],
                     jwks_uri: 'http://as.example.com/jwks.json',
+                }),
+            );
+        });
+
+        it('validates protected resource listings when present', () => {
+            assert.doesNotThrow(() =>
+                validateAuthorizationServerMetadata({
+                    issuer: 'https://as.example.com',
+                    authorization_endpoint: 'https://as.example.com/authorize',
+                    token_endpoint: 'https://as.example.com/token',
+                    response_types_supported: ['code'],
+                    protected_resources: ['https://resource.example.com'],
+                }),
+            );
+
+            assert.throws(() =>
+                validateAuthorizationServerMetadata({
+                    issuer: 'https://as.example.com',
+                    authorization_endpoint: 'https://as.example.com/authorize',
+                    token_endpoint: 'https://as.example.com/token',
+                    response_types_supported: ['code'],
+                    protected_resources: [],
                 }),
             );
         });

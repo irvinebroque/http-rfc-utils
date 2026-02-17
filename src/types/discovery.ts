@@ -1,6 +1,6 @@
 /**
  * Discovery and metadata document types.
- * RFC 9309, RFC 9116, RFC 7033, RFC 6415, RFC 8414, W3C Webmention.
+ * RFC 9309, RFC 9116, RFC 7033, RFC 6415, RFC 8414, RFC 9728, W3C Webmention.
  * @see https://www.rfc-editor.org/rfc/rfc9309.html
  */
 
@@ -117,6 +117,7 @@ export interface AuthorizationServerMetadata {
     introspection_endpoint_auth_signing_alg_values_supported?: string[];
     code_challenge_methods_supported?: string[];
     signed_metadata?: string;
+    protected_resources?: string[];
 }
 
 export interface AuthorizationServerMetadataValidationOptions {
@@ -127,4 +128,34 @@ export interface AuthorizationServerMetadataParseOptions extends AuthorizationSe
 }
 
 export interface AuthorizationServerMetadataFormatOptions extends AuthorizationServerMetadataValidationOptions {
+}
+
+// OAuth 2.0 Protected Resource Metadata (RFC 9728)
+export interface ProtectedResourceMetadata {
+    [member: string]: unknown;
+    resource: string;
+    authorization_servers?: string[];
+    jwks_uri?: string;
+    scopes_supported?: string[];
+    bearer_methods_supported?: string[];
+    resource_signing_alg_values_supported?: string[];
+    resource_name?: string;
+    resource_documentation?: string;
+    resource_policy_uri?: string;
+    resource_tos_uri?: string;
+    tls_client_certificate_bound_access_tokens?: boolean;
+    authorization_details_types_supported?: string[];
+    dpop_signing_alg_values_supported?: string[];
+    dpop_bound_access_tokens_required?: boolean;
+    signed_metadata?: string;
+}
+
+export interface ProtectedResourceMetadataValidationOptions {
+    expectedResource?: string;
+}
+
+export interface ProtectedResourceMetadataParseOptions extends ProtectedResourceMetadataValidationOptions {
+}
+
+export interface ProtectedResourceMetadataFormatOptions extends ProtectedResourceMetadataValidationOptions {
 }

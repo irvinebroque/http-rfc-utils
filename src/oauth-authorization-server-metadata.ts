@@ -55,6 +55,7 @@ const KNOWN_ARRAY_FIELDS = [
     'introspection_endpoint_auth_methods_supported',
     'introspection_endpoint_auth_signing_alg_values_supported',
     'code_challenge_methods_supported',
+    'protected_resources',
 ] as const;
 
 const URL_FIELDS = [
@@ -177,6 +178,7 @@ export function validateAuthorizationServerMetadata(
         'introspection_endpoint_auth_signing_alg_values_supported',
     );
     validateStringArrayClaim(metadata.code_challenge_methods_supported, 'code_challenge_methods_supported');
+    validateStringArrayClaim(metadata.protected_resources, 'protected_resources');
 
     if (metadata.signed_metadata !== undefined && typeof metadata.signed_metadata !== 'string') {
         throw new Error('Metadata field "signed_metadata" must be a string JWT value when present');
