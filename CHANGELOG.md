@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- [#18](https://github.com/irvinebroque/http-rfc-utils/pull/18) [`e41b1d4`](https://github.com/irvinebroque/http-rfc-utils/commit/e41b1d4c2ebe74d0547c4eb8763664f65b763ae7) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Add W3C Webmention utilities for endpoint discovery and form payload handling. This introduces `discoverWebmentionEndpoint`, `parseWebmentionRequest`, `validateWebmentionRequest`, `formatWebmentionRequest`, `isWebmentionSuccessStatus`, plus `WEBMENTION_REL` and `WEBMENTION_CONTENT_TYPE`, with RFC/W3C-mapped tests and documentation updates.
+
 ## 0.4.0
 
 ### Minor Changes
