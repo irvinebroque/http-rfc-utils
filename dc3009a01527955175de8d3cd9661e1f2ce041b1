@@ -1,0 +1,27 @@
+.github/workflows/opencode-issues.yml
+  fade3346d39601f5 26-46,50-51,67
+.github/workflows/opencode-issues-debug.yml
+  fade3346d39601f5 36-37,39-54
+.changeset/early-oranges-grab.md
+  fade3346d39601f5 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.3",
+  "base_commit_sha": "dc3009a01527955175de8d3cd9661e1f2ce041b1",
+  "prompts": {
+    "fade3346d39601f5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_396aa3585ffeb30SOW02p3fHta",
+        "model": "unknown"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 47,
+      "total_deletions": 8,
+      "accepted_lines": 47,
+      "overriden_lines": 0
+    }
+  }
+}
