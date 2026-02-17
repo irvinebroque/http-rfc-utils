@@ -1131,6 +1131,22 @@ export {
 } from './oauth-authorization-server-metadata.js';
 
 // =============================================================================
+// RFC 9207 — OAuth 2.0 Authorization Server Issuer Identification
+// =============================================================================
+export type {
+    AuthorizationResponseIssuerParams,
+    AuthorizationResponseIssuerParseOptions,
+    AuthorizationResponseIssuerValidationOptions,
+    AuthorizationResponseIssuerFormatOptions,
+} from './types.js';
+
+export {
+    parseAuthorizationResponseIssuerParam,
+    formatAuthorizationResponseIssuerParam,
+    validateAuthorizationResponseIssuer,
+} from './oauth-authorization-server-issuer.js';
+
+// =============================================================================
 // RFC 8615 — Well-Known URIs
 // =============================================================================
 export {

@@ -129,6 +129,22 @@ export interface PkceTokenRequestParams {
     codeVerifier: string;
 }
 
+// OAuth 2.0 Authorization Server Issuer Identification (RFC 9207)
+export interface AuthorizationResponseIssuerParams {
+    issuer?: string;
+}
+
+export interface AuthorizationResponseIssuerValidationOptions {
+    expectedIssuer?: string;
+}
+
+export interface AuthorizationResponseIssuerParseOptions extends AuthorizationResponseIssuerValidationOptions {
+    requireIssuer?: boolean;
+}
+
+export interface AuthorizationResponseIssuerFormatOptions extends AuthorizationResponseIssuerValidationOptions {
+}
+
 // WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)
 export type WebauthnAuthenticatorAttachment = 'platform' | 'cross-platform';
 

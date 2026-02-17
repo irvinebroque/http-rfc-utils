@@ -57,6 +57,10 @@ const KNOWN_ARRAY_FIELDS = [
     'code_challenge_methods_supported',
 ] as const;
 
+const KNOWN_BOOLEAN_FIELDS = [
+    'authorization_response_iss_parameter_supported',
+] as const;
+
 const URL_FIELDS = [
     'authorization_endpoint',
     'token_endpoint',
@@ -182,6 +186,13 @@ export function validateAuthorizationServerMetadata(
         throw new Error('Metadata field "signed_metadata" must be a string JWT value when present');
     }
 
+    if (
+        metadata.authorization_response_iss_parameter_supported !== undefined
+        && typeof metadata.authorization_response_iss_parameter_supported !== 'boolean'
+    ) {
+        throw new Error('Metadata field "authorization_response_iss_parameter_supported" must be a boolean');
+    }
+
     const effectiveGrantTypes = metadata.grant_types_supported ?? DEFAULT_GRANT_TYPES;
 
     if (requiresAuthorizationEndpoint(effectiveGrantTypes) && !metadata.authorization_endpoint) {
@@ -240,7 +251,14 @@ export function formatAuthorizationServerMetadata(
         }
     }
 
-    const knownFieldSet = new Set<string>([...KNOWN_STRING_FIELDS, ...KNOWN_ARRAY_FIELDS]);
+    for (const field of KNOWN_BOOLEAN_FIELDS) {
+        const value = metadata[field];
+        if (value !== undefined) {
+            output[field] = value;
+        }
+    }
+
+    const knownFieldSet = new Set<string>([...KNOWN_STRING_FIELDS, ...KNOWN_ARRAY_FIELDS, ...KNOWN_BOOLEAN_FIELDS]);
     const extensionKeys = Object.keys(metadata)
         .filter((key) => !knownFieldSet.has(key))
         .sort();
@@ -332,6 +350,13 @@ function hasValidKnownMemberShapes(value: Record<string, unknown>): boolean {
         }
 
         if (fieldValue.some((item) => typeof item !== 'string')) {
+            return false;
+        }
+    }
+
+    for (const field of KNOWN_BOOLEAN_FIELDS) {
+        const fieldValue = value[field];
+        if (fieldValue !== undefined && typeof fieldValue !== 'boolean') {
             return false;
         }
     }

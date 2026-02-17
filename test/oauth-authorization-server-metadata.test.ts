@@ -69,6 +69,7 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
             token_endpoint: 'https://server.example.com/token',
             response_types_supported: ['code', 'code token'],
             scopes_supported: ['openid', 'profile'],
+            authorization_response_iss_parameter_supported: true,
             extension_claim: {
                 nested: true,
             },
@@ -79,6 +80,7 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
             assert.notEqual(parsed, null);
             assert.equal(parsed?.issuer, 'https://server.example.com');
             assert.deepEqual(parsed?.response_types_supported, ['code', 'code token']);
+            assert.equal(parsed?.authorization_response_iss_parameter_supported, true);
             assert.deepEqual(parsed?.extension_claim, { nested: true });
         });
 
@@ -119,6 +121,16 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
                     issuer: 'https://server.example.com',
                     response_types_supported: ['code'],
                     extension: undefined,
+                }),
+                null,
+            );
+            assert.equal(
+                parseAuthorizationServerMetadataObject({
+                    issuer: 'https://server.example.com',
+                    authorization_endpoint: 'https://server.example.com/authorize',
+                    token_endpoint: 'https://server.example.com/token',
+                    response_types_supported: ['code'],
+                    authorization_response_iss_parameter_supported: 'true',
                 }),
                 null,
             );
@@ -251,6 +263,16 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
                     jwks_uri: 'http://as.example.com/jwks.json',
                 }),
             );
+
+            assert.throws(() =>
+                validateAuthorizationServerMetadata({
+                    issuer: 'https://as.example.com',
+                    authorization_endpoint: 'https://as.example.com/authorize',
+                    token_endpoint: 'https://as.example.com/token',
+                    response_types_supported: ['code'],
+                    authorization_response_iss_parameter_supported: 'true',
+                }),
+            );
         });
 
         // RFC 8414 Section 2: JWT auth methods require corresponding signing alg metadata.
@@ -308,6 +330,7 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
                 authorization_endpoint: 'https://as.example.com/authorize',
                 token_endpoint: 'https://as.example.com/token',
                 response_types_supported: ['code'],
+                authorization_response_iss_parameter_supported: true,
                 extension_claim: 'retained',
             };
 
@@ -315,6 +338,7 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
             const parsed = JSON.parse(formatted) as Record<string, unknown>;
 
             assert.equal(parsed.issuer, 'https://as.example.com');
+            assert.equal(parsed.authorization_response_iss_parameter_supported, true);
             assert.equal(parsed.extension_claim, 'retained');
             assert.deepEqual(parsed.response_types_supported, ['code']);
         });

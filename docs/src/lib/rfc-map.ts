@@ -288,6 +288,17 @@ export const RFC_MAP: RfcMapEntry[] = [
         notes: 'Authorization server metadata parse/validate/format helpers with RFC 8414 well-known URL derivation, exact issuer comparison options, and signed-claims precedence merge support without JOSE verification.',
     },
     {
+        module: 'src/oauth-authorization-server-issuer.ts',
+        rfc: 'RFC 9207',
+        sections: ['2', '2.4', '3'],
+        exports: [
+            'parseAuthorizationResponseIssuerParam',
+            'formatAuthorizationResponseIssuerParam',
+            'validateAuthorizationResponseIssuer',
+        ],
+        notes: 'Authorization response issuer (`iss`) parsing, formatting, and validation helpers with https-only issuer enforcement and exact string comparison against expected issuer identifiers.',
+    },
+    {
         module: 'src/webmention.ts',
         rfc: 'W3C Webmention',
         sections: ['3.1.2', '3.1.3', '3.2.1', '3.2.3', '6'],

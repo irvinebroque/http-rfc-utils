@@ -117,6 +117,7 @@ export interface AuthorizationServerMetadata {
     introspection_endpoint_auth_signing_alg_values_supported?: string[];
     code_challenge_methods_supported?: string[];
     signed_metadata?: string;
+    authorization_response_iss_parameter_supported?: boolean;
 }
 
 export interface AuthorizationServerMetadataValidationOptions {
