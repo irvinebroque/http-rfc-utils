@@ -23,14 +23,32 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run opencode
-        uses: anomalyco/opencode/github@latest
+      - name: Get OpenCode version
+        id: version
+        run: |
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+          echo "version=${VERSION:-latest}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache OpenCode CLI
+        id: cache-opencode
+        uses: actions/cache@v4
+        with:
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+
+      - name: Install OpenCode CLI
+        if: steps.cache-opencode.outputs.cache-hit != 'true'
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add OpenCode to PATH
+        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Run OpenCode
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GH_TOKEN: ${{ github.token }}
-        with:
-          model: openai/gpt-5.2-codex
-          prompt: |
+          MODEL: openai/gpt-5.2-codex
+          PROMPT: |
             You are working on a newly opened GitHub issue and should treat the issue itself as the task prompt.
 
             Repository: ${{ github.repository }}
@@ -46,3 +64,4 @@ jobs:
             then implement your plan
             then review your implementation and improve it
             when you are done commit and push and make a pull request
+        run: opencode github run
