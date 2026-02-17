@@ -1,0 +1,41 @@
+.changeset/curvy-dancers-work.md
+  7740aaa35774eea2 1-5
+docs/reference/rfc-map.md
+  7740aaa35774eea2 43
+docs/plans/rfc-9331-implementation-plan-2026-02-16.md
+  7740aaa35774eea2 1-73
+src/types/header.ts
+  7740aaa35774eea2 4,118-128
+src/l4s.ts
+  7740aaa35774eea2 1-199
+test/l4s.test.ts
+  7740aaa35774eea2 1-174
+docs/reference/imports-by-task.md
+  7740aaa35774eea2 46
+docs/src/lib/rfc-map.ts
+  7740aaa35774eea2 47-61
+README.md
+  7740aaa35774eea2 94,108
+src/index.ts
+  7740aaa35774eea2 203-206,645-657
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.3",
+  "base_commit_sha": "365fdb854fb0c9714c9c710ac1157ebe5b7cdfbe",
+  "prompts": {
+    "7740aaa35774eea2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_396b4d04bffeW06rlEJ3ptcAlH",
+        "model": "unknown"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 506,
+      "total_deletions": 6,
+      "accepted_lines": 502,
+      "overriden_lines": 0
+    }
+  }
+}
