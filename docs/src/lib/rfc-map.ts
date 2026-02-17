@@ -237,6 +237,19 @@ export const RFC_MAP: RfcMapEntry[] = [
         notes: 'PKCE verifier/challenge generation, derivation, and verification for plain/S256 with strict ABNF validators and tolerant authorization/token request parameter parsers; OAuth flow orchestration and extension methods remain out of scope.',
     },
     {
+        module: 'src/auth/resource-indicator.ts',
+        rfc: 'RFC 8707',
+        sections: ['2', '2.1', '2.2'],
+        exports: [
+            'validateResourceIndicatorUri',
+            'parseResourceIndicatorAuthorizationRequestParams',
+            'formatResourceIndicatorAuthorizationRequestParams',
+            'parseResourceIndicatorTokenRequestParams',
+            'formatResourceIndicatorTokenRequestParams',
+        ],
+        notes: 'Resource indicator query/body parameter helpers for OAuth authorization/token requests with strict absolute-URI validation and tolerant multi-resource parsing; JWT request object representation and OAuth server enforcement are out of scope.',
+    },
+    {
         module: 'src/auth/webauthn.ts',
         rfc: 'W3C WebAuthn Level 3',
         sections: [

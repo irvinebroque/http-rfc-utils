@@ -1,6 +1,6 @@
 /**
  * Authentication-related types.
- * RFC 7617, RFC 6750, RFC 7616, RFC 7636, W3C WebAuthn Level 3.
+ * RFC 7617, RFC 6750, RFC 7616, RFC 7636, RFC 8707, W3C WebAuthn Level 3.
  * @see https://www.rfc-editor.org/rfc/rfc7617.html
  */
 
@@ -127,6 +127,19 @@ export interface PkceAuthorizationRequestInput {
 
 export interface PkceTokenRequestParams {
     codeVerifier: string;
+}
+
+// OAuth Resource Indicators (RFC 8707)
+export interface ResourceIndicatorRequestParams {
+    resources: string[];
+}
+
+export interface ResourceIndicatorRequestInput {
+    resources: readonly string[];
+}
+
+export interface ResourceIndicatorValidationOptions {
+    allowQuery?: boolean;
 }
 
 // WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)
