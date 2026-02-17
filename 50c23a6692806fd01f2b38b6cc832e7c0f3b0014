@@ -1,0 +1,25 @@
+.github/workflows/ci.yml
+  eca85926486f418d 8
+.changeset/neat-peaches-rush.md
+  eca85926486f418d 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.3",
+  "base_commit_sha": "50c23a6692806fd01f2b38b6cc832e7c0f3b0014",
+  "prompts": {
+    "eca85926486f418d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_3965d6aa1ffeEbzotDNuHzBhJq",
+        "model": "unknown"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 0,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    }
+  }
+}
