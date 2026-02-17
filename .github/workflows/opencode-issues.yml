@@ -1,0 +1,48 @@
+name: opencode-issues
+
+on:
+  issues:
+    types: [opened]
+
+concurrency:
+  group: opencode-issue-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  opencode:
+    if: github.event.issue.user.login == 'irvinebroque'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run opencode
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          model: openai/gpt-5.3-codex
+          token: ${{ github.token }}
+          prompt: |
+            You are working on a newly opened GitHub issue and should treat the issue itself as the task prompt.
+
+            Repository: ${{ github.repository }}
+            Issue number: #${{ github.event.issue.number }}
+            Issue URL: ${{ github.event.issue.html_url }}
+            Issue title: ${{ github.event.issue.title }}
+            Issue body:
+            ${{ github.event.issue.body || '(no issue body provided)' }}
+
+            research deeply
+            then write plan to markdown
+            then review your plan and improve it
+            then implement your plan
+            then review your implementation and improve it
+            when you are done commit and push and make a pull request
