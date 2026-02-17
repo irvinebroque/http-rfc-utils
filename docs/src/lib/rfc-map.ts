@@ -237,6 +237,18 @@ export const RFC_MAP: RfcMapEntry[] = [
         notes: 'PKCE verifier/challenge generation, derivation, and verification for plain/S256 with strict ABNF validators and tolerant authorization/token request parameter parsers; OAuth flow orchestration and extension methods remain out of scope.',
     },
     {
+        module: 'src/auth/authorization-details.ts',
+        rfc: 'RFC 9396',
+        sections: ['2', '2.1', '2.2', '5'],
+        exports: [
+            'parseAuthorizationDetails',
+            'parseAuthorizationDetailsObject',
+            'formatAuthorizationDetails',
+            'validateAuthorizationDetails',
+        ],
+        notes: 'Deterministic parsing/formatting/validation helpers for authorization_details arrays, including common-field typing checks, JSON-value enforcement, and optional per-type registry validation; type-specific schema enforcement remains out of scope.',
+    },
+    {
         module: 'src/auth/webauthn.ts',
         rfc: 'W3C WebAuthn Level 3',
         sections: [

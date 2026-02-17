@@ -1,7 +1,8 @@
 /**
  * Authentication-related types.
- * RFC 7617, RFC 6750, RFC 7616, RFC 7636, W3C WebAuthn Level 3.
+ * RFC 7617, RFC 6750, RFC 7616, RFC 7636, RFC 9396, W3C WebAuthn Level 3.
  * @see https://www.rfc-editor.org/rfc/rfc7617.html
+ * @see https://www.rfc-editor.org/rfc/rfc9396.html
  */
 
 // RFC 7235 shared auth surface
@@ -127,6 +128,41 @@ export interface PkceAuthorizationRequestInput {
 
 export interface PkceTokenRequestParams {
     codeVerifier: string;
+}
+
+// OAuth 2.0 Rich Authorization Requests (RFC 9396)
+export type AuthorizationDetailsJsonPrimitive = string | number | boolean | null;
+
+export type AuthorizationDetailsJsonValue =
+    | AuthorizationDetailsJsonPrimitive
+    | AuthorizationDetailsJsonObject
+    | AuthorizationDetailsJsonValue[];
+
+export interface AuthorizationDetailsJsonObject {
+    [key: string]: AuthorizationDetailsJsonValue;
+}
+
+export interface AuthorizationDetailsEntry {
+    type: string;
+    locations?: string[];
+    actions?: string[];
+    datatypes?: string[];
+    identifier?: string;
+    privileges?: string[];
+    [key: string]: AuthorizationDetailsJsonValue | undefined;
+}
+
+export type AuthorizationDetails = AuthorizationDetailsEntry[];
+
+export interface AuthorizationDetailsTypeDefinition {
+    requiredFields?: readonly string[];
+    allowedFields?: readonly string[];
+    allowUnknownFields?: boolean;
+}
+
+export interface AuthorizationDetailsValidationOptions {
+    allowedTypes?: readonly string[];
+    typeDefinitions?: Record<string, AuthorizationDetailsTypeDefinition>;
 }
 
 // WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)
