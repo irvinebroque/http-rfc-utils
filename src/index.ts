@@ -218,6 +218,10 @@ export type {
     PkceAuthorizationRequestParams,
     PkceAuthorizationRequestInput,
     PkceTokenRequestParams,
+    PushedAuthorizationRequest,
+    PushedAuthorizationRequestValidationOptions,
+    PushedAuthorizationResponse,
+    PushedAuthorizationErrorResponse,
     WebauthnAuthenticatorAttachment,
     WebauthnResidentKeyRequirement,
     WebauthnUserVerificationRequirement,
@@ -1129,6 +1133,23 @@ export {
     buildAuthorizationServerMetadataUrl,
     mergeSignedAuthorizationServerMetadata,
 } from './oauth-authorization-server-metadata.js';
+
+// =============================================================================
+// RFC 9126 — OAuth 2.0 Pushed Authorization Requests (PAR)
+// =============================================================================
+export {
+    parsePushedAuthorizationRequest,
+    validatePushedAuthorizationRequest,
+    formatPushedAuthorizationRequest,
+    parsePushedAuthorizationResponse,
+    parsePushedAuthorizationResponseObject,
+    validatePushedAuthorizationResponse,
+    formatPushedAuthorizationResponse,
+    parsePushedAuthorizationErrorResponse,
+    parsePushedAuthorizationErrorResponseObject,
+    validatePushedAuthorizationErrorResponse,
+    formatPushedAuthorizationErrorResponse,
+} from './oauth-par.js';
 
 // =============================================================================
 // RFC 8615 — Well-Known URIs

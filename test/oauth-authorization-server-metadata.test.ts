@@ -69,6 +69,8 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
             token_endpoint: 'https://server.example.com/token',
             response_types_supported: ['code', 'code token'],
             scopes_supported: ['openid', 'profile'],
+            pushed_authorization_request_endpoint: 'https://server.example.com/par',
+            require_pushed_authorization_requests: true,
             extension_claim: {
                 nested: true,
             },
@@ -86,6 +88,8 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
             const parsed = parseAuthorizationServerMetadataObject(validMetadata);
             assert.notEqual(parsed, null);
             assert.equal(parsed?.token_endpoint, 'https://server.example.com/token');
+            assert.equal(parsed?.pushed_authorization_request_endpoint, 'https://server.example.com/par');
+            assert.equal(parsed?.require_pushed_authorization_requests, true);
         });
 
         // RFC 8414 Section 3.3 and Section 4: expected issuer comparison is exact.
@@ -296,6 +300,40 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
                 validateAuthorizationServerMetadata(metadata, {
                     expectedIssuer: 'https://as.example.com/',
                 }),
+            );
+        });
+
+        // RFC 9126 Section 5: PAR metadata fields.
+        it('validates PAR metadata field constraints', () => {
+            assert.doesNotThrow(() =>
+                validateAuthorizationServerMetadata({
+                    issuer: 'https://as.example.com',
+                    authorization_endpoint: 'https://as.example.com/authorize',
+                    token_endpoint: 'https://as.example.com/token',
+                    response_types_supported: ['code'],
+                    pushed_authorization_request_endpoint: 'https://as.example.com/par',
+                    require_pushed_authorization_requests: true,
+                }),
+            );
+
+            assert.throws(() =>
+                validateAuthorizationServerMetadata({
+                    issuer: 'https://as.example.com',
+                    authorization_endpoint: 'https://as.example.com/authorize',
+                    token_endpoint: 'https://as.example.com/token',
+                    response_types_supported: ['code'],
+                    pushed_authorization_request_endpoint: 'http://as.example.com/par',
+                }),
+            );
+
+            assert.throws(() =>
+                validateAuthorizationServerMetadata({
+                    issuer: 'https://as.example.com',
+                    authorization_endpoint: 'https://as.example.com/authorize',
+                    token_endpoint: 'https://as.example.com/token',
+                    response_types_supported: ['code'],
+                    require_pushed_authorization_requests: 'true',
+                } as unknown as Record<string, unknown>),
             );
         });
     });

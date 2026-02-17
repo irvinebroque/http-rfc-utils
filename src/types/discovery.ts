@@ -91,7 +91,7 @@ export interface HostMeta {
     properties?: Record<string, string | null>;
 }
 
-// OAuth 2.0 Authorization Server Metadata (RFC 8414)
+// OAuth 2.0 Authorization Server Metadata (RFC 8414) + PAR (RFC 9126)
 export interface AuthorizationServerMetadata {
     [member: string]: unknown;
     issuer: string;
@@ -117,6 +117,8 @@ export interface AuthorizationServerMetadata {
     introspection_endpoint_auth_signing_alg_values_supported?: string[];
     code_challenge_methods_supported?: string[];
     signed_metadata?: string;
+    pushed_authorization_request_endpoint?: string;
+    require_pushed_authorization_requests?: boolean;
 }
 
 export interface AuthorizationServerMetadataValidationOptions {

@@ -129,6 +129,26 @@ export interface PkceTokenRequestParams {
     codeVerifier: string;
 }
 
+// OAuth 2.0 Pushed Authorization Requests (RFC 9126)
+export interface PushedAuthorizationRequest {
+    params: Record<string, string>;
+}
+
+export interface PushedAuthorizationRequestValidationOptions {
+    requireClientId?: boolean;
+}
+
+export interface PushedAuthorizationResponse {
+    requestUri: string;
+    expiresIn: number;
+}
+
+export interface PushedAuthorizationErrorResponse {
+    error: string;
+    errorDescription?: string;
+    errorUri?: string;
+}
+
 // WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)
 export type WebauthnAuthenticatorAttachment = 'platform' | 'cross-platform';
 

@@ -40,6 +40,7 @@ const KNOWN_STRING_FIELDS = [
     'revocation_endpoint',
     'introspection_endpoint',
     'signed_metadata',
+    'pushed_authorization_request_endpoint',
 ] as const;
 
 const KNOWN_ARRAY_FIELDS = [
@@ -57,6 +58,10 @@ const KNOWN_ARRAY_FIELDS = [
     'code_challenge_methods_supported',
 ] as const;
 
+const KNOWN_BOOLEAN_FIELDS = [
+    'require_pushed_authorization_requests',
+] as const;
+
 const URL_FIELDS = [
     'authorization_endpoint',
     'token_endpoint',
@@ -67,6 +72,7 @@ const URL_FIELDS = [
     'op_tos_uri',
     'revocation_endpoint',
     'introspection_endpoint',
+    'pushed_authorization_request_endpoint',
 ] as const;
 
 const AUTH_METHODS_REQUIRING_SIGNED_ALGS = new Set(['private_key_jwt', 'client_secret_jwt']);
@@ -150,6 +156,13 @@ export function validateAuthorizationServerMetadata(
         validateHttpsUrl('jwks_uri', metadata.jwks_uri);
     }
 
+    if (metadata.pushed_authorization_request_endpoint !== undefined) {
+        validateHttpsUrl(
+            'pushed_authorization_request_endpoint',
+            metadata.pushed_authorization_request_endpoint,
+        );
+    }
+
     validateStringArrayClaim(metadata.response_types_supported, 'response_types_supported', true);
     validateStringArrayClaim(metadata.scopes_supported, 'scopes_supported');
     validateStringArrayClaim(metadata.response_modes_supported, 'response_modes_supported');
@@ -180,6 +193,13 @@ export function validateAuthorizationServerMetadata(
 
     if (metadata.signed_metadata !== undefined && typeof metadata.signed_metadata !== 'string') {
         throw new Error('Metadata field "signed_metadata" must be a string JWT value when present');
+    }
+
+    if (
+        metadata.require_pushed_authorization_requests !== undefined
+        && typeof metadata.require_pushed_authorization_requests !== 'boolean'
+    ) {
+        throw new Error('Metadata field "require_pushed_authorization_requests" must be a boolean');
     }
 
     const effectiveGrantTypes = metadata.grant_types_supported ?? DEFAULT_GRANT_TYPES;
@@ -240,7 +260,18 @@ export function formatAuthorizationServerMetadata(
         }
     }
 
-    const knownFieldSet = new Set<string>([...KNOWN_STRING_FIELDS, ...KNOWN_ARRAY_FIELDS]);
+    for (const field of KNOWN_BOOLEAN_FIELDS) {
+        const value = metadata[field];
+        if (value !== undefined) {
+            output[field] = cloneJsonValue(value as JsonValue);
+        }
+    }
+
+    const knownFieldSet = new Set<string>([
+        ...KNOWN_STRING_FIELDS,
+        ...KNOWN_ARRAY_FIELDS,
+        ...KNOWN_BOOLEAN_FIELDS,
+    ]);
     const extensionKeys = Object.keys(metadata)
         .filter((key) => !knownFieldSet.has(key))
         .sort();
@@ -332,6 +363,13 @@ function hasValidKnownMemberShapes(value: Record<string, unknown>): boolean {
         }
 
         if (fieldValue.some((item) => typeof item !== 'string')) {
+            return false;
+        }
+    }
+
+    for (const field of KNOWN_BOOLEAN_FIELDS) {
+        const fieldValue = value[field];
+        if (fieldValue !== undefined && typeof fieldValue !== 'boolean') {
             return false;
         }
     }
