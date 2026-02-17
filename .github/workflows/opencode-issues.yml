@@ -64,4 +64,5 @@ jobs:
             then implement your plan
             then review your implementation and improve it
             when you are done commit and push and make a pull request
+            the pull request description must include: Closes #${{ github.event.issue.number }}
         run: opencode github run
