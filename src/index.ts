@@ -200,6 +200,10 @@ export type {
     ProxyStatusEntry,
     PriorityField,
     RequiredPriority,
+    EcnCodepoint,
+    EcnCodepointBits,
+    L4sTreatment,
+    L4sClassificationOptions,
     AuthParam,
     AuthChallenge,
     AuthCredentials,
@@ -637,6 +641,20 @@ export {
     applyPriorityDefaults,
     mergePriority,
 } from './priority.js';
+
+// =============================================================================
+// L4S ECN Protocol (RFC 9331)
+// =============================================================================
+export {
+    parseEcnCodepoint,
+    formatEcnCodepoint,
+    formatEcnCodepointBits,
+    isL4sIdentifier,
+    isL4sSenderCodepoint,
+    classifyL4sTreatment,
+    isL4sEcnTransitionAllowed,
+    disableL4sCodepoint,
+} from './l4s.js';
 
 // =============================================================================
 // Conditional Requests (RFC 9110)

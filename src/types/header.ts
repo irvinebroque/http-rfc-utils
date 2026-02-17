@@ -1,7 +1,7 @@
 /**
  * Shared header-focused type contracts.
  * RFC 7239, RFC 6266, RFC 8187, RFC 7838, RFC 8470, RFC 8942, RFC 9218,
- * RFC 9842.
+ * RFC 9331, RFC 9842.
  * @see https://github.com/irvinebroque/http-rfc-utils/blob/main/docs/reference/rfc-map.md
  */
 
@@ -114,4 +114,16 @@ export interface PriorityField {
 export interface RequiredPriority {
     u: number;
     i: boolean;
+}
+
+// L4S ECN protocol (RFC 9331 + RFC 3168)
+export type EcnCodepoint = 'not-ect' | 'ect(0)' | 'ect(1)' | 'ce';
+
+export type EcnCodepointBits = 0 | 1 | 2 | 3;
+
+export type L4sTreatment = 'classic' | 'l4s';
+
+export interface L4sClassificationOptions {
+    override?: L4sTreatment;
+    classifyCeAsClassicIfFlowEct0Only?: boolean;
 }

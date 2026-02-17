@@ -44,6 +44,22 @@ export const RFC_MAP: RfcMapEntry[] = [
         notes: 'Priority dictionary handling with strict SF parse, permissive member semantics, defaults, and client/server merge helpers.',
     },
     {
+        module: 'src/l4s.ts',
+        rfc: 'RFC 9331',
+        sections: ['2', '4.1', '5.1', '5.3', '8'],
+        exports: [
+            'parseEcnCodepoint',
+            'formatEcnCodepoint',
+            'formatEcnCodepointBits',
+            'isL4sIdentifier',
+            'isL4sSenderCodepoint',
+            'classifyL4sTreatment',
+            'isL4sEcnTransitionAllowed',
+            'disableL4sCodepoint',
+        ],
+        notes: 'L4S ECN codepoint parse/format helpers with sender-side ECT(1) checks, RFC 9331 default CE classification, transport-aware CE exception support, L4S-specific re-marking constraint checks, and ECT(1)-to-Not-ECT disable fallback behavior.',
+    },
+    {
         module: 'src/compression-dictionary.ts',
         rfc: 'RFC 9842',
         sections: ['2', '2.1', '2.2', '2.3', '6.1', '6.2'],
