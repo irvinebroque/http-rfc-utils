@@ -1131,6 +1131,26 @@ export {
 } from './oauth-authorization-server-metadata.js';
 
 // =============================================================================
+// RFC 9728 — OAuth 2.0 Protected Resource Metadata
+// =============================================================================
+export type {
+    ProtectedResourceMetadata,
+    ProtectedResourceMetadataParseOptions,
+    ProtectedResourceMetadataValidationOptions,
+    ProtectedResourceMetadataFormatOptions,
+} from './types.js';
+
+export {
+    OAUTH_PROTECTED_RESOURCE_WELL_KNOWN_SUFFIX,
+    parseProtectedResourceMetadata,
+    parseProtectedResourceMetadataObject,
+    formatProtectedResourceMetadata,
+    validateProtectedResourceMetadata,
+    buildProtectedResourceMetadataUrl,
+    mergeSignedProtectedResourceMetadata,
+} from './oauth-protected-resource-metadata.js';
+
+// =============================================================================
 // RFC 8615 — Well-Known URIs
 // =============================================================================
 export {

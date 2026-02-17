@@ -288,6 +288,21 @@ export const RFC_MAP: RfcMapEntry[] = [
         notes: 'Authorization server metadata parse/validate/format helpers with RFC 8414 well-known URL derivation, exact issuer comparison options, and signed-claims precedence merge support without JOSE verification.',
     },
     {
+        module: 'src/oauth-protected-resource-metadata.ts',
+        rfc: 'RFC 9728',
+        sections: ['2', '2.1', '2.2', '3', '3.1', '3.2', '3.3', '4', '5.1'],
+        exports: [
+            'OAUTH_PROTECTED_RESOURCE_WELL_KNOWN_SUFFIX',
+            'parseProtectedResourceMetadata',
+            'parseProtectedResourceMetadataObject',
+            'formatProtectedResourceMetadata',
+            'validateProtectedResourceMetadata',
+            'buildProtectedResourceMetadataUrl',
+            'mergeSignedProtectedResourceMetadata',
+        ],
+        notes: 'Protected resource metadata parse/validate/format helpers with RFC 9728 well-known URL derivation, exact resource matching support, language-tagged human-readable fields, and signed-claims precedence merge support without JOSE verification.',
+    },
+    {
         module: 'src/webmention.ts',
         rfc: 'W3C Webmention',
         sections: ['3.1.2', '3.1.3', '3.2.1', '3.2.3', '6'],
