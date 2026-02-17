@@ -129,6 +129,19 @@ export interface PkceTokenRequestParams {
     codeVerifier: string;
 }
 
+// Token revocation (RFC 7009)
+export type TokenTypeHint = 'access_token' | 'refresh_token' | (string & {});
+
+export interface TokenRevocationRequestParams {
+    token: string;
+    tokenTypeHint?: TokenTypeHint;
+}
+
+export interface TokenRevocationRequestInput {
+    token: string;
+    tokenTypeHint?: TokenTypeHint;
+}
+
 // WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)
 export type WebauthnAuthenticatorAttachment = 'platform' | 'cross-platform';
 

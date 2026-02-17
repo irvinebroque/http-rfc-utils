@@ -218,6 +218,9 @@ export type {
     PkceAuthorizationRequestParams,
     PkceAuthorizationRequestInput,
     PkceTokenRequestParams,
+    TokenTypeHint,
+    TokenRevocationRequestParams,
+    TokenRevocationRequestInput,
     WebauthnAuthenticatorAttachment,
     WebauthnResidentKeyRequirement,
     WebauthnUserVerificationRequirement,
@@ -573,6 +576,10 @@ export {
     formatPkceAuthorizationRequestParams,
     parsePkceTokenRequestParams,
     formatPkceTokenRequestParams,
+    // Token revocation (RFC 7009)
+    parseTokenRevocationRequestParams,
+    formatTokenRevocationRequestParams,
+    validateTokenRevocationRequestParams,
     // WebAuthn (W3C WebAuthn Level 3)
     parseWebauthnBase64url,
     formatWebauthnBase64url,

@@ -237,6 +237,17 @@ export const RFC_MAP: RfcMapEntry[] = [
         notes: 'PKCE verifier/challenge generation, derivation, and verification for plain/S256 with strict ABNF validators and tolerant authorization/token request parameter parsers; OAuth flow orchestration and extension methods remain out of scope.',
     },
     {
+        module: 'src/auth/token-revocation.ts',
+        rfc: 'RFC 7009',
+        sections: ['2.1'],
+        exports: [
+            'parseTokenRevocationRequestParams',
+            'formatTokenRevocationRequestParams',
+            'validateTokenRevocationRequestParams',
+        ],
+        notes: 'Token revocation request x-www-form-urlencoded parse/format/validate helpers with strict token presence checks and permissive token_type_hint support; response handling and JSONP/CORS flows remain out of scope.',
+    },
+    {
         module: 'src/auth/webauthn.ts',
         rfc: 'W3C WebAuthn Level 3',
         sections: [
