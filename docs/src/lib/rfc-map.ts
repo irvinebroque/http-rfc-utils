@@ -237,6 +237,21 @@ export const RFC_MAP: RfcMapEntry[] = [
         notes: 'PKCE verifier/challenge generation, derivation, and verification for plain/S256 with strict ABNF validators and tolerant authorization/token request parameter parsers; OAuth flow orchestration and extension methods remain out of scope.',
     },
     {
+        module: 'src/auth/oauth-token-introspection.ts',
+        rfc: 'RFC 7662',
+        sections: ['2.1', '2.2'],
+        exports: [
+            'parseTokenIntrospectionRequestParams',
+            'formatTokenIntrospectionRequestParams',
+            'validateTokenIntrospectionRequestParams',
+            'parseTokenIntrospectionResponse',
+            'parseTokenIntrospectionResponseObject',
+            'formatTokenIntrospectionResponse',
+            'validateTokenIntrospectionResponse',
+        ],
+        notes: 'Token introspection request/response helpers for form-encoded parameters and JSON payloads with strict validation of required members, typed metadata fields, and extension preservation.',
+    },
+    {
         module: 'src/auth/webauthn.ts',
         rfc: 'W3C WebAuthn Level 3',
         sections: [

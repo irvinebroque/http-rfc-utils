@@ -1,6 +1,6 @@
 /**
  * Authentication-related types.
- * RFC 7617, RFC 6750, RFC 7616, RFC 7636, W3C WebAuthn Level 3.
+ * RFC 7617, RFC 6750, RFC 7616, RFC 7636, RFC 7662, W3C WebAuthn Level 3.
  * @see https://www.rfc-editor.org/rfc/rfc7617.html
  */
 
@@ -127,6 +127,35 @@ export interface PkceAuthorizationRequestInput {
 
 export interface PkceTokenRequestParams {
     codeVerifier: string;
+}
+
+// OAuth 2.0 Token Introspection (RFC 7662)
+export interface TokenIntrospectionRequestParams {
+    token: string;
+    token_type_hint?: string;
+    extensions?: Record<string, string>;
+}
+
+export interface TokenIntrospectionRequestInput {
+    token: string;
+    token_type_hint?: string;
+    extensions?: Record<string, string>;
+}
+
+export interface TokenIntrospectionResponse {
+    [member: string]: unknown;
+    active: boolean;
+    scope?: string;
+    client_id?: string;
+    username?: string;
+    token_type?: string;
+    exp?: number;
+    iat?: number;
+    nbf?: number;
+    sub?: string;
+    aud?: string | string[];
+    iss?: string;
+    jti?: string;
 }
 
 // WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)
