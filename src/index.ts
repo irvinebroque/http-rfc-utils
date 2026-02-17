@@ -218,6 +218,19 @@ export type {
     PkceAuthorizationRequestParams,
     PkceAuthorizationRequestInput,
     PkceTokenRequestParams,
+    OAuthClientRegistrationErrorCode,
+    OAuthClientMetadata,
+    OAuthClientRegistrationRequest,
+    OAuthClientRegistrationResponse,
+    OAuthClientRegistrationErrorResponse,
+    OAuthClientRegistrationValidationOptions,
+    OAuthClientRegistrationParseOptions,
+    OAuthClientRegistrationFormatOptions,
+    OAuthClientConfigurationResponse,
+    OAuthClientConfigurationUpdateRequest,
+    OAuthClientConfigurationValidationOptions,
+    OAuthClientConfigurationParseOptions,
+    OAuthClientConfigurationFormatOptions,
     WebauthnAuthenticatorAttachment,
     WebauthnResidentKeyRequirement,
     WebauthnUserVerificationRequirement,
@@ -1109,6 +1122,55 @@ export {
     tryParseHostMetaJson,
     formatHostMetaJson,
 } from './host-meta.js';
+
+// =============================================================================
+// RFC 7591 — OAuth 2.0 Dynamic Client Registration Protocol
+// =============================================================================
+export type {
+    OAuthClientMetadata,
+    OAuthClientRegistrationErrorCode,
+    OAuthClientRegistrationErrorResponse,
+    OAuthClientRegistrationRequest,
+    OAuthClientRegistrationResponse,
+    OAuthClientRegistrationValidationOptions,
+    OAuthClientRegistrationParseOptions,
+    OAuthClientRegistrationFormatOptions,
+    OAuthClientConfigurationResponse,
+    OAuthClientConfigurationUpdateRequest,
+    OAuthClientConfigurationValidationOptions,
+    OAuthClientConfigurationParseOptions,
+    OAuthClientConfigurationFormatOptions,
+} from './types.js';
+
+export {
+    parseOAuthClientRegistrationRequest,
+    parseOAuthClientRegistrationRequestObject,
+    validateOAuthClientRegistrationRequest,
+    formatOAuthClientRegistrationRequest,
+    parseOAuthClientRegistrationResponse,
+    parseOAuthClientRegistrationResponseObject,
+    validateOAuthClientRegistrationResponse,
+    formatOAuthClientRegistrationResponse,
+    parseOAuthClientRegistrationErrorResponse,
+    parseOAuthClientRegistrationErrorResponseObject,
+    validateOAuthClientRegistrationErrorResponse,
+    formatOAuthClientRegistrationErrorResponse,
+    mergeSoftwareStatementClientMetadata,
+} from './oauth-client-registration.js';
+
+// =============================================================================
+// RFC 7592 — OAuth 2.0 Dynamic Client Registration Management Protocol
+// =============================================================================
+export {
+    parseOAuthClientConfigurationResponse,
+    parseOAuthClientConfigurationResponseObject,
+    validateOAuthClientConfigurationResponse,
+    formatOAuthClientConfigurationResponse,
+    parseOAuthClientConfigurationUpdateRequest,
+    parseOAuthClientConfigurationUpdateRequestObject,
+    validateOAuthClientConfigurationUpdateRequest,
+    formatOAuthClientConfigurationUpdateRequest,
+} from './oauth-client-registration-management.js';
 
 // =============================================================================
 // RFC 8414 — OAuth 2.0 Authorization Server Metadata

@@ -129,6 +129,79 @@ export interface PkceTokenRequestParams {
     codeVerifier: string;
 }
 
+// OAuth 2.0 Dynamic Client Registration (RFC 7591)
+export type OAuthClientRegistrationErrorCode =
+    | 'invalid_redirect_uri'
+    | 'invalid_client_metadata'
+    | 'invalid_software_statement';
+
+export interface OAuthClientMetadata {
+    [member: string]: unknown;
+    redirect_uris?: string[];
+    token_endpoint_auth_method?: string;
+    grant_types?: string[];
+    response_types?: string[];
+    client_name?: string;
+    client_uri?: string;
+    logo_uri?: string;
+    scope?: string;
+    contacts?: string[];
+    tos_uri?: string;
+    policy_uri?: string;
+    jwks_uri?: string;
+    jwks?: Record<string, unknown>;
+    software_id?: string;
+    software_version?: string;
+}
+
+export interface OAuthClientRegistrationRequest extends OAuthClientMetadata {
+    software_statement?: string;
+}
+
+export interface OAuthClientRegistrationResponse extends OAuthClientMetadata {
+    client_id: string;
+    client_secret?: string;
+    client_id_issued_at?: number;
+    client_secret_expires_at?: number;
+    software_statement?: string;
+}
+
+export interface OAuthClientRegistrationErrorResponse {
+    [member: string]: unknown;
+    error: OAuthClientRegistrationErrorCode | string;
+    error_description?: string;
+}
+
+export interface OAuthClientRegistrationValidationOptions {
+    enforceGrantTypeResponseTypeConsistency?: boolean;
+}
+
+export interface OAuthClientRegistrationParseOptions extends OAuthClientRegistrationValidationOptions {
+}
+
+export interface OAuthClientRegistrationFormatOptions extends OAuthClientRegistrationValidationOptions {
+}
+
+// OAuth 2.0 Dynamic Client Registration Management (RFC 7592)
+export interface OAuthClientConfigurationResponse extends OAuthClientRegistrationResponse {
+    registration_access_token: string;
+    registration_client_uri: string;
+}
+
+export interface OAuthClientConfigurationUpdateRequest extends OAuthClientRegistrationRequest {
+    client_id: string;
+    client_secret?: string;
+}
+
+export interface OAuthClientConfigurationValidationOptions extends OAuthClientRegistrationValidationOptions {
+}
+
+export interface OAuthClientConfigurationParseOptions extends OAuthClientConfigurationValidationOptions {
+}
+
+export interface OAuthClientConfigurationFormatOptions extends OAuthClientConfigurationValidationOptions {
+}
+
 // WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)
 export type WebauthnAuthenticatorAttachment = 'platform' | 'cross-platform';
 
