@@ -1,6 +1,6 @@
 /**
  * Authentication-related types.
- * RFC 7617, RFC 6750, RFC 7616, RFC 7636, W3C WebAuthn Level 3.
+ * RFC 7617, RFC 6750, RFC 7616, RFC 7636, RFC 9068, W3C WebAuthn Level 3.
  * @see https://www.rfc-editor.org/rfc/rfc7617.html
  */
 
@@ -127,6 +127,50 @@ export interface PkceAuthorizationRequestInput {
 
 export interface PkceTokenRequestParams {
     codeVerifier: string;
+}
+
+// JWT access token profile (RFC 9068)
+export interface JwtAccessTokenHeader {
+    [member: string]: unknown;
+    typ?: string;
+    alg: string;
+    kid?: string;
+}
+
+export interface JwtAccessTokenClaims {
+    [claim: string]: unknown;
+    iss: string;
+    sub: string;
+    aud: string | string[];
+    exp: number;
+    iat: number;
+    jti: string;
+    client_id: string;
+    auth_time?: number;
+    acr?: string;
+    amr?: string[];
+    scope?: string;
+    groups?: string[];
+    roles?: string[];
+    entitlements?: string[];
+}
+
+export interface JwtAccessToken {
+    header: JwtAccessTokenHeader;
+    claims: JwtAccessTokenClaims;
+    signature: string;
+}
+
+export interface JwtAccessTokenValidationOptions {
+    expectedIssuer?: string;
+    expectedAudience?: string | readonly string[];
+    now?: number | Date;
+    clockSkewSeconds?: number;
+    requireTyp?: boolean;
+    requireSignature?: boolean;
+}
+
+export interface JwtAccessTokenParseOptions extends JwtAccessTokenValidationOptions {
 }
 
 // WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)

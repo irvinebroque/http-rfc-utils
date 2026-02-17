@@ -12,6 +12,7 @@ All plans are plan-only artifacts (no code edits embedded in these docs). They a
 - `docs/plans/spec-implementation/rfc-7636-oauth-pkce.md`
 - `docs/plans/spec-implementation/rfc-8297-early-hints.md`
 - `docs/plans/spec-implementation/rfc-8414-oauth-authorization-server-metadata.md`
+- `docs/plans/spec-implementation/rfc-9068-jwt-access-token-profile.md`
 - `docs/plans/spec-implementation/rfc-8785-json-canonicalization.md`
 - `docs/plans/spec-implementation/w3c-clear-site-data.md`
 - `docs/plans/spec-implementation/w3c-csp3-subset.md`
