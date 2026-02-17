@@ -47,6 +47,66 @@ export interface BearerChallenge {
     params?: Record<string, string>;
 }
 
+// DPoP (RFC 9449)
+export type DpopError =
+    | 'invalid_request'
+    | 'invalid_token'
+    | 'insufficient_scope'
+    | 'invalid_dpop_proof'
+    | 'use_dpop_nonce';
+
+export interface DpopChallenge {
+    realm?: string;
+    scope?: string;
+    error?: DpopError;
+    errorDescription?: string;
+    errorUri?: string;
+    algs?: string[];
+    params?: Record<string, string>;
+}
+
+export interface DpopJwk {
+    kty: string;
+    [key: string]: unknown;
+}
+
+export interface DpopProofJwtHeader {
+    typ: 'dpop+jwt';
+    alg: string;
+    jwk: DpopJwk;
+    [key: string]: unknown;
+}
+
+export interface DpopProofJwtPayload {
+    jti: string;
+    htm: string;
+    htu: string;
+    iat: number;
+    ath?: string;
+    nonce?: string;
+    [key: string]: unknown;
+}
+
+export interface DpopProofJwt {
+    header: DpopProofJwtHeader;
+    payload: DpopProofJwtPayload;
+    signature: string;
+}
+
+export interface DpopProofJwtValidationOptions {
+    expectedMethod?: string;
+    expectedHtu?: string | URL;
+    expectedNonce?: string;
+    requireNonce?: boolean;
+    accessToken?: string;
+    requireAth?: boolean;
+    allowedAlgorithms?: readonly string[];
+    now?: number;
+    maxTokenAgeSeconds?: number;
+    maxClockSkewSeconds?: number;
+    normalizeHtu?: boolean;
+}
+
 // Digest (RFC 7616)
 export type DigestAuthAlgorithm =
     | 'MD5'
