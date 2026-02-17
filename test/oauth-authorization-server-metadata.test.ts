@@ -69,6 +69,8 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
             token_endpoint: 'https://server.example.com/token',
             response_types_supported: ['code', 'code token'],
             scopes_supported: ['openid', 'profile'],
+            request_object_signing_alg_values_supported: ['RS256'],
+            require_signed_request_object: true,
             extension_claim: {
                 nested: true,
             },
@@ -79,6 +81,8 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
             assert.notEqual(parsed, null);
             assert.equal(parsed?.issuer, 'https://server.example.com');
             assert.deepEqual(parsed?.response_types_supported, ['code', 'code token']);
+            assert.deepEqual(parsed?.request_object_signing_alg_values_supported, ['RS256']);
+            assert.equal(parsed?.require_signed_request_object, true);
             assert.deepEqual(parsed?.extension_claim, { nested: true });
         });
 
@@ -249,6 +253,40 @@ describe('OAuth 2.0 Authorization Server Metadata (RFC 8414 Sections 2, 3.1-3.3,
                     token_endpoint: 'https://as.example.com/token',
                     response_types_supported: ['code'],
                     jwks_uri: 'http://as.example.com/jwks.json',
+                }),
+            );
+        });
+
+        // RFC 9101 Section 9.2 and Section 10.5: require_signed_request_object is boolean metadata.
+        it('validates request object metadata fields added by RFC 9101', () => {
+            assert.doesNotThrow(() =>
+                validateAuthorizationServerMetadata({
+                    issuer: 'https://as.example.com',
+                    authorization_endpoint: 'https://as.example.com/authorize',
+                    token_endpoint: 'https://as.example.com/token',
+                    response_types_supported: ['code'],
+                    request_object_signing_alg_values_supported: ['RS256'],
+                    require_signed_request_object: false,
+                }),
+            );
+
+            assert.throws(() =>
+                validateAuthorizationServerMetadata({
+                    issuer: 'https://as.example.com',
+                    authorization_endpoint: 'https://as.example.com/authorize',
+                    token_endpoint: 'https://as.example.com/token',
+                    response_types_supported: ['code'],
+                    require_signed_request_object: 'true',
+                } as unknown as import('../src/types.js').AuthorizationServerMetadata),
+            );
+
+            assert.throws(() =>
+                validateAuthorizationServerMetadata({
+                    issuer: 'https://as.example.com',
+                    authorization_endpoint: 'https://as.example.com/authorize',
+                    token_endpoint: 'https://as.example.com/token',
+                    response_types_supported: ['code'],
+                    request_object_signing_alg_values_supported: [],
                 }),
             );
         });

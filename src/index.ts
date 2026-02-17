@@ -218,6 +218,8 @@ export type {
     PkceAuthorizationRequestParams,
     PkceAuthorizationRequestInput,
     PkceTokenRequestParams,
+    JarAuthorizationRequestParams,
+    JarAuthorizationRequestValidationOptions,
     WebauthnAuthenticatorAttachment,
     WebauthnResidentKeyRequirement,
     WebauthnUserVerificationRequirement,
@@ -536,7 +538,7 @@ export {
 } from './cookie.js';
 
 // =============================================================================
-// Authorization (RFC 7617 + RFC 6750 + RFC 7616 + RFC 7636 + W3C WebAuthn)
+// Authorization (RFC 7617 + RFC 6750 + RFC 7616 + RFC 7636 + RFC 9101 + W3C WebAuthn)
 // =============================================================================
 export {
     parseAuthorization,
@@ -573,6 +575,10 @@ export {
     formatPkceAuthorizationRequestParams,
     parsePkceTokenRequestParams,
     formatPkceTokenRequestParams,
+    // JAR (RFC 9101)
+    parseJarAuthorizationRequestParams,
+    validateJarAuthorizationRequestParams,
+    formatJarAuthorizationRequestParams,
     // WebAuthn (W3C WebAuthn Level 3)
     parseWebauthnBase64url,
     formatWebauthnBase64url,

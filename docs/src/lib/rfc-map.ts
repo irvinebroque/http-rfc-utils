@@ -237,6 +237,17 @@ export const RFC_MAP: RfcMapEntry[] = [
         notes: 'PKCE verifier/challenge generation, derivation, and verification for plain/S256 with strict ABNF validators and tolerant authorization/token request parameter parsers; OAuth flow orchestration and extension methods remain out of scope.',
     },
     {
+        module: 'src/auth/jar.ts',
+        rfc: 'RFC 9101',
+        sections: ['4', '5', '5.1', '5.2'],
+        exports: [
+            'parseJarAuthorizationRequestParams',
+            'validateJarAuthorizationRequestParams',
+            'formatJarAuthorizationRequestParams',
+        ],
+        notes: 'JWT-Secured Authorization Request (JAR) query parameter parsing/formatting with strict request/request_uri exclusivity and JWT compact-serialization checks; JOSE verification and request object claim validation remain out of scope.',
+    },
+    {
         module: 'src/auth/webauthn.ts',
         rfc: 'W3C WebAuthn Level 3',
         sections: [
@@ -286,6 +297,18 @@ export const RFC_MAP: RfcMapEntry[] = [
             'mergeSignedAuthorizationServerMetadata',
         ],
         notes: 'Authorization server metadata parse/validate/format helpers with RFC 8414 well-known URL derivation, exact issuer comparison options, and signed-claims precedence merge support without JOSE verification.',
+    },
+    {
+        module: 'src/oauth-authorization-server-metadata.ts',
+        rfc: 'RFC 9101',
+        sections: ['9.2', '10.5'],
+        exports: [
+            'parseAuthorizationServerMetadata',
+            'parseAuthorizationServerMetadataObject',
+            'formatAuthorizationServerMetadata',
+            'validateAuthorizationServerMetadata',
+        ],
+        notes: 'Authorization server metadata support for require_signed_request_object and request object algorithm capabilities used by JAR downgrade protection checks.',
     },
     {
         module: 'src/webmention.ts',

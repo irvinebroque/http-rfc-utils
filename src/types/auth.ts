@@ -129,6 +129,18 @@ export interface PkceTokenRequestParams {
     codeVerifier: string;
 }
 
+// OAuth JWT-Secured Authorization Request (RFC 9101)
+export interface JarAuthorizationRequestParams {
+    clientId: string;
+    request?: string;
+    requestUri?: string;
+}
+
+export interface JarAuthorizationRequestValidationOptions {
+    allowedRequestUriSchemes?: readonly string[];
+    maxRequestUriLength?: number;
+}
+
 // WebAuthn (W3C WebAuthn Level 3, RFC 4648, RFC 9053)
 export type WebauthnAuthenticatorAttachment = 'platform' | 'cross-platform';
 

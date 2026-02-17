@@ -1,6 +1,6 @@
 /**
  * Discovery and metadata document types.
- * RFC 9309, RFC 9116, RFC 7033, RFC 6415, RFC 8414, W3C Webmention.
+ * RFC 9309, RFC 9116, RFC 7033, RFC 6415, RFC 8414, RFC 9101, W3C Webmention.
  * @see https://www.rfc-editor.org/rfc/rfc9309.html
  */
 
@@ -105,6 +105,9 @@ export interface AuthorizationServerMetadata {
     grant_types_supported?: string[];
     token_endpoint_auth_methods_supported?: string[];
     token_endpoint_auth_signing_alg_values_supported?: string[];
+    request_object_signing_alg_values_supported?: string[];
+    request_object_encryption_alg_values_supported?: string[];
+    request_object_encryption_enc_values_supported?: string[];
     service_documentation?: string;
     ui_locales_supported?: string[];
     op_policy_uri?: string;
@@ -116,6 +119,7 @@ export interface AuthorizationServerMetadata {
     introspection_endpoint_auth_methods_supported?: string[];
     introspection_endpoint_auth_signing_alg_values_supported?: string[];
     code_challenge_methods_supported?: string[];
+    require_signed_request_object?: boolean;
     signed_metadata?: string;
 }
 

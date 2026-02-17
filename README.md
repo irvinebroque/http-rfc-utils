@@ -84,6 +84,7 @@ All public APIs are exported from `@irvinebroque/http-rfc-utils`.
 | Problem Details responses | `createProblem`, `problemResponse`, `Problems` |
 | CORS policy and preflight headers | `buildCorsHeadersForOrigin`, `buildStrictCorsHeadersForOrigin`, `buildPreflightHeaders` |
 | OAuth PKCE verifier/challenge helpers | `generatePkceCodeVerifier`, `derivePkceCodeChallenge`, `verifyPkceCodeVerifier`, `parsePkceAuthorizationRequestParams`, `parsePkceTokenRequestParams` |
+| OAuth JAR (JWT-Secured Authorization Request) helpers | `parseJarAuthorizationRequestParams`, `validateJarAuthorizationRequestParams`, `formatJarAuthorizationRequestParams` |
 | WebAuthn parse/format/validate helpers (v1) | `parseWebauthnCreationOptionsFromJson`, `formatWebauthnCreationOptionsToJson`, `validateWebauthnCreationOptions`, `parseWebauthnRequestOptionsFromJson`, `formatWebauthnRequestOptionsToJson`, `validateWebauthnRequestOptions`, `parseWebauthnClientDataJson`, `formatWebauthnClientDataJson`, `validateWebauthnClientData`, `parseWebauthnAuthenticatorData`, `validateWebauthnAuthenticatorData`, `validateWebauthnCoseAlgorithm` |
 | OAuth authorization server metadata (RFC 8414) | `parseAuthorizationServerMetadata`, `parseAuthorizationServerMetadataObject`, `formatAuthorizationServerMetadata`, `validateAuthorizationServerMetadata`, `buildAuthorizationServerMetadataUrl`, `mergeSignedAuthorizationServerMetadata` |
 | Clear-Site-Data header parse/format/validation | `parseClearSiteData`, `formatClearSiteData`, `validateClearSiteData` |
@@ -104,7 +105,7 @@ For the exhaustive task-to-import mapping, see:
 - Negotiation and request preferences: RFC 7231 (obsoleted by RFC 9110), RFC 5789, RFC 7240, RFC 4647, RFC 9218.
 - Linking and discovery: RFC 8288, RFC 8297, RFC 9264, RFC 9652, RFC 9727, RFC 8615, RFC 7033, RFC 6415, W3C Webmention.
 - Content and metadata headers: RFC 6265, RFC 6266, RFC 8187, RFC 8941, RFC 9651, RFC 9745, RFC 8942, RFC 9209, RFC 9842.
-- Auth and transport security: RFC 7617, RFC 6750, RFC 7616, RFC 7636, RFC 8414, RFC 6797, RFC 8470, RFC 7838, RFC 9053, RFC 9421, RFC 9309, RFC 9116, RFC 7239.
+- Auth and transport security: RFC 7617, RFC 6750, RFC 7616, RFC 7636, RFC 8414, RFC 9101, RFC 6797, RFC 8470, RFC 7838, RFC 9053, RFC 9421, RFC 9309, RFC 9116, RFC 7239.
 - JSON, URI, and error formats: RFC 9457, RFC 6901, RFC 6902, RFC 7396, RFC 8785, RFC 9535, RFC 3986, RFC 6570, RFC 3339, RFC 6920.
 - Additional web specs: W3C Webmention, W3C Trace Context, W3C Fetch Metadata, W3C Clear Site Data, W3C Referrer Policy, W3C Reporting API, W3C CSP3 (subset), W3C WebAuthn Level 3 (parse/validate subset), Fetch/CORS specifications.
 

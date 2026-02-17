@@ -1,6 +1,6 @@
 /**
  * OAuth 2.0 Authorization Server Metadata helpers per RFC 8414.
- * RFC 8414 Sections 2, 2.1, 3, 3.1, 3.2, 3.3, and 4.
+ * RFC 8414 Sections 2, 2.1, 3, 3.1, 3.2, 3.3, and 4; RFC 9101 Sections 9.2 and 10.5.
  * @see https://www.rfc-editor.org/rfc/rfc8414.html
  */
 
@@ -49,12 +49,19 @@ const KNOWN_ARRAY_FIELDS = [
     'grant_types_supported',
     'token_endpoint_auth_methods_supported',
     'token_endpoint_auth_signing_alg_values_supported',
+    'request_object_signing_alg_values_supported',
+    'request_object_encryption_alg_values_supported',
+    'request_object_encryption_enc_values_supported',
     'ui_locales_supported',
     'revocation_endpoint_auth_methods_supported',
     'revocation_endpoint_auth_signing_alg_values_supported',
     'introspection_endpoint_auth_methods_supported',
     'introspection_endpoint_auth_signing_alg_values_supported',
     'code_challenge_methods_supported',
+] as const;
+
+const KNOWN_BOOLEAN_FIELDS = [
+    'require_signed_request_object',
 ] as const;
 
 const URL_FIELDS = [
@@ -159,6 +166,18 @@ export function validateAuthorizationServerMetadata(
         metadata.token_endpoint_auth_signing_alg_values_supported,
         'token_endpoint_auth_signing_alg_values_supported',
     );
+    validateStringArrayClaim(
+        metadata.request_object_signing_alg_values_supported,
+        'request_object_signing_alg_values_supported',
+    );
+    validateStringArrayClaim(
+        metadata.request_object_encryption_alg_values_supported,
+        'request_object_encryption_alg_values_supported',
+    );
+    validateStringArrayClaim(
+        metadata.request_object_encryption_enc_values_supported,
+        'request_object_encryption_enc_values_supported',
+    );
     validateStringArrayClaim(metadata.ui_locales_supported, 'ui_locales_supported');
     validateStringArrayClaim(
         metadata.revocation_endpoint_auth_methods_supported,
@@ -177,6 +196,13 @@ export function validateAuthorizationServerMetadata(
         'introspection_endpoint_auth_signing_alg_values_supported',
     );
     validateStringArrayClaim(metadata.code_challenge_methods_supported, 'code_challenge_methods_supported');
+
+    if (
+        metadata.require_signed_request_object !== undefined
+        && typeof metadata.require_signed_request_object !== 'boolean'
+    ) {
+        throw new Error('Metadata field "require_signed_request_object" must be a boolean when present');
+    }
 
     if (metadata.signed_metadata !== undefined && typeof metadata.signed_metadata !== 'string') {
         throw new Error('Metadata field "signed_metadata" must be a string JWT value when present');
@@ -240,7 +266,14 @@ export function formatAuthorizationServerMetadata(
         }
     }
 
-    const knownFieldSet = new Set<string>([...KNOWN_STRING_FIELDS, ...KNOWN_ARRAY_FIELDS]);
+    for (const field of KNOWN_BOOLEAN_FIELDS) {
+        const value = metadata[field];
+        if (value !== undefined) {
+            output[field] = cloneJsonValue(value as JsonValue);
+        }
+    }
+
+    const knownFieldSet = new Set<string>([...KNOWN_STRING_FIELDS, ...KNOWN_ARRAY_FIELDS, ...KNOWN_BOOLEAN_FIELDS]);
     const extensionKeys = Object.keys(metadata)
         .filter((key) => !knownFieldSet.has(key))
         .sort();
@@ -332,6 +365,13 @@ function hasValidKnownMemberShapes(value: Record<string, unknown>): boolean {
         }
 
         if (fieldValue.some((item) => typeof item !== 'string')) {
+            return false;
+        }
+    }
+
+    for (const field of KNOWN_BOOLEAN_FIELDS) {
+        const fieldValue = value[field];
+        if (fieldValue !== undefined && typeof fieldValue !== 'boolean') {
             return false;
         }
     }
