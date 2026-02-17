@@ -29,7 +29,6 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           model: openai/gpt-5.3-codex
-          token: ${{ github.token }}
           prompt: |
             You are working on a newly opened GitHub issue and should treat the issue itself as the task prompt.
 
