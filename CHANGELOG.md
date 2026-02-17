@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.1
+
+### Patch Changes
+
+- [#29](https://github.com/irvinebroque/http-rfc-utils/pull/29) [`e090101`](https://github.com/irvinebroque/http-rfc-utils/commit/e090101b4b7da758e412acd496ad57fb633cda2b) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Ensure OpenCode issue workflows include explicit issue-closing references in generated pull requests, including a post-run safeguard in the debug workflow that appends `Closes #<issue>` when missing.
+
+- [#27](https://github.com/irvinebroque/http-rfc-utils/pull/27) [`dc3009a`](https://github.com/irvinebroque/http-rfc-utils/commit/dc3009a01527955175de8d3cd9661e1f2ce041b1) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Cache the OpenCode CLI binary in both issue-triggered workflows to avoid repeated installs and speed up subsequent automation and debug runs.
+
+- [#52](https://github.com/irvinebroque/http-rfc-utils/pull/52) [`bad1366`](https://github.com/irvinebroque/http-rfc-utils/commit/bad13665239b6149527dfca59249b8925ebb1531) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Add a pull-request-opened OpenCode workflow for GitHub Actions-authored PRs that runs a high-thinking review pass focused on standards compliance and then applies fixes directly on the same PR branch.
+
+- [#53](https://github.com/irvinebroque/http-rfc-utils/pull/53) [`50c23a6`](https://github.com/irvinebroque/http-rfc-utils/commit/50c23a6692806fd01f2b38b6cc832e7c0f3b0014) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Add a manual `workflow_dispatch` trigger to the CI workflow so checks can be started for bot-authored pull requests when automatic `pull_request` runs are suppressed.
+
+- [#26](https://github.com/irvinebroque/http-rfc-utils/pull/26) [`be34740`](https://github.com/irvinebroque/http-rfc-utils/commit/be347407cada7ea270fb4e10a52917a39452871c) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Pass `GH_TOKEN` to OpenCode issue workflows so in-run `gh` commands can read issue context without requiring manual token setup.
+
+- [#20](https://github.com/irvinebroque/http-rfc-utils/pull/20) [`5f14e9c`](https://github.com/irvinebroque/http-rfc-utils/commit/5f14e9cfc9586744748c7dbcec4aee15522bf60b) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Add owner-gated OpenCode issue automation that runs only for issues opened by `irvinebroque`, injects the issue content into a fixed execution prompt, and grants workflow permissions required for commit, push, and pull request creation.
+
+- [#24](https://github.com/irvinebroque/http-rfc-utils/pull/24) [`92e0218`](https://github.com/irvinebroque/http-rfc-utils/commit/92e0218d469329d552eceb76ee4cac92cbbc3a33) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Add a one-off OpenCode debug workflow for manual issue runs with verbose logs, while keeping the normal issue-opened automation behavior unchanged.
+
+- [#25](https://github.com/irvinebroque/http-rfc-utils/pull/25) [`23855a1`](https://github.com/irvinebroque/http-rfc-utils/commit/23855a19f564e8c32ed9dae5bdc781371d15f6ce) Contributor: [@irvinebroque](https://github.com/irvinebroque) - Switch OpenCode issue workflows from `openai/gpt-5.3-codex` to `openai/gpt-5.2-codex` to avoid model access errors when using an OpenAI API key in GitHub Actions.
+
 ## 0.5.0
 
 ### Minor Changes
