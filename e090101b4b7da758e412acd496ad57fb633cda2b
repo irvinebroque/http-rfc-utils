@@ -1,0 +1,27 @@
+.github/workflows/opencode-issues.yml
+  fade3346d39601f5 67
+.github/workflows/opencode-issues-debug.yml
+  fade3346d39601f5 83-84,95-122
+.changeset/calm-lobsters-beg.md
+  fade3346d39601f5 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.3",
+  "base_commit_sha": "e090101b4b7da758e412acd496ad57fb633cda2b",
+  "prompts": {
+    "fade3346d39601f5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_396aa3585ffeb30SOW02p3fHta",
+        "model": "unknown"
+      },
+      "human_author": "Brendan Irvine-Broque <brendanib@gmail.com>",
+      "messages": [],
+      "total_additions": 44,
+      "total_deletions": 8,
+      "accepted_lines": 37,
+      "overriden_lines": 0
+    }
+  }
+}
