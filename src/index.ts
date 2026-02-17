@@ -1074,6 +1074,27 @@ export {
 } from './webfinger.js';
 
 // =============================================================================
+// W3C Webmention
+// =============================================================================
+export type {
+    WebmentionDiscoverySource,
+    WebmentionEndpointDiscoveryInput,
+    WebmentionEndpointDiscoveryResult,
+    WebmentionRequest,
+    WebmentionValidationOptions,
+} from './types.js';
+
+export {
+    WEBMENTION_REL,
+    WEBMENTION_CONTENT_TYPE,
+    discoverWebmentionEndpoint,
+    parseWebmentionRequest,
+    validateWebmentionRequest,
+    formatWebmentionRequest,
+    isWebmentionSuccessStatus,
+} from './webmention.js';
+
+// =============================================================================
 // RFC 6415 — Host Metadata
 // =============================================================================
 export type {

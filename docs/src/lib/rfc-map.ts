@@ -288,6 +288,21 @@ export const RFC_MAP: RfcMapEntry[] = [
         notes: 'Authorization server metadata parse/validate/format helpers with RFC 8414 well-known URL derivation, exact issuer comparison options, and signed-claims precedence merge support without JOSE verification.',
     },
     {
+        module: 'src/webmention.ts',
+        rfc: 'W3C Webmention',
+        sections: ['3.1.2', '3.1.3', '3.2.1', '3.2.3', '6'],
+        exports: [
+            'WEBMENTION_REL',
+            'WEBMENTION_CONTENT_TYPE',
+            'discoverWebmentionEndpoint',
+            'parseWebmentionRequest',
+            'validateWebmentionRequest',
+            'formatWebmentionRequest',
+            'isWebmentionSuccessStatus',
+        ],
+        notes: 'Webmention endpoint discovery from HTTP Link headers and HTML rel values with deterministic precedence, plus tolerant parser and strict validator/formatter helpers for x-www-form-urlencoded source/target request payloads.',
+    },
+    {
         module: 'src/trace-context.ts',
         rfc: 'W3C Trace Context',
         sections: ['3.2', '3.3', '3.5', '4.2', '4.3'],
